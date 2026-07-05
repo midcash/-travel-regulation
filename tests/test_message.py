@@ -458,6 +458,33 @@ class TestAgentMessage:
         # message_id + timestamp + correlation_id = 3 violations
         assert len(exc_info.value.violations) >= 3
 
+    def test_validate_handles_non_string_message_id(self, sample_identity, sample_identity2):
+        """非字符串 message_id 不抛出 TypeError (P0 fix R1)。"""
+        msg = AgentMessage(
+            message_id=12345,  # type: ignore[arg-type]
+            sender=sample_identity2,
+            receiver=sample_identity,
+            task_type=TaskType.TASK_CREATE_ITINERARY,
+            payload={},
+            timestamp=datetime.now(timezone.utc),
+        )
+        with pytest.raises(MessageValidationError, match="message_id"):
+            msg.validate()
+
+    def test_validate_handles_non_enum_task_type(self, sample_identity, sample_identity2):
+        """非 TaskType 枚举 task_type 不抛出 AttributeError (P0 fix R2)。"""
+        # 使用 __init__ 绕过 frozen dataclass 限制直接构造非法值
+        msg = object.__new__(AgentMessage)
+        object.__setattr__(msg, "message_id", str(uuid.uuid4()))
+        object.__setattr__(msg, "sender", sample_identity2)
+        object.__setattr__(msg, "receiver", sample_identity)
+        object.__setattr__(msg, "task_type", "not_an_enum")
+        object.__setattr__(msg, "payload", {})
+        object.__setattr__(msg, "timestamp", datetime.now(timezone.utc))
+        object.__setattr__(msg, "correlation_id", None)
+        with pytest.raises(MessageValidationError):
+            msg.validate()
+
 
 # ============================================================
 # MessageValidationError

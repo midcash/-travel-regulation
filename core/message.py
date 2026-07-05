@@ -260,6 +260,10 @@ class AgentMessage:
         # 规则 1: message_id 必须为非空 UUID v4
         if not self.message_id:
             violations.append("message_id 为空")
+        elif not isinstance(self.message_id, str):
+            violations.append(
+                f"message_id 必须是字符串类型, 实际: {type(self.message_id).__name__}"
+            )
         elif not _UUID_V4_RE.match(self.message_id):
             violations.append(f"message_id 不是合法的 UUID v4: {self.message_id!r}")
         else:
@@ -299,11 +303,17 @@ class AgentMessage:
             )
 
         # 规则 5: 响应消息必须带 correlation_id
-        if self.task_type.is_response():
+        # 仅在 task_type 为合法 TaskType 枚举值时检查 (否则规则 3 已捕获)
+        if isinstance(self.task_type, TaskType) and self.task_type.is_response():
             if not self.correlation_id:
                 violations.append(
                     f"响应消息 (task_type={self.task_type.value}) "
                     f"必须携带 correlation_id"
+                )
+            elif self.correlation_id and not isinstance(self.correlation_id, str):
+                violations.append(
+                    f"correlation_id 必须是字符串类型, "
+                    f"实际: {type(self.correlation_id).__name__}"
                 )
             elif self.correlation_id and not _UUID_V4_RE.match(self.correlation_id):
                 violations.append(
