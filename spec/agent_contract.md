@@ -167,6 +167,30 @@ class AgentMessage:
 
 **响应**: 见 evaluator_playbook.md §5
 
+#### 通用消息类型
+
+**响应**: `response.result`
+```json
+{
+  "payload": {
+    "result_type": "string (itinerary_draft | validation_report | code_quality_report | plan_quality_report | contribution_report)",
+    "data": { "... (具体响应内容，见对应 playbook §5)" }
+  }
+}
+```
+> 此消息类型是 Orchestrator 接收子 Agent 响应的通用包装。具体 payload 结构由 `result_type` 决定。
+
+**控制**: `control.abort`
+```json
+{
+  "payload": {
+    "reason": "user_cancel | fatal_error | timeout",
+    "description": "string"
+  }
+}
+```
+> 此消息类型用于 Orchestrator 向所有子 Agent 广播中止指令。触发场景: 用户取消、致命错误、全局超时。
+
 ---
 
 ## 4. 错误处理契约

@@ -150,7 +150,19 @@ def gate_2_check(quality_report: PlanQualityReport, iteration: int) -> GateResul
     if quality_report.composite_score >= 80:
         return GateResult(gate_id=2, passed=True)
 
+    # 得分 < 60: 无论第几轮，标记为 REJECT
+    if quality_report.composite_score < 60:
+        return GateResult(
+            gate_id=2,
+            passed=False,
+            rejected=True,
+            blocking_issues=[BlockingIssue(
+                f"综合得分 {quality_report.composite_score} < 60，严重缺陷，建议重新规划而非修订"
+            )]
+        )
+
     if iteration >= 3:
+        # 得分 60-79 且达到最大迭代次数: 降级通过
         return GateResult(
             gate_id=2,
             passed=True,  # 强制通过但降级
@@ -158,6 +170,7 @@ def gate_2_check(quality_report: PlanQualityReport, iteration: int) -> GateResul
             warnings=[Warning(f"已达最大迭代次数({iteration}/3)，降级输出")]
         )
 
+    # 得分 60-79 且未达迭代上限: 发送修订反馈
     return GateResult(
         gate_id=2,
         passed=False,

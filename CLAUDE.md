@@ -112,9 +112,9 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 
 | Gate | 位置 | 阻断级别 | 通过条件 |
 |------|------|---------|---------|
-| Gate 0 | 用户输入后 | 阻断 | 需求完整性 ≥ 80% |
-| Gate 1 | 执行验证后 | 阻断 | 可行性得分 ≥ 70% |
-| Gate 2 | 评估反馈后 | 条件阻断 | 综合质量 ≥ 80/100，最多3轮迭代 |
+| Gate 0 | 用户输入后 | 阻断 | 必填项校验全部通过（目的地/日期/预算/人数） |
+| Gate 1 | 执行验证后 | 阻断 | blocking_issues == 0（无硬约束违反） |
+| Gate 2 | 评估反馈后 | 条件阻断 | 综合质量 ≥ 80/100 且 ≥ 60，最多3轮迭代；< 60 → REJECT |
 | Gate 3 | 最终输出前 | 阻断 | 格式合规 + 完整性 = 100% |
 
 ## Key Design Decisions
