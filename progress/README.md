@@ -51,6 +51,7 @@
 |------|---------|---------|------|
 | 2026-07-05 | 创建 | 全部 24 个 .md 文件 | 项目初始化，完成所有准备文件 |
 | 2026-07-05 | 重构 | PROGRESS.md → progress/*.md | 拆分为 per-module 碎片，避免并行开发时的合并冲突 |
+| 2026-07-05 | 修复 | CLAUDE.md, code_agent.md, gate_definitions.md, agent_contract.md | 约束推演发现5个关键缺口（Chain A/C/D）：Gate 2伪代码缺REJECT、Gate 0/1阈值不一致、Code Agent §6缺性能+测试自检、合约缺消息类型 |
 
 ---
 
