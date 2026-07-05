@@ -1,0 +1,24 @@
+# core/ — 进度跟踪
+
+**所属阶段**: Phase 0: 基础设施
+
+---
+
+## 文档-代码同步状态
+
+| spec 文件 | spec commit | 对应代码 | 同步状态 | 备注 |
+|-----------|-------------|---------|---------|------|
+| `spec/agent_contract.md` | — | `core/message.py` | 未开始 | AgentMessage 数据类 |
+| `spec/agent_contract.md` | — | `core/context.py` | 未开始 | SharedContext 黑板实现 |
+| `spec/system_spec.md` | — | `core/orchestration_engine.py` | 未开始 | 编排引擎 |
+
+> **spec commit**: 上次确认同步时 spec 文件的 commit hash。`—` 表示尚未开始或首次同步。
+> 检查漂移: `git diff <spec_commit>..HEAD -- <spec_file>`
+
+---
+
+## 任务历史
+
+| 日期 | 任务 | 状态 | 备注 |
+|------|------|------|------|
+| — | — | — | — |

@@ -1,0 +1,40 @@
+# Commit Message 格式
+# =====================
+# 格式: [module] type: 简短描述
+#
+# module: 改动所属模块，可选值:
+#   core       - 框架内核
+#   models     - 数据模型
+#   tools      - 工具集
+#   orch       - Orchestrator
+#   plan       - Planning Agent
+#   exec       - Execution Agent
+#   eval       - Evaluation Agent
+#   test       - 测试
+#   spec       - 规格文件
+#   playbook   - 操作手册
+#   devagent   - 开发Agent约束
+#   progress   - 进度跟踪
+#   meta       - 元信息 (CLAUDE.md, VERSION, ROADMAP, .gitignore)
+#
+# type: 变更类型:
+#   feat       - 新功能
+#   fix        - bug 修复
+#   refactor   - 重构（不改功能）
+#   test       - 测试相关
+#   docs       - 文档/规格变更
+#   chore      - 杂项（配置/构建/依赖）
+#   release    - 版本发布
+#
+# 示例:
+#   [core] feat: 实现 AgentMessage 数据类 (spec: spec/agent_contract.md)
+#   [orch] fix: 修复 Gate 0 输入校验误判空字符串
+#   [spec] docs: 更新 planner_spec 约束条件
+#   [meta] release: v1.0.0
+#
+# 规则:
+#   - 标题 ≤ 72 字符
+#   - 标题后空一行再写正文
+#   - 正文每行 ≤ 72 字符
+#   - 关联 spec 文件在正文中注明
+#

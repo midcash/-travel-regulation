@@ -133,7 +133,10 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 | `playbooks/` | 业务Agent运行时操作手册 (prompt模板) | 配置 |
 | `spec/` | 系统/模块规格 (WHAT) | 规格 |
 | `evaluation/` | 评估准则/质量门/消融协议 (HOW TO JUDGE) | 评估 |
-| `PROGRESS.md` | 项目进度账本 (文档-代码同步状态 + 变更日志) | 元信息 |
+| `PROGRESS.md` | 项目进度入口 → 指向 progress/ 各模块碎片 | 元信息 |
+| `progress/` | 各模块独立进度碎片 (core/orch/plan/exec/eval/models/tools/tests) | 元信息 |
+| `ROADMAP.md` | 版本路线图 (仅在 main 分支维护) | 元信息 |
+| `.gitmessage` | Commit message 格式模板 | 配置 |
 | `core/` | 框架内核 (消息/上下文/编排引擎) | 基础设施 |
 | `models/` | 数据模型定义 | 数据 |
 | `tools/` | Agent 可调用工具集 | 工具 |
@@ -146,12 +149,13 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 3. **独立评估**: Evaluation Agent (Mode A) 独立于 Code/Test Agent，不共享评分预期
 4. **契约优先**: Plan 中的接口定义必须先于 Code 中的实现
 5. **追溯链**: 每一行代码 → 对应 Plan 中的任务 → 对应 spec 中的要求 → 对应 test_scenarios 中的场景
-6. **进度回写**: Code/Test Agent 完成后 → 必须更新 `PROGRESS.md` 的同步状态和变更日志
+6. **进度回写**: Code/Test Agent 完成后 → 更新 `progress/<module>.md` 的同步状态和任务历史
 7. **差异阻塞**: Context Agent 发现 blocking 级别的 spec-代码差异 → 阻塞下游直到差异解决
+8. **碎片隔离**: 每个分支只修改自己负责的 `progress/<module>.md`，不修改其他模块的碎片
 
 ## Document-Code Synchronization Rules
 
-**核心原则**: spec 是单一事实来源，PROGRESS.md 是同步账本，Context Agent 是差异检测器。
+**核心原则**: spec 是单一事实来源，progress/ 碎片是同步账本，Context Agent 是差异检测器。
 
 ### 规则 1: 规格变更的涟漪传播
 修改 `spec/` 中的任何文件后，必须检查并同步:
@@ -171,21 +175,23 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 
 ### 规则 3: 代码完成后的回写
 每次 Code Agent 完成实现任务后:
-1. 更新 `PROGRESS.md` 中对应模块的同步状态（`未开始` → `进行中` → `已完成`）
-2. 记录变更日志行
-3. 如发现 spec 与实现的偏差，记录到 `PROGRESS.md` 变更日志
+1. 更新 `progress/<module>.md` 中对应模块的同步状态（`未开始` → `进行中` → `已完成`）
+2. 写入 `spec commit` 列（当前 spec 文件的 commit hash）用于后续漂移检测
+3. 记录任务历史行
+4. 如发现 spec 与实现的偏差，记录到 `progress/README.md` 变更日志
 
 ### 规则 4: 流水线启动前的差异检测
 每次 Dev Agent Pipeline 启动前:
 1. Context Agent 执行增量扫描（`scope: diff_since_last`）
 2. 对比 `spec/` 定义 vs `agents/` 实际代码
-3. 发现的差异记录到 `context_summary.clarifications_needed`
+3. 用 `progress/<module>.md` 的 `spec commit` 列检测漂移: `git diff <spec_commit>..HEAD -- <spec_file>`
 4. blocking 级别的差异 → 阻塞下游 Agent
 
-### 规则 5: PROGRESS.md 作为同步锚点
-- `PROGRESS.md` 的 "文档-代码同步状态" 表是唯一权威的同步状态来源
-- 任何同步状态变更必须反映到该表
-- 不可跳过 PROGRESS.md 直接开始编码
+### 规则 5: progress/ 作为同步锚点
+- `progress/README.md` 是跨模块的索引（阶段进度 + 变更日志 + 评估影响追踪）
+- `progress/<module>.md` 是每个模块的独立进度碎片（互不冲突）
+- 任何同步状态变更必须反映到对应的碎片文件
+- 不可跳过 progress/ 碎片直接开始编码
 
 ## Spec-Driven Development Rules
 
@@ -193,6 +199,12 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 2. 接口变更必须同步更新 spec 文件
 3. spec 文件是所有 agent 的单一事实来源 (Single Source of Truth)
 4. Agent 间通信必须符合 `spec/agent_contract.md` 的消息格式
+
+## Commit Convention
+
+1. Commit message 格式: `[module] type: 描述`（模板见 `.gitmessage`）
+2. 每个 commit 应关联对应的 spec 文件（在正文中注明 `spec: spec/xxx.md`）
+3. 提交粒度: 一个 commit = 一个逻辑变更单元
 
 ## Evaluation-Driven Development Rules
 
