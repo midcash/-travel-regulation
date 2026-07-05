@@ -4,7 +4,7 @@
 
 - **版本**: `1.0.0-dev`
 - **分支**: `main`（与 `origin/main` 同步）
-- **已完成**: 试点编码 `core/message.py` + `core/context.py`，Pipeline R1-R5 全部通过（96% 覆盖率，133 tests）
+- **已完成**: 试点编码 `core/message.py` + `core/context.py`，Pipeline R1-R5 全部通过（96% 覆盖率，131 tests）
 
 ## 已完成清单
 
@@ -62,13 +62,13 @@ tests/
 - **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
 
 #### 1B. `models/` 全部（P0）
-- **spec**: `spec/system_spec.md` §3, `spec/agent_contract.md`
+- **spec**: `spec/system_spec.md` §2（Models 层定义）, `spec/agent_contract.md` §3.1（AgentMessage 数据模型）, 各 Agent spec 中的数据结构定义
 - **依赖**: 无代码依赖
 - **产出**: TripPlan / Budget / ItineraryDay / Constraint / UserPreferences / TravelPlanDraft / ValidationReport / PlanQualityReport / FinalTravelPlan 等数据模型
 - **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
 
 #### 1C. `tools/` 全部（P1）
-- **spec**: `spec/executor_spec.md` §工具
+- **spec**: `spec/executor_spec.md` §2（功能规格，check_prices/check_time/check_geography 定义）, §3（接口规格）
 - **依赖**: models/（逻辑依赖，可先用 dataclass stub）
 - **产出**: check_prices() / check_time() / check_geography() / check_budget_compliance() 等 stub 实现
 - **注意**: v1.0.0 用 stub/mock，不接真实 API
