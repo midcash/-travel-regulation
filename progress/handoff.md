@@ -1,10 +1,10 @@
-# Handoff — 试点编码启动
+# Handoff — 试点编码（已完成）
 
 ## 当前状态
 
 **项目版本**: `1.0.0-dev`（未发布）
 **分支**: `main`
-**阶段**: 约束修补完成，准备试点编码
+**阶段**: ✅ 试点编码已完成 (2026-07-05)，进入 Phase 1 开发
 
 ## 已完成工作
 
@@ -54,19 +54,26 @@
 - Mode A 不在 test_scenarios 中
 - 等等
 
-## 下一步：试点编码
+## 下一步：试点编码 ✅ 已完成
 
 **目标**: 实现 `core/message.py` + `core/context.py`，跑通完整 Dev Agent Pipeline
 
 **Pipeline**: Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent (Mode A)
+**结果**: 全部 5 轮通过，代码已推送到 main 分支。
 
-**流程**:
-1. 启动 Context Agent（扫描 spec/、playbooks/、evaluation/、progress/，输出上下文摘要）
-2. 启动 Plan Agent（设计 message.py + context.py 实现方案，分解原子任务）
-3. 启动 Code Agent（按 Plan 编写代码）
-4. 启动 Test Agent（编写测试，覆盖率 ≥ 70%）
-5. 启动 Evaluation Agent (Mode A)（按 code_quality_rubric 评分）
-6. 若未通过质量门 → 退回 Code/Test Agent，最多 3 轮
+### 执行记录
+
+| 轮次 | Agent | 产出 | Git Commit |
+|------|-------|------|------------|
+| R1 | Context Agent (Explore子agent) | 完整上下文摘要，5个clarifications | — |
+| R2 | Plan Agent (Plan子agent) | 7任务实现方案，29项spec 100%覆盖 | — |
+| R3 | Code Agent | core/message.py + core/context.py + __init__.py | `80badf4` |
+| R4 | Test Agent | 133 tests, 96% 覆盖率 | `3d30de5` |
+| R5 | Evaluation Agent (Mode A) | 评分 3.85 → P0修复 → 达标 | `a79ba76` |
+
+**质量门**: Mode A 评分 PASS_WITH_SUGGESTIONS (3.85)，2个P0项已修复。
+
+**未修复项**: 重要级 ~15项 + 优化级 ~24项，移至 `progress/README.md` 变更日志追踪。
 
 ## 关键文件索引
 
