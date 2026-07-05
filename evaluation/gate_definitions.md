@@ -136,19 +136,68 @@ def gate_1_check(validation: ValidationReport) -> GateResult:
 
 ### 4.2 检查项
 
+**综合评分**:
+
 | 检查项 | 规则 | 严重级别 |
 |--------|------|---------|
 | composite_score | ≥ 80 | blocking (条件) |
-| 完整性得分 | ≥ 3 | warning |
-| 可行性得分 | ≥ 3 | warning |
-| 约束满足度得分 | ≥ 3 | warning |
+
+**维度级评分** (来自 plan_quality_rubric，1-5 分制):
+
+| 维度 | 缩写 | 警告阈值 | 警告升级规则 |
+|------|------|---------|-------------|
+| 完整性 (Completeness) | COM | < 3 | 任意维度 < 3 → Warning |
+| 可行性 (Feasibility) | FEA | < 3 | ≥ 3 个维度有 Warning → 升级为 blocking |
+| 约束满足度 (Constraint Satisfaction) | CON | < 3 | — |
+| 体验质量 (Experience Quality) | EXP | < 3 | — |
+| 信息准确度 (Information Accuracy) | ACC | < 3 | — |
 
 ### 4.3 判定逻辑
 
 ```python
 def gate_2_check(quality_report: PlanQualityReport, iteration: int) -> GateResult:
+    # === Phase 1: 维度级检查 ===
+    DIMENSION_THRESHOLD = 3       # 低于 3 分 (1-5 制) 触发警告
+    DIM_ESCALATION_COUNT = 3      # ≥ 3 个维度告警时升级为阻断
+
+    dim_scores = {
+        "COM": quality_report.dimensions.completeness,
+        "FEA": quality_report.dimensions.feasibility,
+        "CON": quality_report.dimensions.constraint_satisfaction,
+        "EXP": quality_report.dimensions.experience_quality,
+        "ACC": quality_report.dimensions.information_accuracy,
+    }
+
+    dim_warnings = []
+    for name, score in dim_scores.items():
+        if score < DIMENSION_THRESHOLD:
+            dim_warnings.append(Warning(
+                f"维度 [{name}] 得分 {score} < {DIMENSION_THRESHOLD}，存在结构性缺陷"
+            ))
+
+    dim_escalated = len(dim_warnings) >= DIM_ESCALATION_COUNT
+    if dim_escalated:
+        dim_blocking = BlockingIssue(
+            f"{len(dim_warnings)} 个维度得分低于 {DIMENSION_THRESHOLD}，方案结构性缺陷严重"
+        )
+
+    # === Phase 2: 综合评分判定 ===
+
+    # 综合 ≥ 80 但维度升级: 阻断，需针对性修订
+    if quality_report.composite_score >= 80 and dim_escalated:
+        return GateResult(
+            gate_id=2, passed=False,
+            blocking_issues=[dim_blocking],
+            warnings=dim_warnings,
+            revision_feedback=f"综合分达标但 {len(dim_warnings)} 个维度严重偏低，需针对性修订"
+        )
+
+    # 综合 ≥ 80 且无维度升级: 通过 (维度告警附在 warnings 中)
     if quality_report.composite_score >= 80:
-        return GateResult(gate_id=2, passed=True)
+        return GateResult(
+            gate_id=2, passed=True,
+            warnings=dim_warnings if dim_warnings else None
+        )
 
     # 得分 < 60: 无论第几轮，标记为 REJECT
     if quality_report.composite_score < 60:
@@ -158,16 +207,20 @@ def gate_2_check(quality_report: PlanQualityReport, iteration: int) -> GateResul
             rejected=True,
             blocking_issues=[BlockingIssue(
                 f"综合得分 {quality_report.composite_score} < 60，严重缺陷，建议重新规划而非修订"
-            )]
+            )],
+            warnings=dim_warnings
         )
 
     if iteration >= 3:
         # 得分 60-79 且达到最大迭代次数: 降级通过
+        all_warnings = dim_warnings + [
+            Warning(f"已达最大迭代次数({iteration}/3)，降级输出")
+        ]
         return GateResult(
             gate_id=2,
             passed=True,  # 强制通过但降级
             degraded=True,
-            warnings=[Warning(f"已达最大迭代次数({iteration}/3)，降级输出")]
+            warnings=all_warnings
         )
 
     # 得分 60-79 且未达迭代上限: 发送修订反馈
@@ -177,11 +230,13 @@ def gate_2_check(quality_report: PlanQualityReport, iteration: int) -> GateResul
         blocking_issues=[BlockingIssue(
             f"综合得分 {quality_report.composite_score} < 80，需修订"
         )],
+        warnings=dim_warnings,
         revision_feedback=quality_report.revision_feedback
     )
 ```
 
 ### 4.4 失败处理
+- **维度升级 (≥3 维度 < 3)**: 即使综合分 ≥ 80 也阻断，反馈中标注低分维度，退回 Planning 针对性修订
 - **第 1-2 轮不通过**: 将 revision_feedback 发送给 Planning Agent 修订
 - **第 3 轮不通过**: 停止迭代，降级输出（`degraded: true`），标注未满足项
 - **得分 < 60**: 无论第几轮，标记为 REJECT，建议重新规划而非修订
@@ -282,7 +337,8 @@ Orchestrator 分解 → Planning Agent → Execution Agent
 Evaluation Agent (Mode B)
     │
     ▼
-[Gate 2] ── FAIL (第1-2轮) → 退回 Planning 修订 (带 revision_feedback)
+[Gate 2] ── FAIL (维度升级)  → 退回 Planning 针对性修订
+    │      ── FAIL (第1-2轮) → 退回 Planning 修订 (带 revision_feedback)
     │      ── FAIL (第3轮)   → 降级输出
     │ PASS
     ▼
@@ -327,4 +383,4 @@ class GateRunner:
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 1.0.0 | 2026-07-05 | 初始版本，Gate 0-3 完整定义 |
+| 1.0.0 | 2026-07-05 | 初始版本，Gate 0-3 完整定义；Gate 2 包含维度级告警检查（5维度 < 3 触发 Warning，≥3 维度告警升级为 blocking） |

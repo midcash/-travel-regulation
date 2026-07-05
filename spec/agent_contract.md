@@ -83,7 +83,51 @@ class AgentMessage:
         # 5. 若为响应消息，correlation_id 必须非空
 ```
 
-### 3.2 各 Agent 的消息契约
+### 3.2 TaskType 枚举
+
+`AgentMessage.task_type` 字段的类型定义。所有 Agent 间通信的 `task_type` 必须为此枚举中的值。
+
+```python
+class TaskType(Enum):
+    """任务类型枚举 — 统一定义所有 Agent 间通信的有效 task_type 值"""
+
+    # === 任务请求 (Orchestrator → Specialist) ===
+    # 行程规划请求: Orchestrator → Planning Agent
+    TASK_CREATE_ITINERARY = "task.create_itinerary"
+    # 行程修订请求: Orchestrator → Planning Agent (携带修订反馈)
+    TASK_REVISE_ITINERARY = "task.revise_itinerary"
+    # 可行性验证请求: Orchestrator → Execution Agent
+    TASK_VALIDATE_FEASIBILITY = "task.validate_feasibility"
+    # 代码质量评估请求: Orchestrator → Evaluation Agent (Mode A)
+    TASK_EVALUATE_CODE = "task.evaluate_code"
+    # 方案质量评估请求: Orchestrator → Evaluation Agent (Mode B)
+    TASK_EVALUATE_PLAN = "task.evaluate_plan"
+    # 贡献度评估请求: Orchestrator → Evaluation Agent (Mode C, 消融实验)
+    TASK_EVALUATE_CONTRIBUTION = "task.evaluate_contribution"
+
+    # === 响应消息 (Specialist → Orchestrator) ===
+    # 行程草稿响应: Planning Agent → Orchestrator
+    RESPONSE_ITINERARY_DRAFT = "response.itinerary_draft"
+    # 校验报告响应: Execution Agent → Orchestrator
+    RESPONSE_VALIDATION_REPORT = "response.validation_report"
+    # 通用结果响应: 任意 Specialist → Orchestrator
+    RESPONSE_RESULT = "response.result"
+    # 错误响应: 任意 Specialist → Orchestrator
+    RESPONSE_ERROR = "response.error"
+
+    # === 控制消息 (Orchestrator → All Agents) ===
+    # 全局中止指令: Orchestrator 广播给所有子 Agent
+    CONTROL_ABORT = "control.abort"
+```
+
+**值命名规则**: `<category>.<action>` — category 为 `task` | `response` | `control`，action 使用 `snake_case`。
+
+**使用约束**:
+- 消息发送前必须校验 `task_type` 是否为已知枚举值
+- 未在枚举中定义的任务类型将被 `MessageValidationError` 拒绝
+- 新增任务类型必须在此枚举中注册后方可使用
+
+### 3.3 各 Agent 的消息契约
 
 #### Orchestrator → Planning Agent
 
@@ -312,4 +356,4 @@ class AgentRegistry(ABC):
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 1.0.0 | 2026-07-05 | 初始版本，定义完整 Agent 通信契约 |
+| 1.0.0 | 2026-07-05 | 初始版本，定义完整 Agent 通信契约；含 §3.2 TaskType 枚举（11个值）、§3.3 各 Agent 消息契约、§4 错误处理 |

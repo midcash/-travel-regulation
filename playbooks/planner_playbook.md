@@ -115,7 +115,7 @@
 | `cluster_by_geography` | Step 3 地理分组 | `items: [object], max_distance_km: number` |
 | `optimize_daily_schedule` | Step 3 日程编排 | `attractions: [object], day_index: int` |
 
-**回退策略**: 搜索工具返回空结果 → 扩大搜索半径（+5km）→ 仍为空则标注"该区域搜索结果有限"
+**回退策略**: 工具调用失败 → 按 agent_contract.md §5.2 重试（最多3次，指数退避 1s→2s→4s，超时15s）；搜索工具返回空结果 → 扩大搜索半径（+5km）→ 仍为空则标注"该区域搜索结果有限"
 
 ---
 

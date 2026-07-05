@@ -335,18 +335,222 @@
 
 ---
 
-## 8. 回归测试套件
+## 8. 编排器错误恢复测试场景
+
+### TS-ORCH-001: Planning Agent 超时恢复
+```
+场景: Planning Agent 首次调用超时，第1次重试成功
+
+期望:
+  - 第1次调用 30s 后超时
+  - Orchestrator 按指数退避 1s 后重试
+  - 第1次重试成功，流程继续
+  - 最终方案正常产出
+```
+
+### TS-ORCH-002: Agent 超时耗尽重试
+```
+场景: Execution Agent 连续 3 次重试全部超时
+
+期望:
+  - 3 次重试均在 30s 后超时（间隔 1s→2s→4s）
+  - 重试耗尽后标记 Execution Agent 调用失败
+  - Orchestrator 降级输出: 跳过可行性验证，标注 degraded
+  - 最终方案标注"可行性未验证"
+```
+
+### TS-ORCH-003: 评估超时跳过
+```
+场景: Evaluation Agent (Mode B) 超时
+
+期望:
+  - 超时后不阻塞流程
+  - Orchestrator 跳过质量评估，直接进入 Gate 3
+  - 最终方案标注"质量评估未完成"
+  - degraded: true
+```
+
+### TS-ORCH-004: Planning Agent 返回错误(有部分产物)
+```
+场景: Planning Agent 返回错误但有部分草稿
+
+期望:
+  - Orchestrator 检测到错误响应 (response.error)
+  - partial_draft 非空 → 使用部分草稿
+  - 缺失部分由默认模板填充 + auto_filled: true
+  - 标注"部分内容需人工完善"
+```
+
+### TS-ORCH-005: Agent 返回空错误(无产物)
+```
+场景: Execution Agent 返回错误且 body 为空
+
+期望:
+  - Orchestrator 检测到错误响应且无有效 payload
+  - 错误信息传播到用户
+  - 不产出虚假方案
+  - GateRunner 记录失败原因
+```
+
+### TS-ORCH-006: 多 Agent 复合错误
+```
+场景: Planning 和 Execution 均返回错误
+
+期望:
+  - Orchestrator 不提前退出，收集所有错误
+  - 汇总错误列表到最终响应
+  - 不产出方案，返回聚合错误信息
+```
+
+### TS-ORCH-007: 用户在 Planning 阶段取消
+```
+场景: 用户在 Planning Agent 执行中发送取消指令
+
+期望:
+  - Orchestrator 收到 control.abort (reason: user_cancel)
+  - 广播 abort 到所有子 Agent
+  - 清理 SharedContext，释放资源
+  - 返回"已取消"确认
+```
+
+### TS-ORCH-008: 用户在 Execution 阶段取消
+```
+场景: 用户在 Execution Agent 执行中取消
+
+期望:
+  - Orchestrator 广播 abort
+  - 保存当前部分产物到日志（供后续恢复）
+  - 5s 内完成清理
+  - 返回"已取消"+"已保存部分草稿"
+```
+
+### TS-ORCH-009: 用户在 Evaluation 阶段取消
+```
+场景: 用户在 Evaluation Agent 执行中取消
+
+期望:
+  - Orchestrator 广播 abort
+  - 询问用户: 保留当前草稿 / 丢弃
+  - 保留 → 跳过评估直接 Gate 3 + degraded
+  - 丢弃 → 完全清理
+```
+
+---
+
+## 9. 执行 Agent 核心检查函数测试场景
+
+### TS-EXEC-001: check_prices 正常通过
+```
+场景: 4项价格 (机票/酒店/餐饮/门票) 均在市场价 10% 偏差内
+
+期望:
+  - price_score ≥ 90
+  - 0 个 price_anomalies
+  - overall_status: "passed"
+```
+
+### TS-EXEC-002: check_prices 边界告警
+```
+场景: 酒店价格偏离市场价恰好 30% (中/高阈值边界)
+
+期望:
+  - price_score 在 60-70 之间
+  - 1 个 price_anomaly (severity: "medium")
+  - overall_status: "passed_with_warnings"
+  - 不产生 blocking_issue
+```
+
+### TS-EXEC-003: check_prices 触发阻断
+```
+场景: 4项中3项价格偏离超过 30%
+
+期望:
+  - price_score < 50
+  - 3 个 price_anomalies (含 severity: "high")
+  - overall_status: "failed"
+  - 产生 blocking_issue: "多项价格严重偏离市场价，预算可行性存疑"
+```
+
+### TS-EXEC-004: check_time 正常通过
+```
+场景: 5天行程，每天总活动+交通 ≤ 10h，无时间冲突
+
+期望:
+  - 0 个 time_conflicts
+  - 0 个 time_warnings
+  - overall_time_status: "passed"
+  - 不产生 blocking_issue
+```
+
+### TS-EXEC-005: check_time 边界告警
+```
+场景: 某天总活动时间恰好 12h (告警阈值，未到冲突)
+
+期望:
+  - 0 个 time_conflicts
+  - 1 个 time_warning: "第X天总时长接近上限(12h)"
+  - overall_time_status: "passed_with_warnings"
+```
+
+### TS-EXEC-006: check_time 触发阻断
+```
+场景: 某天活动时间超过 12h + 午餐时段两个活动重叠
+
+期望:
+  - 2 个 time_conflicts (超时 + 午餐冲突)
+  - overall_time_status: "failed"
+  - 产生 blocking_issue: "第X天存在时间冲突"
+```
+
+### TS-EXEC-007: check_geography 正常通过
+```
+场景: 东京线性路线 (浅草→上野→秋叶原→新宿→涩谷)，绕路比 1.14 (< 1.5)
+
+期望:
+  - detour_ratio < 1.5
+  - 0 个 geography_warnings
+  - overall_geo_status: "passed"
+```
+
+### TS-EXEC-008: check_geography 边界告警
+```
+场景: 路线绕路比恰好 1.5 (告警阈值)
+
+期望:
+  - detour_ratio = 1.5
+  - 1 个 geography_warning: "路线绕路比达到上限(1.5)"
+  - overall_geo_status: "passed_with_warnings"
+```
+
+### TS-EXEC-009: check_geography 触发阻断
+```
+场景: 路线绕路比 2.0 + 包含 3.5h 未标注交通方式的长途转移
+
+期望:
+  - detour_ratio > 1.5
+  - 1 个 geography_warning (绕路) + 1 个 blocking (未标注长途)
+  - overall_geo_status: "failed"
+  - 产生 blocking_issue: "存在地理逻辑不可行的路线段"
+```
+
+---
+
+## 10. 回归测试套件
 
 ### 最小回归集 (每次提交必跑)
 - TS-E2E-001 (标准流程)
 - TS-ERR-001 (缺失目的地)
 - TS-GATE-001 (硬约束违反)
+- TS-ORCH-001 (超时恢复)
+- TS-EXEC-003 (价格检查阻断)
 
 ### 完整回归集 (每次发布前必跑)
 - 所有 TS-E2E-* (5个)
 - 所有 TS-EDGE-* (5个)
 - 所有 TS-ERR-* (7个)
 - 所有 TS-GATE-* (5个)
+- 所有 TS-ORCH-* (9个)
+- 所有 TS-EXEC-* (9个)
 - TS-PERF-001
 
 ### 消融回归集 (每次架构变更必跑)
@@ -354,8 +558,8 @@
 
 ---
 
-## 9. 变更日志
+## 11. 变更日志
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 1.0.0 | 2026-07-05 | 初始版本，23个测试场景 |
+| 1.0.0 | 2026-07-05 | 初始版本，41个测试场景（含 §8 编排器错误恢复 9个 + §9 执行 Agent 核心检查函数 9个） |

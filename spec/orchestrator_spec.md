@@ -72,6 +72,7 @@
 | 行程规划 (T1-T4) | planning_agent | task.create_itinerary |
 | 可行性验证 | execution_agent | task.validate_feasibility |
 | 方案评估 | evaluation_agent | task.evaluate_plan |
+| 行程修订 (Gate 2 反馈修订) | planning_agent | task.revise_itinerary |
 | 代码评估 | evaluation_agent | task.evaluate_code |
 | 贡献度评估 | evaluation_agent | task.evaluate_contribution |
 

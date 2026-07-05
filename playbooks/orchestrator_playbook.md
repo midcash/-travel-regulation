@@ -115,7 +115,7 @@
 | `trigger_gate` | 每个 Gate 检查点 | `gate_id: int, payload: object` |
 | `assemble_plan` | Step 5 整合输出 | `plan_draft: object, eval_report: object` |
 
-**回退策略**: 任何工具调用失败 → 重试3次（间隔1s） → 仍失败则记录错误并尝试降级路径
+**回退策略**: 任何工具调用失败 → 按 agent_contract.md §5.2 重试（最多3次，指数退避 1s→2s→4s，超时15s）→ 仍失败则记录错误并尝试降级路径
 
 ---
 
@@ -172,13 +172,15 @@
 
 ## 7. 异常处理 (Error Handling)
 
+超时与重试统一遵循 agent_contract.md §5。错误码与建议操作统一遵循 agent_contract.md §4.2。
+
 | 异常场景 | 处理策略 |
 |---------|---------|
 | 用户输入缺失必填项 | 追问用户，最多2轮；仍不完整则拒绝并说明原因 |
-| Planning Agent 超时 (30s) | 重试1次；仍超时则使用缓存模板 + 标注"部分内容需人工完善" |
+| Planning Agent 超时 (30s) | 按 agent_contract.md §5.2 重试（最多3次，指数退避 1s→2s→4s）；仍超时则降级：使用缓存模板 + 标注"部分内容需人工完善" |
 | Execution Agent 返回不可行 | 将约束冲突信息反馈给 Planning Agent，要求修订 |
 | Evaluation 评分 < 80 连续3轮 | 停止迭代，降级输出 + 标注未满足项清单 |
-| 子 agent 返回格式错误 | 要求重发；2次格式错误则跳过该 agent，标注降级 |
+| 子 agent 返回格式错误 | 格式错误不可恢复（参考 agent_contract.md §4.2，INVALID_MESSAGE → abort），直接标记该 agent 调用失败并降级输出 |
 | 预算超出上限 > 110% | 硬约束违规，必须修订（不适用降级策略） |
 
 ---
