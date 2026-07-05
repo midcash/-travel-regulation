@@ -18,3 +18,5 @@ venv/
 # OS
 Thumbs.db
 .DS_Store
+.coverage
+htmlcov/
