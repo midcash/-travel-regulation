@@ -47,8 +47,20 @@ from core.orchestration_engine import (
     TaskDAG,
     TaskStatus,
 )
+from core.llm_client import (
+    DEFAULT_MODEL,
+    ENV_API_KEY,
+    LLM_TIMEOUT,
+    LLMClient,
+    LLMEmptyResponseError,
+    LLMError,
+    LLMParseError,
+    LLMRateLimitError,
+    LLMSchemaValidationError,
+    LLMTimeoutError,
+)
 
-__version__ = "1.0.0-dev"
+__version__ = "1.1.0-dev"
 
 __all__ = [
     # 枚举
@@ -81,6 +93,12 @@ __all__ = [
     # 异常
     "MessageValidationError",
     "TaskExecutionError",
+    "LLMError",
+    "LLMTimeoutError",
+    "LLMRateLimitError",
+    "LLMParseError",
+    "LLMEmptyResponseError",
+    "LLMSchemaValidationError",
     # 常量
     "HEALTH_CHECK_TIMEOUT",
     "MAX_RETRIES",
@@ -89,4 +107,9 @@ __all__ = [
     "TASK_TIMEOUT",
     "TIMESTAMP_TOLERANCE",
     "TOOL_TIMEOUT",
+    "LLM_TIMEOUT",
+    "DEFAULT_MODEL",
+    "ENV_API_KEY",
+    # LLM 客户端
+    "LLMClient",
 ]

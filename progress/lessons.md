@@ -158,6 +158,25 @@
 | 2026-07-06 | Batch 1 (core/models/tools) | 10 | 10 | 0 |
 | 2026-07-06 | Batch 2 (orchestrator/planning/execution/evaluation) | 13 | 13 | 0 |
 | 2026-07-06 | Batch 3 (integration tests + ablation) | 10 | 10 | 0 |
+| 2026-07-06 | Batch 4 (planning agent LLM 接入) | 4 | 4 | 0 |
+
+---
+
+## Batch 4: Planning Agent 接入 LLM (core/llm_client + agents/planning_agent)
+
+### core/llm_client.py
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | LLM 超时 30s vs TOOL_TIMEOUT 15s — handoff.md §4.1 明确要求 LLM 超时 30s，因 LLM 生成延迟显著高于普通 API 调用。两值不应统一。 | core/llm_client.py 定义独立 LLM_TIMEOUT=30，与 message.py 的 TOOL_TIMEOUT=15 分离 | 不同外部调用的超时值应在对应模块独立定义，spec 中应区分"API 调用超时"和"LLM 生成超时" |
+| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | LLMClient.generate() 内建 3 次重试 + Agent 层 _llm_or_stub 也有异常捕获，双层防御导致 Mock 测试仅验证 Agent 层（1 次调用即 fallback），不验证 LLMClient 内部重试 | 保持分层：LLMClient 负责网络层重试(429/超时)，Agent 层 _llm_or_stub 负责业务层降级。Mock 测试覆盖 Agent 层即可 | 分层错误处理应明确职责边界：基础设施层管重试，业务层管降级 |
+
+### agents/planning_agent.py
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-06 | 待提交 | Code Agent | 接口不匹配 | `_llm_or_stub` 的 fallback_func 返回最终类型（如 List[Attraction]），外层方法期望 dict 并调用 _parse_llm_* 解析，导致 `'list' object has no attribute 'get'` | 外层方法增加 isinstance 类型检查：LLM 成功返回 dict→解析；fallback 返回最终类型→直接返回 | _llm_or_stub 的返回值语义应文档化；或使用 Result 类型消除歧义 |
+| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | `allocate_budget` 从同步改为 async。测试 2 处直接调用未加 asyncio.run()，返回 coroutine 而非 BudgetAllocation | 测试改为 `asyncio.run(agent.allocate_budget(...))`；方法签名变更在 commit message 中标注 | 异步化改造应全局搜索调用点并批量更新；CI 应检测 unawaited coroutine warning |
 
 ---
 
@@ -170,3 +189,4 @@
 | 2026-07-06 | 回填 Batch 1 全部 10 个问题（含跨模块 1 个），commit hash = `41b5970` |
 | 2026-07-06 | 回填 Batch 2 全部 13 个问题（含跨模块 3 个），commit hash = `7681362` |
 | 2026-07-06 | 回填 Batch 3 全部 10 个问题（含跨模块 2 个），commit hash = `f3da390` |
+| 2026-07-06 | 记录 Batch 4 全部 4 个问题，commit 待回填 |
