@@ -189,25 +189,25 @@
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | `.env` 文件加载依赖 python-dotenv 可选包。如果未安装，`load_dotenv()` 调用静默失败，用户通过系统环境变量设置 API key 仍可正常工作 | 使用 try/except ImportError 包裹 `load_dotenv()`，不强制依赖 | 可选依赖应在模块文档中标注安装条件和使用影响 |
+| 2026-07-06 | 4c74fa1 | Code Agent | 设计权衡 | `.env` 文件加载依赖 python-dotenv 可选包。如果未安装，`load_dotenv()` 调用静默失败，用户通过系统环境变量设置 API key 仍可正常工作 | 使用 try/except ImportError 包裹 `load_dotenv()`，不强制依赖 | 可选依赖应在模块文档中标注安装条件和使用影响 |
 
 ### tools/price_checker.py
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 工具限制 | Amadeus Self-Service API 需要 OAuth2 token 获取流程（client_credentials grant），增加了集成复杂度。当前默认降级到 stub，API 可用时自动切换 | 实现完整的 OAuth2 token 管理（缓存 + 过期前刷新），API 不可用时自动降级 | 第三方 API 集成前应评估认证复杂度，OAuth2 流程应抽取为可复用模块 |
+| 2026-07-06 | 4c74fa1 | Code Agent | 工具限制 | Amadeus Self-Service API 需要 OAuth2 token 获取流程（client_credentials grant），增加了集成复杂度。当前默认降级到 stub，API 可用时自动切换 | 实现完整的 OAuth2 token 管理（缓存 + 过期前刷新），API 不可用时自动降级 | 第三方 API 集成前应评估认证复杂度，OAuth2 流程应抽取为可复用模块 |
 
 ### tools/geo_checker.py
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | Nominatim 免费但限速 1 req/s。`geocode_async` 使用 known_cache 优先策略（20+ 常用坐标），避免频繁 API 调用。这是"真实 API + 本地缓存"的混合模式 | known_cache 命中时直接返回（degraded=False），未命中时尝试 Nominatim → 模糊匹配 → 默认值 | 免费 API 的速率限制应在设计阶段评估；本地缓存预热策略可显著降低 API 调用量 |
+| 2026-07-06 | 4c74fa1 | Code Agent | 设计权衡 | Nominatim 免费但限速 1 req/s。`geocode_async` 使用 known_cache 优先策略（20+ 常用坐标），避免频繁 API 调用。这是"真实 API + 本地缓存"的混合模式 | known_cache 命中时直接返回（degraded=False），未命中时尝试 Nominatim → 模糊匹配 → 默认值 | 免费 API 的速率限制应在设计阶段评估；本地缓存预热策略可显著降低 API 调用量 |
 
 ### agents/execution_agent.py
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 接口不匹配 | Execution agent 的 `_MARKET_PRICES` 与 `tools/price_checker.py` 的 `_MARKET_PRICES` 是两套独立维护的重复数据，Item type key 也不一致（"flight" vs "flight_domestic"） | 移除 execution agent 中的重复定义，`estimate_market_price` 改为调用 `tools.price_checker.estimate_market_price`，通过 type_map 做 key 映射 | stub 数据只应存在于一个权威源；Agent 需要参考数据时应调用 tools 层而非自行维护副本 |
+| 2026-07-06 | 4c74fa1 | Code Agent | 接口不匹配 | Execution agent 的 `_MARKET_PRICES` 与 `tools/price_checker.py` 的 `_MARKET_PRICES` 是两套独立维护的重复数据，Item type key 也不一致（"flight" vs "flight_domestic"） | 移除 execution agent 中的重复定义，`estimate_market_price` 改为调用 `tools.price_checker.estimate_market_price`，通过 type_map 做 key 映射 | stub 数据只应存在于一个权威源；Agent 需要参考数据时应调用 tools 层而非自行维护副本 |
 
 ---
 
@@ -221,4 +221,4 @@
 | 2026-07-06 | 回填 Batch 2 全部 13 个问题（含跨模块 3 个），commit hash = `7681362` |
 | 2026-07-06 | 回填 Batch 3 全部 10 个问题（含跨模块 2 个），commit hash = `f3da390` |
 | 2026-07-06 | 回填 Batch 4 全部 4 个问题，commit hash = `bce72b8` |
-| 2026-07-06 | 新增 Batch 5 全部 4 个问题（commit 列待回填） |
+| 2026-07-06 | 新增 Batch 5 全部 4 个问题，commit hash = `4c74fa1` |
