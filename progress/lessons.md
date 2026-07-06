@@ -160,6 +160,7 @@
 | 2026-07-06 | Batch 3 (integration tests + ablation) | 10 | 10 | 0 |
 | 2026-07-06 | Batch 4 (planning agent LLM 接入) | 4 | 4 | 0 |
 | 2026-07-06 | Batch 5 (execution agent API 接入) | 4 | 4 | 0 |
+| 2026-07-06 | Batch 6 (集成验证 + 真实案例) | 3 | 3 | 0 |
 
 ---
 
@@ -209,6 +210,20 @@
 |------|--------|----------|------|---------|---------|---------|
 | 2026-07-06 | 4c74fa1 | Code Agent | 接口不匹配 | Execution agent 的 `_MARKET_PRICES` 与 `tools/price_checker.py` 的 `_MARKET_PRICES` 是两套独立维护的重复数据，Item type key 也不一致（"flight" vs "flight_domestic"） | 移除 execution agent 中的重复定义，`estimate_market_price` 改为调用 `tools.price_checker.estimate_market_price`，通过 type_map 做 key 映射 | stub 数据只应存在于一个权威源；Agent 需要参考数据时应调用 tools 层而非自行维护副本 |
 
+## Batch 6: 集成验证 + 真实案例
+
+### tests/test_real_cases.py
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-06 | 待提交 | Code Agent | 测试盲区 | `test_chinese_input_full_pipeline` 使用中文日期 "8月15号" 触发 Gate 0 失败 — `_extract_dates()` 仅支持 YYYY-MM-DD 和 `/` 分隔，此为 Batch 2 已知限制，但在真实案例测试中再次遇到 | 测试输入改用 `2026-08-15出发2026-08-17返回`，保留中文目的地和偏好描述 | 测试用例的输入格式应参考 lessons.md 已知限制清单；Context Agent R1 应在上下文摘要中标注"测试输入应避免的格式" |
+| 2026-07-06 | 待提交 | Code Agent | spec遗漏 | handoff.md 标注"552 个现有测试"但实际测试数为 649（Batch 4 +60, Batch 5 +75, 另有 test_api_integration.py），handoff 编写时的数据已过时 | 在 Batch 6 开始前通过 `pytest --collect-only -q` 获取实际测试数 | handoff 中的测试数量应通过脚本自动统计并标注统计时间戳，而非手工填写 |
+| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | 5 个真实城市案例通过 stub fallback 运行（不真调 LLM/API），验证的是双轨架构的降级路径而非真实外部服务调用。真实 API 端到端测试需要有效的 API key 和网络环境，不适合 CI 自动化 | 在 CI 中使用 stub 降级路径验证架构正确性；真实 API 调用留给手动集成测试或独立 smoketest 脚本 | 应在 ROADMAP.md 或 handoff 中明确区分"CI 集成测试"（stub）和"手动 smoketest"（真实 API），避免期望不一致 |
+
+### 跨模块问题
+
+无新问题。
+
 ---
 
 ## 变更日志
@@ -222,3 +237,4 @@
 | 2026-07-06 | 回填 Batch 3 全部 10 个问题（含跨模块 2 个），commit hash = `f3da390` |
 | 2026-07-06 | 回填 Batch 4 全部 4 个问题，commit hash = `bce72b8` |
 | 2026-07-06 | 新增 Batch 5 全部 4 个问题，commit hash = `4c74fa1` |
+| 2026-07-06 | 新增 Batch 6 全部 3 个问题，commit hash = `待提交` |

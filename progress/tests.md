@@ -8,8 +8,8 @@
 
 | 来源 | spec commit | 对应代码 | 同步状态 | 备注 |
 |------|-------------|---------|---------|------|
-| `evaluation/test_scenarios.md` | 7681362 | `tests/` | 已完成 | 41 场景全覆盖: 集成测试 + 消融实验 |
-| `evaluation/ablation_protocol.md` | 7681362 | `tests/test_ablation.py` | 已完成 | LOO + AIS + 360° + 协同 + 成本-质量 |
+| `evaluation/test_scenarios.md` | 4c74fa1 | `tests/` | 已完成 | 41 场景全覆盖 + Batch 6 真实案例 |
+| `evaluation/ablation_protocol.md` | 4c74fa1 | `tests/test_ablation.py` | 已完成 | LOO + AIS + 360° + 协同 + 成本-质量 |
 
 > **spec commit**: 上次确认同步时 spec 文件的 commit hash。
 > 检查漂移: `git diff <spec_commit>..HEAD -- <spec_file>`
@@ -32,6 +32,8 @@
 | `test_evaluation_agent.py` | Evaluation Agent Mode A/B/C, 41 tests | 已完成 |
 | `test_integration.py` | E2E + Edge + Error + Gate + ORCH + PERF | **Batch 3 新建** |
 | `test_ablation.py` | TS-ABLATION-001~004 (LOO + AIS + 360 + Synergy) | **Batch 3 新建** |
+| `test_api_integration.py` | Batch 5: API config + price/geo/time checker 集成 | **Batch 5 新建** |
+| `test_real_cases.py` | Batch 6: 5真实城市 + 降级 + 跨领域 (14 tests) | **Batch 6 新建** |
 
 ---
 
@@ -78,3 +80,5 @@
 | 2026-07-06 | Batch 3: test_ablation.py 创建 | 已完成 | LOO+AIS+360°+Synergy+C2C5 |
 | 2026-07-06 | Batch 3: conftest.py 扩展 | 已完成 | 新增 integration/ablation 共享 fixtures |
 | 2026-07-06 | Phase 4 完成 | 已完成 | 41/41 场景全量覆盖 |
+| 2026-07-06 | Batch 5: test_api_integration.py | 已完成 | API config + 3 tool clients + execution agent 集成 (75 tests) |
+| 2026-07-06 | Batch 6: test_real_cases.py | 已完成 | 5真实城市端到端 + 降级场景 + 跨领域验证 (14 tests)，663 total 0 regressions |

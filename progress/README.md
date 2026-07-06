@@ -55,7 +55,9 @@
 | 2026-07-06 | 实现 | agents/ + 164 tests | Batch 2 全面铺开：4个业务Agent完整实现 + 164 tests (85% cov) |
 | 2026-07-06 | 实现 | tests/test_integration.py, tests/test_ablation.py | Batch 3 集成测试+消融实验：41/41 场景全覆盖，LOO+AIS+360°+协同分析 |
 | 2026-07-06 | 新增 | progress/lessons.md + CLAUDE.md R5.5 + devagents 约束更新 | 创建跨轮次经验记录机制：Code/Test Agent 写入，Context Agent 读取 |
+| 2026-07-06 | 实现 | core/llm_client.py + agents/planning_agent.py + 60 tests | Batch 4: Planning Agent 接入 LLM — LLMClient + 6方法改造，LLM优先→stub降级 |
 | 2026-07-06 | 实现 | core/config.py + tools/price|geo|time_checker.py + agents/execution_agent.py + 75 tests | Batch 5: Execution Agent 接入真实 API — AmadeusPriceClient + NominatimClient + MapboxDirectionsClient，全部双轨架构（API优先→stub降级），degraded 标记传播 |
+| 2026-07-06 | 实现 | tests/test_real_cases.py + 14 tests | Batch 6: 集成验证 + 真实案例 — 5个真实城市(东京/巴黎/纽约/成都/曼谷)端到端跑通，降级场景+跨领域验证，663 tests 0 regressions |
 
 ---
 
