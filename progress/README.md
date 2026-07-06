@@ -6,9 +6,9 @@
 
 | 模块 | 碎片文件 | 所属阶段 | 状态 |
 |------|---------|---------|------|
-| core/ (框架内核) | [core.md](core.md) | Phase 0 | 未开始 |
-| models/ (数据模型) | [models.md](models.md) | Phase 0 | 未开始 |
-| tools/ (工具集) | [tools.md](tools.md) | Phase 0 | 未开始 |
+| core/ (框架内核) | [core.md](core.md) | Phase 0 | 已完成 |
+| models/ (数据模型) | [models.md](models.md) | Phase 0 | 已完成 |
+| tools/ (工具集) | [tools.md](tools.md) | Phase 0 | 已完成 |
 | Orchestrator | [orchestrator.md](orchestrator.md) | Phase 1 | 未开始 |
 | Planning Agent | [planning.md](planning.md) | Phase 2 | 未开始 |
 | Execution Agent | [execution.md](execution.md) | Phase 2 | 未开始 |
@@ -21,7 +21,7 @@
 
 | 阶段 | 状态 | 开始日期 | 完成日期 |
 |------|------|---------|---------|
-| Phase 0: 基础设施 (core/, models/, tools/) | 未开始 | — | — |
+| Phase 0: 基础设施 (core/, models/, tools/) | 已完成 | 2026-07-05 | 2026-07-06 |
 | Phase 1: Orchestrator | 未开始 | — | — |
 | Phase 2: Planning Agent + Execution Agent | 未开始 | — | — |
 | Phase 3: Evaluation Agent | 未开始 | — | — |

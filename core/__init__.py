@@ -32,6 +32,21 @@ from core.context import (
     LogEntry,
     SharedContext,
 )
+from core.gate_runner import (
+    BlockingIssue,
+    GateResult,
+    GateRunner,
+    Warning_,
+)
+from core.orchestration_engine import (
+    AgentRouter,
+    ResultAssembler,
+    RetryManager,
+    RouteRule,
+    Task,
+    TaskDAG,
+    TaskStatus,
+)
 
 __version__ = "1.0.0-dev"
 
@@ -40,14 +55,26 @@ __all__ = [
     "ErrorCode",
     "TaskType",
     "ContextStatus",
+    "TaskStatus",
     # 数据类
     "AgentIdentity",
     "AgentMessage",
     "Capability",
     "HealthStatus",
     "LogEntry",
+    "Task",
     # 核心类
     "SharedContext",
+    "TaskDAG",
+    "AgentRouter",
+    "RetryManager",
+    "ResultAssembler",
+    "GateRunner",
+    # Gate 相关
+    "BlockingIssue",
+    "GateResult",
+    "RouteRule",
+    "Warning_",
     # 抽象基类
     "AgentRegistry",
     "BaseAgent",

@@ -8,9 +8,9 @@
 
 | 模块 | 详细文件 | 所属阶段 | 状态 |
 |------|---------|---------|------|
-| core/ | [progress/core.md](progress/core.md) | Phase 0 | 未开始 |
-| models/ | [progress/models.md](progress/models.md) | Phase 0 | 未开始 |
-| tools/ | [progress/tools.md](progress/tools.md) | Phase 0 | 未开始 |
+| core/ | [progress/core.md](progress/core.md) | Phase 0 | 已完成 |
+| models/ | [progress/models.md](progress/models.md) | Phase 0 | 已完成 |
+| tools/ | [progress/tools.md](progress/tools.md) | Phase 0 | 已完成 |
 | Orchestrator | [progress/orchestrator.md](progress/orchestrator.md) | Phase 1 | 未开始 |
 | Planning Agent | [progress/planning.md](progress/planning.md) | Phase 2 | 未开始 |
 | Execution Agent | [progress/execution.md](progress/execution.md) | Phase 2 | 未开始 |
