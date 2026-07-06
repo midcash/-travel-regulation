@@ -11,10 +11,10 @@
 | core/ | [progress/core.md](progress/core.md) | Phase 0 | 已完成 |
 | models/ | [progress/models.md](progress/models.md) | Phase 0 | 已完成 |
 | tools/ | [progress/tools.md](progress/tools.md) | Phase 0 | 已完成 |
-| Orchestrator | [progress/orchestrator.md](progress/orchestrator.md) | Phase 1 | 未开始 |
-| Planning Agent | [progress/planning.md](progress/planning.md) | Phase 2 | 未开始 |
-| Execution Agent | [progress/execution.md](progress/execution.md) | Phase 2 | 未开始 |
-| Evaluation Agent | [progress/evaluation.md](progress/evaluation.md) | Phase 3 | 未开始 |
+| Orchestrator | [progress/orchestrator.md](progress/orchestrator.md) | Phase 1 | 已完成 |
+| Planning Agent | [progress/planning.md](progress/planning.md) | Phase 2 | 已完成 |
+| Execution Agent | [progress/execution.md](progress/execution.md) | Phase 2 | 已完成 |
+| Evaluation Agent | [progress/evaluation.md](progress/evaluation.md) | Phase 3 | 已完成 |
 | tests/ | [progress/tests.md](progress/tests.md) | Phase 4 | 未开始 |
 
 **详细内容见 [progress/README.md](progress/README.md)**（阶段进度、变更日志、评估知识影响追踪）
