@@ -13,7 +13,7 @@
 | Planning Agent | [planning.md](planning.md) | Phase 2 | 已完成 |
 | Execution Agent | [execution.md](execution.md) | Phase 2 | 已完成 |
 | Evaluation Agent | [evaluation.md](evaluation.md) | Phase 3 | 已完成 |
-| tests/ (测试) | [tests.md](tests.md) | Phase 4 | 进行中 |
+| tests/ (测试) | [tests.md](tests.md) | Phase 4 | 已完成 |
 
 ---
 
@@ -25,7 +25,7 @@
 | Phase 1: Orchestrator | 已完成 | 2026-07-06 | 2026-07-06 |
 | Phase 2: Planning Agent + Execution Agent | 已完成 | 2026-07-06 | 2026-07-06 |
 | Phase 3: Evaluation Agent | 已完成 | 2026-07-06 | 2026-07-06 |
-| Phase 4: 集成测试 + 消融实验 | 进行中 | 2026-07-06 | — |
+| Phase 4: 集成测试 + 消融实验 | 已完成 | 2026-07-06 | 2026-07-06 |
 
 **状态说明**: 未开始 → 进行中 → 已完成 → 已评估
 
@@ -52,7 +52,8 @@
 | 2026-07-05 | 创建 | 全部 24 个 .md 文件 | 项目初始化，完成所有准备文件 |
 | 2026-07-05 | 重构 | PROGRESS.md → progress/*.md | 拆分为 per-module 碎片，避免并行开发时的合并冲突 |
 | 2026-07-05 | 修复 | CLAUDE.md, code_agent.md, gate_definitions.md, agent_contract.md | 约束推演发现5个关键缺口（Chain A/C/D）：Gate 2伪代码缺REJECT、Gate 0/1阈值不一致、Code Agent §6缺性能+测试自检、合约缺消息类型 |
-| 2026-07-06 | 实现 | agents/orchestrator.py, agents/planning_agent.py, agents/execution_agent.py, agents/evaluation_agent.py | Batch 2 全面铺开：4个业务Agent完整实现 + 164 tests (85% cov) |
+| 2026-07-06 | 实现 | agents/ + 164 tests | Batch 2 全面铺开：4个业务Agent完整实现 + 164 tests (85% cov) |
+| 2026-07-06 | 实现 | tests/test_integration.py, tests/test_ablation.py | Batch 3 集成测试+消融实验：41/41 场景全覆盖，LOO+AIS+360°+协同分析 |
 
 ---
 

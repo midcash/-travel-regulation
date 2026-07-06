@@ -4,8 +4,8 @@
 
 - **版本**: `1.0.0-dev`
 - **分支**: `main`（与 `origin/main` 同步）
-- **已完成**: Phase 0 (core/models/tools) + Phase 1-3 (4个业务Agent)，164 tests (85% cov)
-- **最近提交**: `7681362` — Batch 2 全面铺开完成
+- **已完成**: Phase 0-4 全部完成 — 6个核心模块 + 4个业务Agent + 552 tests (41/41 场景全覆盖)
+- **最近提交**: 待提交 — Batch 3 集成测试+消融实验完成
 
 ## 已完成清单
 
@@ -58,6 +58,17 @@
 | `tests/test_planning_agent.py` | 35 tests |
 | `tests/test_execution_agent.py` | 30 tests |
 | `tests/test_evaluation_agent.py` | 41 tests |
+
+### Batch 3: 集成测试 + 消融实验（Phase 4）
+
+| 文件 | 测试数 | 覆盖场景 |
+|------|--------|---------|
+| `tests/test_integration.py` | 31 | E2E(5) + Edge(5) + Error(2) + Gate(4) + Perf(3) + ORCH Recovery(9) + Context(2) + Message(1) |
+| `tests/test_ablation.py` | 22 | LOO Ablation(7) + AIS(5) + 360°(4) + Synergy(4) + Protocol(10) + Pipeline(2) |
+| `tests/conftest.py` | — | 新增 10 个 Phase 4 共享 fixtures |
+
+**41/41 测试场景全覆盖**: E2E✅ Edge✅ Error✅ Gate✅ Ablation✅ Perf✅ ORCH✅ EXEC✅
+**全量测试**: 552 passed in 15.11s
 
 ### 现存代码文件总览
 ```

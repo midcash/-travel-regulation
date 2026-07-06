@@ -1,7 +1,7 @@
-"""共享 pytest fixtures。"""
+"""共享 pytest fixtures — Phase 4 Batch 3 扩展。"""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -13,6 +13,14 @@ from core.message import (
     TaskType,
 )
 from core.context import ContextStatus, SharedContext
+from models.request import (
+    Budget,
+    DateRange,
+    Destination,
+    Preferences,
+    StructuredRequest,
+    Travelers,
+)
 
 
 @pytest.fixture
@@ -81,3 +89,93 @@ def populated_context():
     ctx.set_status(ContextStatus.DECOMPOSING)
     ctx.add_log("INFO", "context initialized", "orchestrator")
     return ctx
+
+
+# ============================================================
+# Phase 4 Batch 3 — Integration & Ablation test fixtures
+# ============================================================
+
+@pytest.fixture
+def sample_destination():
+    """创建一个标准 Destination (东京)。"""
+    return Destination(city="东京", country="日本")
+
+
+@pytest.fixture
+def sample_daterange():
+    """创建一个标准 DateRange (5天)。"""
+    return DateRange(
+        arrival="2026-12-20",
+        departure="2026-12-25",
+        duration_days=5,
+    )
+
+
+@pytest.fixture
+def sample_budget():
+    """创建一个标准 Budget (15000 CNY)。"""
+    return Budget(total=15000, currency="CNY")
+
+
+@pytest.fixture
+def sample_travelers():
+    """创建标准 Travelers (2 adults)。"""
+    return Travelers(adults=2, children=0)
+
+
+@pytest.fixture
+def sample_preferences():
+    """创建标准 Preferences (food + culture, moderate pace)。"""
+    return Preferences(style=["food", "culture"], pace="moderate")
+
+
+@pytest.fixture
+def sample_request(sample_destination, sample_daterange, sample_budget, sample_travelers, sample_preferences):
+    """创建一个完整的 StructuredRequest (东京5天)。"""
+    return StructuredRequest(
+        destination=sample_destination,
+        dates=sample_daterange,
+        budget=sample_budget,
+        travelers=sample_travelers,
+        preferences=sample_preferences,
+        request_id=str(uuid.uuid4()),
+    )
+
+
+@pytest.fixture
+def ablation_test_suite():
+    """创建消融实验标准测试套件 (10 个用例, protocol §2.2)。"""
+    test_configs = [
+        (5, 15000, "东京"), (3, 8000, "曼谷"), (7, 30000, "巴黎"),
+        (1, 500, "广州"), (14, 50000, "罗马"), (4, 6000, "成都"),
+        (6, 12000, "首尔"), (2, 3000, "杭州"), (10, 40000, "伦敦"),
+        (3, 10000, "新加坡"),
+    ]
+    return [
+        {
+            "id": f"TC-{i+1:03d}",
+            "input": f"去{city}{days}天，预算{budget}元",
+            "expected_score_min": 70,
+        }
+        for i, (days, budget, city) in enumerate(test_configs)
+    ]
+
+
+@pytest.fixture
+def baseline_config():
+    """标准全量 Agent 配置。"""
+    return ["orchestrator", "planning_agent", "execution_agent", "evaluation_agent"]
+
+
+@pytest.fixture
+def ablation_configs():
+    """7 种消融实验配置 (ablation_protocol.md §2.1)。"""
+    return {
+        "C_full":            ["orchestrator", "planning_agent", "execution_agent", "evaluation_agent"],
+        "C_no_planner":      ["orchestrator", "execution_agent", "evaluation_agent"],
+        "C_no_executor":     ["orchestrator", "planning_agent", "evaluation_agent"],
+        "C_no_evaluator":    ["orchestrator", "planning_agent", "execution_agent"],
+        "C_planner_only":    ["orchestrator", "planning_agent"],
+        "C_executor_only":   ["orchestrator", "execution_agent"],
+        "C_orch_only":       ["orchestrator"],
+    }
