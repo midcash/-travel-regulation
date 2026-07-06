@@ -232,34 +232,34 @@
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | Anthropic SDK → OpenAI SDK 切换: DeepSeek API 兼容 OpenAI 格式，需用 AsyncOpenAI + 自定义 base_url (api.deepseek.com)。公共 API (LLMClient.generate()) 签名不变，planning_agent.py 无需修改 | 使用 openai>=1.0.0 的 AsyncOpenAI，设置 base_url 指向 DeepSeek 端点，DEEPSEEK_API_KEY 替代 ANTHROPIC_API_KEY | LLM 客户端应封装为统一接口（generate()），底层 SDK 切换不应影响调用方 |
+| 2026-07-06 | 9fb977b | Code Agent | 设计权衡 | Anthropic SDK → OpenAI SDK 切换: DeepSeek API 兼容 OpenAI 格式，需用 AsyncOpenAI + 自定义 base_url (api.deepseek.com)。公共 API (LLMClient.generate()) 签名不变，planning_agent.py 无需修改 | 使用 openai>=1.0.0 的 AsyncOpenAI，设置 base_url 指向 DeepSeek 端点，DEEPSEEK_API_KEY 替代 ANTHROPIC_API_KEY | LLM 客户端应封装为统一接口（generate()），底层 SDK 切换不应影响调用方 |
 
 ### core/config.py
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 接口不匹配 | API 提供商多次切换（Mapbox→高德, Amadeus→飞猪→途牛），config.py 字段名和认证方式随之变化。高德用 key query param，途牛用 apiKey header，认证方式不统一 | config.py 对每个服务独立管理认证（auth_params for 高德，TuniuMCPClient 内部处理 apiKey header），不做假统一 | 不同 API 提供商的认证方式必然不同，不要强行抽象到同一个方法签名 |
-| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | 飞猪 API 端点不可达 (gw.open.fliggy.com SSL EOF)，无法验证 key 有效性。最终切换到途牛 MCP，MCP 协议标准化程度更高 | 途牛 MCP 三端点全部可达（hotel/flight/ticket），JSON-RPC 2.0 标准协议，HTTP 200 + SSE 响应 | API 提供商选择应优先验证端点可达性，而非仅看文档；MCP 协议作为 Agent-工具交互标准值得优先考虑 |
+| 2026-07-06 | 9fb977b | Code Agent | 接口不匹配 | API 提供商多次切换（Mapbox→高德, Amadeus→飞猪→途牛），config.py 字段名和认证方式随之变化。高德用 key query param，途牛用 apiKey header，认证方式不统一 | config.py 对每个服务独立管理认证（auth_params for 高德，TuniuMCPClient 内部处理 apiKey header），不做假统一 | 不同 API 提供商的认证方式必然不同，不要强行抽象到同一个方法签名 |
+| 2026-07-06 | 9fb977b | Code Agent | 设计权衡 | 飞猪 API 端点不可达 (gw.open.fliggy.com SSL EOF)，无法验证 key 有效性。最终切换到途牛 MCP，MCP 协议标准化程度更高 | 途牛 MCP 三端点全部可达（hotel/flight/ticket），JSON-RPC 2.0 标准协议，HTTP 200 + SSE 响应 | API 提供商选择应优先验证端点可达性，而非仅看文档；MCP 协议作为 Agent-工具交互标准值得优先考虑 |
 
 ### tools/price_checker.py (途牛 MCP)
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 工具限制 | 途牛 MCP 返回 SSE 格式 (text/event-stream: `event: message\ndata: {...}`)，不能直接用 json.loads() 解析 | 实现 _parse_sse() 方法，提取 data: 行后 JSON 解析，同时兼容纯 JSON 响应 | 调用第三方 API 前应先检查 Content-Type 响应头；MCP 协议使用 SSE 是标准行为 |
-| 2026-07-06 | 待提交 | Code Agent | 接口不匹配 | 途牛 MCP auth 使用 `apiKey` header 而非 `Authorization: Bearer`，第一次测试返回 401。tool 名称不是通用名 (tuniuHotelSearch 非 search_hotels)，参数是 camelCase (cityName 非 city) | 先用 tools/list 发现所有可用 tool，再根据 tool schema 确定参数名；auth header 从文档确认 | 永远不要猜测第三方 API 的 tool 名或参数名，先 list 再调用 |
-| 2026-07-06 | 待提交 | Code Agent | 边界遗漏 | 途牛酒店搜索要求同时传 checkIn+checkOut，只传 checkIn 返回"参数只能有一个"错误。门票 scenic_name 必填，用 keyword 返回 validation error | hotel: 自动从 checkIn +2天 计算 checkOut; ticket: 修正参数名为 scenic_name | API 参数校验错误应被客户端捕获并给出明确提示，而不是静默返回 None |
+| 2026-07-06 | 9fb977b | Code Agent | 工具限制 | 途牛 MCP 返回 SSE 格式 (text/event-stream: `event: message\ndata: {...}`)，不能直接用 json.loads() 解析 | 实现 _parse_sse() 方法，提取 data: 行后 JSON 解析，同时兼容纯 JSON 响应 | 调用第三方 API 前应先检查 Content-Type 响应头；MCP 协议使用 SSE 是标准行为 |
+| 2026-07-06 | 9fb977b | Code Agent | 接口不匹配 | 途牛 MCP auth 使用 `apiKey` header 而非 `Authorization: Bearer`，第一次测试返回 401。tool 名称不是通用名 (tuniuHotelSearch 非 search_hotels)，参数是 camelCase (cityName 非 city) | 先用 tools/list 发现所有可用 tool，再根据 tool schema 确定参数名；auth header 从文档确认 | 永远不要猜测第三方 API 的 tool 名或参数名，先 list 再调用 |
+| 2026-07-06 | 9fb977b | Code Agent | 边界遗漏 | 途牛酒店搜索要求同时传 checkIn+checkOut，只传 checkIn 返回"参数只能有一个"错误。门票 scenic_name 必填，用 keyword 返回 validation error | hotel: 自动从 checkIn +2天 计算 checkOut; ticket: 修正参数名为 scenic_name | API 参数校验错误应被客户端捕获并给出明确提示，而不是静默返回 None |
 
 ### tools/geo_checker.py + time_checker.py (高德)
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Code Agent | 设计权衡 | Nominatim (免费无key) → 高德 (需key)，geo_checker 的 available 属性从"始终可用"变为"依赖 API key"。测试需要 monkeypatch 清除环境变量 | AmapGeocodeClient.available 改为检查 AMAP_API_KEY；测试中 monkeypatch.delenv + 清除 config cache | 从免费 API 切换到需认证 API 时，available 语义发生变化，所有相关测试需要同步更新 |
+| 2026-07-06 | 9fb977b | Code Agent | 设计权衡 | Nominatim (免费无key) → 高德 (需key)，geo_checker 的 available 属性从"始终可用"变为"依赖 API key"。测试需要 monkeypatch 清除环境变量 | AmapGeocodeClient.available 改为检查 AMAP_API_KEY；测试中 monkeypatch.delenv + 清除 config cache | 从免费 API 切换到需认证 API 时，available 语义发生变化，所有相关测试需要同步更新 |
 
 ### tests/test_api_integration.py
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-06 | 待提交 | Test Agent | 测试盲区 | .env 中的真实 API key 泄漏到测试环境，导致 `test_not_available_without_key` 类测试失败 — 测试以为没有 key，但 .env 已注入 | monkeypatch.delenv() 清除环境变量 + cfg._config_cache = None 重置缓存 | .env 文件会影响本地测试，CI 环境不会有此问题但本地需防范；测试中需要显式控制环境变量 |
+| 2026-07-06 | 9fb977b | Test Agent | 测试盲区 | .env 中的真实 API key 泄漏到测试环境，导致 `test_not_available_without_key` 类测试失败 — 测试以为没有 key，但 .env 已注入 | monkeypatch.delenv() 清除环境变量 + cfg._config_cache = None 重置缓存 | .env 文件会影响本地测试，CI 环境不会有此问题但本地需防范；测试中需要显式控制环境变量 |
 
 ---
 
