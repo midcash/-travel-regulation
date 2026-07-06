@@ -8,7 +8,7 @@
 
 | 版本 | 目标 | 预计改动范围 | 状态 |
 |------|------|-------------|------|
-| v1.0.0 | 基础旅游规划能力 — 单目的地行程生成 + 可行性验证 + 评估反馈 | 全量初始化 | 开发中 |
+| v1.0.0 | 基础旅游规划能力 — 单目的地行程生成 + 可行性验证 + 评估反馈 | 全量初始化 | 已完成 |
 | v1.1.0 | 多目的地行程串联 | `spec/planner_spec.md`, `spec/orchestrator_spec.md` | 规划中 |
 | v1.2.0 | 实时价格 API 对接 | `spec/executor_spec.md`, `tools/` | 规划中 |
 | v2.0.0 | 多人协作规划 + agent_contract v2 | `spec/system_spec.md`, `spec/agent_contract.md` | 规划中 |
@@ -30,7 +30,7 @@
 | `agents/planning_agent.py` | 行程规划·目的地研究·预算分配 | P1 |
 | `agents/execution_agent.py` | 可行性验证·硬约束检查·风险识别 + Gate 1 | P1 |
 | `agents/evaluation_agent.py` | Mode A/B/C 三层评估 + Gate 2 | P1 |
-| `tests/` | 23 个 test scenarios 全覆盖，行覆盖率 ≥ 70% | P1 |
+| `tests/` | 41 个 test scenarios 全覆盖 + 消融实验 + 回归测试套件，552 tests | P1 |
 
 **不在此版本**:
 - 真实 API 调用（用 stub/mock 替代）

@@ -110,12 +110,9 @@ tests/
 
 ---
 
-## 下一步：Batch 3 — 集成测试 + 消融实验（Phase 4）
+## v1.0.0 全部完成
 
-- 端到端测试：按 `evaluation/test_scenarios.md` 41 个场景全量覆盖
-- 消融实验：按 `evaluation/ablation_protocol.md` 执行 LOO
-- 回归测试套件建立
-- 集成测试：Orchestrator → Planning → Execution → Evaluation 完整流程测试
+Phase 0-4 全部交付，552 tests 全量通过，41/41 场景全覆盖。
 
 ---
 

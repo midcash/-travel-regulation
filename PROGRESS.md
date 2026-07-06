@@ -15,7 +15,7 @@
 | Planning Agent | [progress/planning.md](progress/planning.md) | Phase 2 | 已完成 |
 | Execution Agent | [progress/execution.md](progress/execution.md) | Phase 2 | 已完成 |
 | Evaluation Agent | [progress/evaluation.md](progress/evaluation.md) | Phase 3 | 已完成 |
-| tests/ | [progress/tests.md](progress/tests.md) | Phase 4 | 未开始 |
+| tests/ | [progress/tests.md](progress/tests.md) | Phase 4 | 已完成 |
 
 **详细内容见 [progress/README.md](progress/README.md)**（阶段进度、变更日志、评估知识影响追踪）
 
