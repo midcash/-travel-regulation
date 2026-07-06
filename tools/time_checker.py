@@ -1,6 +1,6 @@
-"""时间可行性校验工具 — API 接入版。
+"""时间可行性校验工具 — 高德地图版。
 
-v1.1.0: 双轨架构 — API 可用时调用 Mapbox Directions API 获取真实交通时间；
+v1.1.0: 双轨架构 — API 可用时调用高德地图路径规划 API 获取真实交通时间；
 不可用时降级到 Haversine 估算 + 规则引擎。
 
 来源: spec/executor_spec.md §2.3, handoff.md §5.3 §5.5
@@ -14,7 +14,7 @@ import math
 from datetime import datetime as dt, timedelta
 from typing import Any, Dict, List, Optional
 
-from core.config import API_TIMEOUT, MAX_RETRIES, RETRY_BACKOFF, get_config
+from core.config import API_TIMEOUT, get_config
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +30,22 @@ _DEFAULT_OPENING_HOURS = {"open": "09:00", "close": "17:00"}
 _LUNCH_WINDOW = ("11:30", "13:30")
 _DINNER_WINDOW = ("17:30", "20:00")
 
+# 高德路径规划模式映射
+_AMAP_STRATEGY_MAP = {
+    "driving": "0",          # 驾车最快
+    "walking": None,         # 步行用独立 API
+}
+
 
 # ============================================================
-# Mapbox Directions API 客户端
+# 高德地图路径规划客户端
 # ============================================================
 
-class MapboxDirectionsClient:
-    """Mapbox Directions API 客户端。
+class AmapDirectionsClient:
+    """高德地图路径规划 API 客户端。
 
-    免费层: 100k req/month。
-    支持: driving / walking / cycling / transit。
+    免费层: 5,000 次/天。
+    认证方式: key 查询参数。
     """
 
     def __init__(self):
@@ -47,8 +53,8 @@ class MapboxDirectionsClient:
 
     @property
     def available(self) -> bool:
-        """客户端是否可用（Mapbox API key 已配置）。"""
-        return self._config.is_configured("mapbox")
+        """客户端是否可用（高德 API key 已配置）。"""
+        return self._config.is_configured("amap")
 
     async def get_travel_time(
         self,
@@ -56,12 +62,12 @@ class MapboxDirectionsClient:
         destination: Dict[str, float],
         mode: str = "driving",
     ) -> Optional[Dict[str, Any]]:
-        """查询两点间的交通时间 (Mapbox Directions API)。
+        """查询两点间的交通时间（高德路径规划 API）。
 
         Args:
             origin: {"lat": float, "lng": float}
             destination: {"lat": float, "lng": float}
-            mode: "driving" | "walking" | "cycling"
+            mode: "driving" | "walking"
 
         Returns:
             {duration_minutes, distance_km, mode, source_type} 或 None。
@@ -72,17 +78,26 @@ class MapboxDirectionsClient:
         import urllib.request
         import json as _json
 
-        lng1, lat1 = origin.get("lng", 0), origin.get("lat", 0)
-        lng2, lat2 = destination.get("lng", 0), destination.get("lat", 0)
+        lat1 = origin.get("lat", 0)
+        lng1 = origin.get("lng", 0)
+        lat2 = destination.get("lat", 0)
+        lng2 = destination.get("lng", 0)
 
-        # Mapbox Directions API 格式: {lng},{lat};{lng},{lat}
-        coords = f"{lng1},{lat1};{lng2},{lat2}"
-        profile = f"mapbox/{mode}"
-        url = (
-            f"{self._config.mapbox_base_url}/directions/v5/{profile}/{coords}"
-            f"?access_token={self._config.mapbox_api_key}"
-            f"&geometries=geojson&overview=full"
-        )
+        key = self._config.amap_api_key
+
+        if mode == "walking":
+            url = (
+                f"{self._config.amap_base_url}/v3/direction/walking"
+                f"?key={key}&origin={lng1},{lat1}&destination={lng2},{lat2}"
+                f"&output=JSON"
+            )
+        else:
+            strategy = _AMAP_STRATEGY_MAP.get(mode, "0")
+            url = (
+                f"{self._config.amap_base_url}/v3/direction/driving"
+                f"?key={key}&origin={lng1},{lat1}&destination={lng2},{lat2}"
+                f"&strategy={strategy}&output=JSON"
+            )
 
         try:
             async def _call():
@@ -92,14 +107,20 @@ class MapboxDirectionsClient:
 
             data = await asyncio.wait_for(_call(), timeout=self._config.api_timeout)
 
-            routes = data.get("routes", [])
-            if not routes:
-                logger.warning(f"Mapbox 未找到路线: {coords}")
+            if data.get("status") != "1":
+                logger.warning(f"高德路径规划失败: status={data.get('status')}, info={data.get('info')}")
                 return None
 
-            route = routes[0]
-            duration_seconds = route.get("duration", 0)
-            distance_meters = route.get("distance", 0)
+            route_key = "route"
+            route = data.get(route_key, {})
+            paths = route.get("paths", [])
+            if not paths:
+                logger.warning(f"高德未找到路线: ({lat1},{lng1}) → ({lat2},{lng2})")
+                return None
+
+            path = paths[0]
+            distance_meters = int(path.get("distance", 0))
+            duration_seconds = int(path.get("duration", 0))
 
             return {
                 "origin": origin,
@@ -111,10 +132,10 @@ class MapboxDirectionsClient:
                 "source_type": "api",
             }
         except asyncio.TimeoutError:
-            logger.warning(f"Mapbox Directions 超时: {coords}")
+            logger.warning(f"高德路径规划超时: ({lat1},{lng1}) → ({lat2},{lng2})")
             return None
         except Exception as exc:
-            logger.warning(f"Mapbox Directions 失败: {exc}")
+            logger.warning(f"高德路径规划失败: {exc}")
             return None
 
 
@@ -122,13 +143,13 @@ class MapboxDirectionsClient:
 # 模块级客户端实例
 # ============================================================
 
-_directions_client: Optional[MapboxDirectionsClient] = None
+_directions_client: Optional[AmapDirectionsClient] = None
 
 
-def _get_directions() -> MapboxDirectionsClient:
+def _get_directions() -> AmapDirectionsClient:
     global _directions_client
     if _directions_client is None:
-        _directions_client = MapboxDirectionsClient()
+        _directions_client = AmapDirectionsClient()
     return _directions_client
 
 
@@ -247,21 +268,21 @@ async def calculate_transit_time_async(
     lat2 = destination.get("lat", 0)
     lng2 = destination.get("lng", 0)
 
-    # Mapbox 只支持 driving/walking/cycling，不支持 public_transit（需要 Mapbox Matrix API）
-    mapbox_mode = mode if mode in ("driving", "walking") else "driving"
+    # 高德支持 driving/walking，public_transit 降级为 driving
+    amap_mode = mode if mode in ("driving", "walking") else "driving"
 
-    # 尝试 Mapbox API
+    # 尝试高德 API
     client = _get_directions()
     if client.available:
         try:
-            result = await client.get_travel_time(origin, destination, mapbox_mode)
+            result = await client.get_travel_time(origin, destination, amap_mode)
             if result:
                 return {**result, "degraded": False}
         except Exception:
             pass
 
         logger.warning(
-            f"Mapbox Directions 不可用，降级到 Haversine 估算: "
+            f"高德路径规划不可用，降级到 Haversine 估算: "
             f"({lat1},{lng1}) → ({lat2},{lng2})"
         )
 

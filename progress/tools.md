@@ -28,3 +28,5 @@
 | 2026-07-06 | 实现 tools/__init__.py | 已完成 | 10个公共函数统一导出 |
 | 2026-07-06 | 编写 tests/test_tools.py | 已完成 | 45 tests，覆盖TS-EXEC-001~009全部价格/时间/地理场景 |
 | 2026-07-06 | Batch 5: API 接入改造 | 已完成 | price: AmadeusPriceClient + 降级; geo: NominatimClient + geocode_async + 降级; time: MapboxDirectionsClient + 降级; 全部保留 stub fallback + degraded 标记 |
+| 2026-07-06 | Phase 5: 地图切换到高德 | 已完成 | geo_checker: NominatimClient→AmapGeocodeClient (restapi.amap.com/v3/geocode), time_checker: MapboxDirectionsClient→AmapDirectionsClient (restapi.amap.com/v3/direction), auth: key query param |
+| 2026-07-06 | Phase 5: 价格切换到途牛 MCP | 已完成 | price_checker: AmadeusPriceClient→FliggyPriceClient→TuniuMCPClient (JSON-RPC 2.0 + SSE 解析), 酒店tuniuHotelSearch/机票searchLowestPriceFlight/门票query_cheapest_tickets, auth: apiKey header |

@@ -1,7 +1,7 @@
-"""地理逻辑校验工具 — API 接入版。
+"""地理逻辑校验工具 — 高德地图版。
 
-v1.1.0: 双轨架构 — API 可用时调用 Nominatim 免费地理编码；不可用时降级到 Haversine + 贪心算法。
-Nominatim 免费、无需 API key，仅需 User-Agent 标识。
+v1.1.0: 双轨架构 — API 可用时调用高德地图地理编码；不可用时降级到 Haversine + 贪心算法。
+高德地图 Web API，免费层 5,000 次/天。
 
 来源: spec/executor_spec.md §2.4, handoff.md §5.2 §5.5
 """
@@ -11,10 +11,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-import time as _time
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.config import API_TIMEOUT, MAX_RETRIES, RETRY_BACKOFF, get_config
+from core.config import API_TIMEOUT, get_config
 
 logger = logging.getLogger(__name__)
 
@@ -26,142 +25,127 @@ _DETOUR_RATIO_THRESHOLD = 1.5
 _LONG_TRANSIT_MINUTES = 3 * 60
 _MAX_SAME_DAY_DISTANCE_KM = 30
 
-# Nominatim 速率限制
-_NOMINATIM_MIN_INTERVAL = 1.0  # 1 req/s (free tier)
-
 
 # ============================================================
-# Nominatim 地理编码客户端
+# 高德地图地理编码客户端
 # ============================================================
 
-class NominatimClient:
-    """Nominatim 免费地理编码客户端。
+class AmapGeocodeClient:
+    """高德地图地理编码客户端。
 
-    基于 OpenStreetMap 数据，免费使用，无需 API key。
-    速率限制: 1 req/s。
+    免费层: 5,000 次/天。
+    认证方式: key 查询参数。
     """
 
     def __init__(self):
         self._config = get_config()
-        self._last_request_time: float = 0.0
 
     @property
     def available(self) -> bool:
-        """Nominatim 无需 API key，始终可用（除非网络不可达）。"""
-        return True
-
-    async def _rate_limit(self) -> None:
-        """确保请求间隔 ≥ 1s（Nominatim free tier 限制）。"""
-        elapsed = _time.monotonic() - self._last_request_time
-        if elapsed < _NOMINATIM_MIN_INTERVAL:
-            await asyncio.sleep(_NOMINATIM_MIN_INTERVAL - elapsed)
+        """客户端是否可用（高德 API key 已配置）。"""
+        return self._config.is_configured("amap")
 
     async def geocode(self, address: str) -> Optional[Dict[str, Any]]:
-        """将地址解析为经纬度坐标。
+        """将地址解析为经纬度坐标（高德地理编码 API）。
 
         Args:
-            address: 地址字符串（如 "东京塔"、"Eiffel Tower, Paris"）。
+            address: 地址字符串（如 "东京塔"、"北京市朝阳区"）。
 
         Returns:
-            {lat, lng, display_name, place_id} 或 None（查询失败）。
+            {lat, lng, display_name, adcode, source} 或 None（查询失败）。
         """
+        if not self.available:
+            return None
+
         import urllib.request
         import urllib.parse
         import json as _json
 
-        await self._rate_limit()
+        params = urllib.parse.urlencode({
+            "key": self._config.amap_api_key,
+            "address": address,
+            "output": "JSON",
+        })
+        url = f"{self._config.amap_base_url}/v3/geocode/geo?{params}"
 
         try:
-            params = urllib.parse.urlencode({
-                "q": address,
-                "format": "json",
-                "limit": 1,
-            })
-            url = f"{self._config.nominatim_base_url}/search?{params}"
-
             async def _call():
-                req = urllib.request.Request(
-                    url,
-                    headers={
-                        "User-Agent": self._config.nominatim_user_agent,
-                        "Accept": "application/json",
-                    },
-                )
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})
                 resp = urllib.request.urlopen(req, timeout=self._config.api_timeout)
-                self._last_request_time = _time.monotonic()
                 return _json.loads(resp.read())
 
-            results = await asyncio.wait_for(_call(), timeout=self._config.api_timeout)
+            data = await asyncio.wait_for(_call(), timeout=self._config.api_timeout)
 
-            if not results:
-                logger.warning(f"Nominatim 未找到地址: {address}")
+            geocodes = data.get("geocodes", [])
+            if not geocodes or data.get("status") != "1":
+                logger.warning(f"高德地理编码未找到地址: {address}, status={data.get('status')}")
                 return None
 
-            best = results[0]
+            best = geocodes[0]
+            location = best.get("location", "0,0")
+            lng_str, lat_str = location.split(",")
             return {
-                "lat": float(best["lat"]),
-                "lng": float(best["lon"]),
-                "display_name": best.get("display_name", address),
-                "place_id": best.get("place_id"),
-                "source": "nominatim",
+                "lat": float(lat_str),
+                "lng": float(lng_str),
+                "display_name": best.get("formatted_address", address),
+                "adcode": best.get("adcode"),
+                "source": "amap",
             }
         except asyncio.TimeoutError:
-            logger.warning(f"Nominatim geocode 超时: {address}")
+            logger.warning(f"高德 geocode 超时: {address}")
             return None
         except Exception as exc:
-            logger.warning(f"Nominatim geocode 失败: {address} — {exc}")
+            logger.warning(f"高德 geocode 失败: {address} — {exc}")
             return None
 
     async def reverse_geocode(self, lat: float, lng: float) -> Optional[Dict[str, Any]]:
-        """将经纬度反向解析为地址。
+        """将经纬度反向解析为地址（高德逆地理编码 API）。
 
         Args:
             lat: 纬度
             lng: 经度
 
         Returns:
-            {address, display_name} 或 None。
+            {lat, lng, display_name, source} 或 None。
         """
+        if not self.available:
+            return None
+
         import urllib.request
         import urllib.parse
         import json as _json
 
-        await self._rate_limit()
+        location = f"{lng},{lat}"
+        params = urllib.parse.urlencode({
+            "key": self._config.amap_api_key,
+            "location": location,
+            "output": "JSON",
+        })
+        url = f"{self._config.amap_base_url}/v3/geocode/regeo?{params}"
 
         try:
-            params = urllib.parse.urlencode({
-                "lat": lat,
-                "lon": lng,
-                "format": "json",
-                "limit": 1,
-            })
-            url = f"{self._config.nominatim_base_url}/reverse?{params}"
-
             async def _call():
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": self._config.nominatim_user_agent},
-                )
+                req = urllib.request.Request(url, headers={"Accept": "application/json"})
                 resp = urllib.request.urlopen(req, timeout=self._config.api_timeout)
-                self._last_request_time = _time.monotonic()
                 return _json.loads(resp.read())
 
-            result = await asyncio.wait_for(_call(), timeout=self._config.api_timeout)
+            data = await asyncio.wait_for(_call(), timeout=self._config.api_timeout)
 
-            if not result:
+            regeocode = data.get("regeocode", {})
+            if data.get("status") != "1" or not regeocode:
                 return None
 
             return {
                 "lat": lat,
                 "lng": lng,
-                "display_name": result.get("display_name", ""),
-                "source": "nominatim",
+                "display_name": regeocode.get("formatted_address", ""),
+                "source": "amap",
             }
         except asyncio.TimeoutError:
-            logger.warning(f"Nominatim reverse geocode 超时: ({lat}, {lng})")
+            logger.warning(f"高德 reverse geocode 超时: ({lat}, {lng})")
             return None
         except Exception as exc:
-            logger.warning(f"Nominatim reverse geocode 失败: ({lat}, {lng}) — {exc}")
+            logger.warning(f"高德 reverse geocode 失败: ({lat}, {lng}) — {exc}")
             return None
 
 
@@ -225,14 +209,14 @@ def _actual_path_length(points: List[Dict[str, float]]) -> float:
 # 模块级客户端实例
 # ============================================================
 
-_nominatim_client: Optional[NominatimClient] = None
+_geocode_client: Optional[AmapGeocodeClient] = None
 
 
-def _get_nominatim() -> NominatimClient:
-    global _nominatim_client
-    if _nominatim_client is None:
-        _nominatim_client = NominatimClient()
-    return _nominatim_client
+def _get_geocode() -> AmapGeocodeClient:
+    global _geocode_client
+    if _geocode_client is None:
+        _geocode_client = AmapGeocodeClient()
+    return _geocode_client
 
 
 # ============================================================
@@ -245,8 +229,7 @@ async def geocode_async(address: str) -> Dict[str, Any]:
     Returns:
         {lat, lng, source, degraded}
     """
-    client = _get_nominatim()
-    # 内置少量已知坐标作为快速降级
+    # 内置已知坐标作为快速降级
     known: Dict[str, Tuple[float, float]] = {
         "东京": (35.6762, 139.6503), "Tokyo": (35.6762, 139.6503),
         "浅草寺": (35.7148, 139.7967), "Sensoji": (35.7148, 139.7967),
@@ -275,13 +258,15 @@ async def geocode_async(address: str) -> Dict[str, Any]:
         lat, lng = known[address]
         return {"lat": lat, "lng": lng, "source": "known_cache", "degraded": False}
 
-    # 尝试 Nominatim API
-    try:
-        result = await client.geocode(address)
-        if result:
-            return {"lat": result["lat"], "lng": result["lng"], "source": "nominatim", "degraded": False}
-    except Exception:
-        pass
+    # 尝试高德 API
+    client = _get_geocode()
+    if client.available:
+        try:
+            result = await client.geocode(address)
+            if result:
+                return {**result, "degraded": False}
+        except Exception:
+            pass
 
     # 降级: 模糊匹配已知坐标
     logger.warning(f"地理编码失败，降级到模糊匹配: {address}")
@@ -289,7 +274,7 @@ async def geocode_async(address: str) -> Dict[str, Any]:
         if key.lower() in address.lower() or address.lower() in key.lower():
             return {"lat": lat, "lng": lng, "source": "fuzzy_match", "degraded": True}
 
-    # 彻底失败: 返回默认坐标（城市中心）
+    # 彻底失败: 返回默认坐标
     logger.warning(f"地理编码完全失败，返回默认值: {address}")
     return {"lat": 0.0, "lng": 0.0, "source": "fallback_default", "degraded": True}
 

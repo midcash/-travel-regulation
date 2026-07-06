@@ -31,3 +31,5 @@
 | 2026-07-06 | 更新 core/__init__.py | 已完成 | 导出gate_runner + orchestration_engine全部公共API |
 | 2026-07-06 | 编写 tests/test_gate_runner.py | 已完成 | 55 tests，覆盖Gate 0-3全部判定分支 |
 | 2026-07-06 | 编写 tests/test_orchestration_engine.py | 已完成 | 44 tests，覆盖TaskDAG/路由/重试/整合 |
+| 2026-07-06 | Phase 5: LLM 切换 Anthropic→DeepSeek | 已完成 | llm_client.py: openai SDK (AsyncOpenAI) + base_url→api.deepseek.com + DEEPSEEK_API_KEY; 公共API不变 |
+| 2026-07-06 | Phase 5: API 配置重构 | 已完成 | config.py: Mapbox→高德(amap_api_key), Amadeus→途牛(tuniu_api_key), auth_headers()→auth_params(), 新增 tuniu_mcp_hotel/flight/ticket 三端点 |

@@ -1,7 +1,7 @@
-"""LLM 统一调用客户端 — 所有 Agent 通过此模块调用 Claude API。
+"""LLM 统一调用客户端 — 所有 Agent 通过此模块调用 DeepSeek API。
 
 职责:
-- 封装 Anthropic SDK 调用，提供统一的 generate() 异步接口
+- 封装 OpenAI SDK 调用 (DeepSeek API 兼容 OpenAI 格式)，提供统一的 generate() 异步接口
 - 超时(30s) + 重试(3次指数退避 [1,2,4]s)
 - JSON 响应解析 + 可选 schema 校验
 - API key 从环境变量注入，不硬编码
@@ -26,18 +26,19 @@ logger = logging.getLogger(__name__)
 # ============================================================
 
 LLM_TIMEOUT = 30          # LLM 调用超时 (秒) — handoff.md §4.1
-DEFAULT_MODEL = "claude-3-haiku-20240307"
-ENV_API_KEY = "ANTHROPIC_API_KEY"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEFAULT_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+ENV_API_KEY = "DEEPSEEK_API_KEY"
 MAX_RETRIES = 3           # 最大重试次数
 RETRY_BACKOFF = [1, 2, 4] # 指数退避序列 (秒)
 
-# 检测 anthropic SDK 是否可用
+# 检测 openai SDK 是否可用
 try:
-    import anthropic
-    _anthropic_available = True
+    from openai import AsyncOpenAI
+    _openai_available = True
 except ImportError:
-    _anthropic_available = False
-    logger.warning("anthropic SDK 未安装，LLMClient 将不可用。安装: pip install anthropic>=0.18.0")
+    _openai_available = False
+    logger.warning("openai SDK 未安装，LLMClient 将不可用。安装: pip install openai>=1.0.0")
 
 
 # ============================================================
@@ -81,11 +82,12 @@ class LLMSchemaValidationError(LLMError):
 class LLMClient:
     """LLM 统一调用客户端。
 
-    所有 Agent 通过此客户端调用 LLM，禁止裸调 Anthropic SDK。
+    所有 Agent 通过此客户端调用 LLM，禁止裸调 DeepSeek API。
+    通过 OpenAI SDK 调用（DeepSeek API 兼容 OpenAI 格式）。
     支持超时、重试、JSON 解析和 schema 校验。
 
     Usage:
-        client = LLMClient()  # 从 ANTHROPIC_API_KEY 环境变量读取 key
+        client = LLMClient()  # 从 DEEPSEEK_API_KEY 环境变量读取 key
         result = await client.generate(
             system_prompt="你是专家...",
             user_prompt="请推荐...",
@@ -102,9 +104,9 @@ class LLMClient:
         """初始化 LLM 客户端。
 
         Args:
-            api_key: Anthropic API key。默认从环境变量 ANTHROPIC_API_KEY 读取。
+            api_key: DeepSeek API key。默认从环境变量 DEEPSEEK_API_KEY 读取。
                      为 None 且环境变量也未设置时，客户端降级为不可用状态。
-            model: 模型 ID，默认 claude-3-haiku-20240307。
+            model: 模型 ID，默认 deepseek-chat（可通过 DEEPSEEK_MODEL 环境变量覆盖）。
             timeout: 单次调用超时 (秒)，默认 30s。
             max_retries: 最大重试次数，默认 3。
         """
@@ -114,8 +116,8 @@ class LLMClient:
         self._max_retries = max_retries
         self._client = None
 
-        if not _anthropic_available:
-            logger.warning("anthropic SDK 未安装，LLMClient 不可用")
+        if not _openai_available:
+            logger.warning("openai SDK 未安装，LLMClient 不可用")
         elif not self._api_key:
             logger.warning(
                 f"环境变量 {ENV_API_KEY} 未设置且未传入 api_key，"
@@ -127,7 +129,7 @@ class LLMClient:
     @property
     def available(self) -> bool:
         """客户端是否可用（SDK 已安装 + API key 已配置）。"""
-        return _anthropic_available and bool(self._api_key)
+        return _openai_available and bool(self._api_key)
 
     async def generate(
         self,
@@ -208,31 +210,30 @@ class LLMClient:
     ) -> str:
         """带超时的 LLM API 调用。"""
         return await asyncio.wait_for(
-            self._call_anthropic(system_prompt, user_prompt),
+            self._call_deepseek(system_prompt, user_prompt),
             timeout=self._timeout,
         )
 
-    async def _call_anthropic(
+    async def _call_deepseek(
         self, system_prompt: str, user_prompt: str
     ) -> str:
-        """底层 Anthropic API 调用。"""
+        """底层 DeepSeek API 调用（OpenAI 兼容格式）。"""
         client = self._get_client()
         try:
-            response = client.messages.create(
+            response = await client.chat.completions.create(
                 model=self._model,
                 max_tokens=4096,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
             )
             # 提取文本内容
-            content = response.content
-            if not content:
+            choices = response.choices
+            if not choices:
                 raise LLMEmptyResponseError("LLM 返回空响应")
-            text = ""
-            for block in content:
-                if hasattr(block, "text"):
-                    text += block.text
-            if not text.strip():
+            text = choices[0].message.content
+            if not text or not text.strip():
                 raise LLMEmptyResponseError("LLM 返回空文本")
             return text
         except (LLMEmptyResponseError,):
@@ -243,12 +244,15 @@ class LLMClient:
                 raise LLMRateLimitError(str(exc)) from exc
             if "timeout" in error_str:
                 raise LLMTimeoutError(str(exc)) from exc
-            raise LLMError(f"Anthropic API 调用失败: {exc}") from exc
+            raise LLMError(f"DeepSeek API 调用失败: {exc}") from exc
 
-    def _get_client(self):
-        """获取或创建 Anthropic 客户端实例。"""
+    def _get_client(self) -> "AsyncOpenAI":
+        """获取或创建 OpenAI 客户端实例（指向 DeepSeek 端点）。"""
         if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self._api_key)
+            self._client = AsyncOpenAI(
+                api_key=self._api_key,
+                base_url=DEEPSEEK_BASE_URL,
+            )
         return self._client
 
     def _parse_json_response(self, text: str) -> Dict[str, Any]:

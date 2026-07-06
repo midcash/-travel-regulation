@@ -3,8 +3,8 @@
 覆盖:
 - core/config.py: 配置加载/环境变量/is_configured
 - tools/price_checker.py: API 客户端可用性/降级/check_prices degraded
-- tools/geo_checker.py: NominatimClient/geocode_async/降级
-- tools/time_checker.py: MapboxDirectionsClient/calculate_transit_time/降级
+- tools/geo_checker.py: AmapGeocodeClient/geocode_async/降级
+- tools/time_checker.py: AmapDirectionsClient/calculate_transit_time/降级
 - agents/execution_agent.py: estimate_market_price 调用 tools/ 集成
 
 所有外部 API 调用均使用 stub 降级路径（不真调 API）。
@@ -17,19 +17,19 @@ from unittest.mock import patch, MagicMock
 
 from core.config import APIConfig, get_config, API_TIMEOUT, MAX_RETRIES
 from tools.price_checker import (
-    AmadeusPriceClient,
+    TuniuMCPClient,
     estimate_market_price,
     check_prices,
     check_budget_compliance,
 )
 from tools.geo_checker import (
-    NominatimClient,
+    AmapGeocodeClient,
     geocode_async,
     check_geography,
     validate_geography,
 )
 from tools.time_checker import (
-    MapboxDirectionsClient,
+    AmapDirectionsClient,
     calculate_transit_time,
     check_opening_hours,
     check_time,
@@ -52,60 +52,48 @@ class TestAPIConfig:
         assert config.api_timeout == 15
         assert config.max_retries == 3
         assert config.retry_backoff == [1.0, 2.0, 4.0]
-        assert config.nominatim_base_url == "https://nominatim.openstreetmap.org"
-        assert config.mapbox_api_key is None
-        assert config.amadeus_api_key is None
-        assert config.amadeus_api_secret is None
+        assert config.amap_api_key is None
+        assert config.tuniu_api_key is None
 
     def test_from_env_reads_env_vars(self, monkeypatch):
-        monkeypatch.setenv("MAPBOX_API_KEY", "pk.test123")
-        monkeypatch.setenv("AMADEUS_API_KEY", "amadeus_key")
-        monkeypatch.setenv("AMADEUS_API_SECRET", "amadeus_secret")
+        monkeypatch.setenv("AMAP_API_KEY", "amap_key_123")
+        monkeypatch.setenv("TUNIU_API_KEY", "tuniu_key")
         monkeypatch.setenv("API_TIMEOUT", "20")
         monkeypatch.setenv("API_MAX_RETRIES", "5")
 
         config = APIConfig.from_env()
-        assert config.mapbox_api_key == "pk.test123"
-        assert config.amadeus_api_key == "amadeus_key"
-        assert config.amadeus_api_secret == "amadeus_secret"
+        assert config.amap_api_key == "amap_key_123"
+        assert config.tuniu_api_key == "tuniu_key"
         assert config.api_timeout == 20
         assert config.max_retries == 5
 
-    def test_is_configured_nominatim_always_true(self):
+    def test_is_configured_amap_no_key(self):
         config = APIConfig()
-        assert config.is_configured("nominatim") is True
+        assert config.is_configured("amap") is False
 
-    def test_is_configured_mapbox_no_key(self):
+    def test_is_configured_amap_with_key(self):
+        config = APIConfig(amap_api_key="amap_key")
+        assert config.is_configured("amap") is True
+
+    def test_is_configured_tuniu_no_key(self):
         config = APIConfig()
-        assert config.is_configured("mapbox") is False
+        assert config.is_configured("tuniu") is False
 
-    def test_is_configured_mapbox_with_key(self):
-        config = APIConfig(mapbox_api_key="pk.test")
-        assert config.is_configured("mapbox") is True
-
-    def test_is_configured_amadeus_partial(self):
-        config = APIConfig(amadeus_api_key="key_only")
-        assert config.is_configured("amadeus") is False
-
-    def test_is_configured_amadeus_full(self):
-        config = APIConfig(amadeus_api_key="key", amadeus_api_secret="secret")
-        assert config.is_configured("amadeus") is True
+    def test_is_configured_tuniu_with_key(self):
+        config = APIConfig(tuniu_api_key="key")
+        assert config.is_configured("tuniu") is True
 
     def test_is_configured_unknown_service(self):
         config = APIConfig()
         assert config.is_configured("unknown_service") is False
 
-    def test_auth_headers_mapbox(self):
-        config = APIConfig(mapbox_api_key="pk.test")
-        assert config.auth_headers("mapbox") == {"Authorization": "Bearer pk.test"}
+    def test_auth_params_amap(self):
+        config = APIConfig(amap_api_key="amap_key")
+        assert config.auth_params("amap") == {"key": "amap_key"}
 
-    def test_auth_headers_amadeus(self):
-        config = APIConfig(amadeus_api_key="key")
-        assert config.auth_headers("amadeus") == {"X-API-Key": "key"}
-
-    def test_auth_headers_empty(self):
+    def test_auth_params_empty(self):
         config = APIConfig()
-        assert config.auth_headers("unknown") == {}
+        assert config.auth_params("unknown") == {}
 
     def test_get_config_returns_singleton(self, monkeypatch):
         # 清空缓存重置
@@ -120,26 +108,21 @@ class TestAPIConfig:
 # tools/price_checker.py — API 客户端 + 降级
 # ============================================================
 
-class TestAmadeusPriceClient:
-    """AmadeusPriceClient — 可用性检测。"""
+class TestTuniuMCPClient:
+    """TuniuMCPClient — 可用性检测。"""
 
-    def test_not_available_without_keys(self):
-        client = AmadeusPriceClient()
-        assert client.available is False
-
-    def test_not_available_with_partial_keys(self, monkeypatch):
-        monkeypatch.setenv("AMADEUS_API_KEY", "key_only")
+    def test_not_available_without_keys(self, monkeypatch):
+        monkeypatch.delenv("TUNIU_API_KEY", raising=False)
         import core.config as cfg
         cfg._config_cache = None
-        client = AmadeusPriceClient()
+        client = TuniuMCPClient()
         assert client.available is False
 
-    def test_available_with_full_keys(self, monkeypatch):
-        monkeypatch.setenv("AMADEUS_API_KEY", "test_key")
-        monkeypatch.setenv("AMADEUS_API_SECRET", "test_secret")
+    def test_available_with_key(self, monkeypatch):
+        monkeypatch.setenv("TUNIU_API_KEY", "test_key")
         import core.config as cfg
         cfg._config_cache = None
-        client = AmadeusPriceClient()
+        client = TuniuMCPClient()
         assert client.available is True
 
 
@@ -259,14 +242,24 @@ class TestCheckBudgetCompliance:
 
 
 # ============================================================
-# tools/geo_checker.py — Nominatim + 降级
+# tools/geo_checker.py — 高德地图 + 降级
 # ============================================================
 
-class TestNominatimClient:
-    """NominatimClient — 免费地理编码客户端。"""
+class TestAmapGeocodeClient:
+    """AmapGeocodeClient — 高德地图地理编码客户端。"""
 
-    def test_available_always_true(self):
-        client = NominatimClient()
+    def test_not_available_without_key(self, monkeypatch):
+        monkeypatch.delenv("AMAP_API_KEY", raising=False)
+        import core.config as cfg
+        cfg._config_cache = None
+        client = AmapGeocodeClient()
+        assert client.available is False
+
+    def test_available_with_key(self, monkeypatch):
+        monkeypatch.setenv("AMAP_API_KEY", "test_amap_key")
+        import core.config as cfg
+        cfg._config_cache = None
+        client = AmapGeocodeClient()
         assert client.available is True
 
 
@@ -408,21 +401,25 @@ class TestCheckGeography:
 
 
 # ============================================================
-# tools/time_checker.py — Mapbox + 降级
+# tools/time_checker.py — 高德地图 + 降级
 # ============================================================
 
-class TestMapboxDirectionsClient:
-    """MapboxDirectionsClient — 可用性检测。"""
+class TestAmapDirectionsClient:
+    """AmapDirectionsClient — 可用性检测。"""
 
-    def test_not_available_without_key(self):
-        client = MapboxDirectionsClient()
+    def test_not_available_without_key(self, monkeypatch):
+        # 确保环境变量未设置且清除缓存
+        monkeypatch.delenv("AMAP_API_KEY", raising=False)
+        import core.config as cfg
+        cfg._config_cache = None
+        client = AmapDirectionsClient()
         assert client.available is False
 
     def test_available_with_key(self, monkeypatch):
-        monkeypatch.setenv("MAPBOX_API_KEY", "pk.test")
+        monkeypatch.setenv("AMAP_API_KEY", "test_amap_key")
         import core.config as cfg
         cfg._config_cache = None
-        client = MapboxDirectionsClient()
+        client = AmapDirectionsClient()
         assert client.available is True
 
 

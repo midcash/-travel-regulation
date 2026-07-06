@@ -45,24 +45,19 @@ class APIConfig:
 
     Usage:
         config = APIConfig.from_env()
-        if config.is_configured("mapbox"):
-            client = MapboxClient(config)
+        if config.is_configured("amap"):
+            client = AmapClient(config)
     """
 
-    # === Nominatim (免费地理编码，无需 API key) ===
-    nominatim_base_url: str = "https://nominatim.openstreetmap.org"
-    nominatim_user_agent: str = "TravelPlanOrchestrator/1.1.0"
-    nominatim_rate_limit: float = 1.0  # req/s (free tier 限制 1 req/s)
+    # === 高德地图 (免费层: 5,000 次/天) ===
+    amap_api_key: Optional[str] = None
+    amap_base_url: str = "https://restapi.amap.com"
 
-    # === Mapbox (免费层: 100k req/month) ===
-    mapbox_api_key: Optional[str] = None
-    mapbox_base_url: str = "https://api.mapbox.com"
-    mapbox_rate_limit: int = 600  # req/min (free tier)
-
-    # === Amadeus Self-Service (免费层，需注册) ===
-    amadeus_api_key: Optional[str] = None
-    amadeus_api_secret: Optional[str] = None
-    amadeus_base_url: str = "https://test.api.amadeus.com"
+    # === 途牛 MCP 开放平台 (酒店/机票/门票，JSON-RPC 2.0) ===
+    tuniu_api_key: Optional[str] = None
+    tuniu_mcp_hotel: str = "https://openapi.tuniu.cn/mcp/hotel"
+    tuniu_mcp_flight: str = "https://openapi.tuniu.cn/mcp/flight"
+    tuniu_mcp_ticket: str = "https://openapi.tuniu.cn/mcp/ticket"
 
     # === 通用 API 设置 ===
     api_timeout: int = 15       # agent_contract.md §5.1
@@ -81,12 +76,8 @@ class APIConfig:
             配置实例。缺失的 API key 为 None，由调用方降级处理。
         """
         return cls(
-            nominatim_user_agent=os.environ.get(
-                "NOMINATIM_USER_AGENT", "TravelPlanOrchestrator/1.1.0"
-            ),
-            mapbox_api_key=os.environ.get("MAPBOX_API_KEY"),
-            amadeus_api_key=os.environ.get("AMADEUS_API_KEY"),
-            amadeus_api_secret=os.environ.get("AMADEUS_API_SECRET"),
+            amap_api_key=os.environ.get("AMAP_API_KEY"),
+            tuniu_api_key=os.environ.get("TUNIU_API_KEY"),
             api_timeout=int(os.environ.get("API_TIMEOUT", "15")),
             max_retries=int(os.environ.get("API_MAX_RETRIES", "3")),
         )
@@ -99,31 +90,30 @@ class APIConfig:
         """检查指定服务是否已配置（API key 已设置）。
 
         Args:
-            service: 服务名 — "nominatim" | "mapbox" | "amadeus"
+            service: 服务名 — "amap" | "tuniu"
 
         Returns:
             True 如果该服务的必需凭据已设置。
         """
         checks: Dict[str, bool] = {
-            "nominatim": True,  # 无需 key，始终可用
-            "mapbox": bool(self.mapbox_api_key),
-            "amadeus": bool(self.amadeus_api_key and self.amadeus_api_secret),
+            "amap": bool(self.amap_api_key),
+            "tuniu": bool(self.tuniu_api_key),
         }
         return checks.get(service, False)
 
-    def auth_headers(self, service: str) -> Dict[str, str]:
-        """获取指定服务的认证请求头。
+    def auth_params(self, service: str) -> Dict[str, str]:
+        """获取指定服务的认证查询参数。
+
+        高德使用 key 查询参数认证。
 
         Args:
             service: 服务名
 
         Returns:
-            HTTP 请求头字典。
+            认证参数字典。
         """
-        if service == "mapbox":
-            return {"Authorization": f"Bearer {self.mapbox_api_key}"}
-        if service == "amadeus":
-            return {"X-API-Key": self.amadeus_api_key or ""}
+        if service == "amap":
+            return {"key": self.amap_api_key or ""}
         return {}
 
 
