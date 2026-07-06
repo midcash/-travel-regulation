@@ -6,6 +6,16 @@
 **架构模式**: Hybrid Orchestrator-Specialist (一主多从)
 **开发方法论**: Spec-Driven + Evaluation-Driven + Harness Development
 
+## Development Environment
+
+| 配置项 | 值 |
+|--------|-----|
+| **当前分支** | `feat/api-integration` (v1.1.0 API 接入开发) |
+| **基线版本** | `v1.0.0` (main 分支已封存) |
+| **Python 解释器** | `venv/Scripts/python.exe` (Python 3.11.11) |
+| **运行测试** | `venv/Scripts/python.exe -m pytest tests/ -v` |
+| **运行单文件** | `venv/Scripts/python.exe -m pytest tests/<test_file>.py -v` |
+
 ## Architecture Overview
 
 项目采用 **双层 Agent 架构**:

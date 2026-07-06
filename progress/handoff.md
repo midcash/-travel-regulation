@@ -1,128 +1,104 @@
-# Handoff — v1.0.0 全面铺开
+# Handoff — v1.1.0 API 接入
 
 ## 当前状态
 
-- **版本**: `1.0.0-dev`
-- **分支**: `main`（与 `origin/main` 同步）
-- **已完成**: Phase 0-4 全部完成 — 6个核心模块 + 4个业务Agent + 552 tests (41/41 场景全覆盖)
-- **最近提交**: 待提交 — Batch 3 集成测试+消融实验完成
+- **版本**: `1.1.0-dev`
+- **基线**: `v1.0.0` (已封存 — 纯 stub 架构验证版)
+- **分支**: `feat/api-integration`
+- **目标**: 将 stub 数据替换为真实 LLM/API，使系统从"假数据的真流程"变为"可投产的真系统"
 
-## 已完成清单
+## 开发路线
 
-### 约束修补（11项）
-| # | 类别 | 修复项 | 状态 |
-|---|------|--------|------|
-| 1 | 必须 | Gate 2 伪代码 <60→REJECT | ✅ |
-| 2 | 必须 | CLAUDE.md Quality Gate 表对齐 | ✅ |
-| 3 | 必须 | Code Agent §6 性能自检项 | ✅ |
-| 4 | 必须 | Code Agent §6 测试覆盖率自检 | ✅ |
-| 5 | 必须 | agent_contract 新增 response.result + control.abort | ✅ |
-| 6 | 阻塞 | orchestrator 路由表新增 task.revise_itinerary | ✅ |
-| 7 | 阻塞 | 4个playbooks+code_agent retry策略统一 | ✅ |
-| 8 | 阻塞 | agent_contract §3.2 TaskType枚举(11个值) | ✅ |
-| 9 | 阻塞 | Gate 2 维度级告警(5维度,≥3→blocking) | ✅ |
-| 10 | 阻塞 | test_scenarios TS-EXEC-001~009 | ✅ |
-| 11 | 阻塞 | test_scenarios TS-ORCH-001~009 | ✅ |
-
-### Batch 1: core/models/tools（基础层）
-| 文件 | 行数 | 功能 |
-|------|------|------|
-| `core/message.py` | 426 | AgentMessage / TaskType / ErrorCode / AgentIdentity / BaseAgent / AgentRegistry |
-| `core/context.py` | 387 | ContextStatus(15状态) / LogEntry / SharedContext / to_dict / from_dict |
-| `core/gate_runner.py` | 586 | GateRunner (Gate 0-3 执行器) / BlockingIssue / GateResult |
-| `core/orchestration_engine.py` | 528 | Task / TaskDAG / AgentRouter / RetryManager / ResultAssembler |
-| `models/entities.py` | 451 | Attraction / Restaurant / Accommodation / DestinationInfo / PriceRange 等 |
-| `models/plan.py` | 297 | Transportation / ItineraryDay / BudgetAllocation / TravelPlanDraft / FinalTravelPlan |
-| `models/request.py` | 391 | StructuredRequest / Destination / DateRange / Budget / Travelers / Preferences |
-| `models/validation.py` | 370 | ValidationReport / PriceCheckResult / TimeCheckResult / GeographyCheckResult 等 |
-| `models/quality.py` | 435 | CodeQualityReport / PlanQualityReport / ContributionReport / AblationResults 等 |
-| `tools/price_checker.py` | — | check_prices / check_budget_compliance / estimate_market_price (stub) |
-| `tools/time_checker.py` | — | check_time / check_opening_hours / calculate_transit_time (stub) |
-| `tools/geo_checker.py` | — | check_geography / validate_geography (stub) |
-| `tools/risk_checker.py` | — | check_weather_risk / check_travel_requirements (stub) |
-
-### Batch 2: 业务Agent（编排层）
-
-| 文件 | 行数 | 功能 | 覆盖率 |
-|------|------|------|--------|
-| `agents/orchestrator.py` | 333 | Orchestrator 主控 — parse_request / decompose_task / route_task / assemble_plan / manage_quality_gate (Gate 0-3) / handle_revision / process_request | 78% |
-| `agents/planning_agent.py` | 134 | Planning Agent — create_itinerary / revise_itinerary / research_destination / search_attractions / search_accommodations / search_restaurants / allocate_budget | 94% |
-| `agents/execution_agent.py` | 234 | Execution Agent — validate_feasibility / check_prices / check_time / check_geography / check_constraints / identify_risks / estimate_market_price | 88% |
-| `agents/evaluation_agent.py` | 284 | Evaluation Agent — Mode A (代码质量5维度) / Mode B (方案质量5维度加权) / Mode C (LOO消融+360°+协同分析+C2C5) | 86% |
-| `agents/__init__.py` | — | 完整公共 API 导出 | — |
-
-**Agent 测试文件**:
-| 文件 | 测试数 |
-|------|--------|
-| `tests/test_orchestrator.py` | 52 tests |
-| `tests/test_planning_agent.py` | 35 tests |
-| `tests/test_execution_agent.py` | 30 tests |
-| `tests/test_evaluation_agent.py` | 41 tests |
-
-### Batch 3: 集成测试 + 消融实验（Phase 4）
-
-| 文件 | 测试数 | 覆盖场景 |
-|------|--------|---------|
-| `tests/test_integration.py` | 31 | E2E(5) + Edge(5) + Error(2) + Gate(4) + Perf(3) + ORCH Recovery(9) + Context(2) + Message(1) |
-| `tests/test_ablation.py` | 22 | LOO Ablation(7) + AIS(5) + 360°(4) + Synergy(4) + Protocol(10) + Pipeline(2) |
-| `tests/conftest.py` | — | 新增 10 个 Phase 4 共享 fixtures |
-
-**41/41 测试场景全覆盖**: E2E✅ Edge✅ Error✅ Gate✅ Ablation✅ Perf✅ ORCH✅ EXEC✅
-**全量测试**: 552 passed in 15.11s
-
-### 现存代码文件总览
 ```
-core/
-  message.py              ← 已完成 (Batch 1)
-  context.py              ← 已完成 (Batch 1)
-  gate_runner.py          ← 已完成 (Batch 1)
-  orchestration_engine.py ← 已完成 (Batch 1)
-  __init__.py             ← 已完成
-models/
-  entities.py             ← 已完成 (Batch 1)
-  plan.py                 ← 已完成 (Batch 1)
-  request.py              ← 已完成 (Batch 1)
-  validation.py           ← 已完成 (Batch 1)
-  quality.py              ← 已完成 (Batch 1)
-  __init__.py             ← 已完成
-tools/
-  price_checker.py        ← 已完成 (Batch 1)
-  time_checker.py         ← 已完成 (Batch 1)
-  geo_checker.py          ← 已完成 (Batch 1)
-  risk_checker.py         ← 已完成 (Batch 1)
-  __init__.py             ← 已完成
-agents/
-  orchestrator.py         ← 已完成 (Batch 2A)
-  planning_agent.py       ← 已完成 (Batch 2B)
-  execution_agent.py      ← 已完成 (Batch 2C)
-  evaluation_agent.py     ← 已完成 (Batch 2D)
-  __init__.py             ← 已完成
-tests/
-  test_message.py         ← 已完成
-  test_context.py         ← 已完成
-  test_orchestrator.py    ← 已完成 (Batch 2)
-  test_planning_agent.py  ← 已完成 (Batch 2)
-  test_execution_agent.py ← 已完成 (Batch 2)
-  test_evaluation_agent.py← 已完成 (Batch 2)
-  conftest.py             ← 已完成
-  __init__.py             ← 已完成
+Batch 4 (P0): Planning Agent 接入 LLM     → 行程/餐厅/住宿"活"起来
+Batch 5 (P0): Execution Agent 接入真实 API → 价格/地图/时间校验不再用假数据
+Batch 6 (P1): 集成验证 + 真实案例          → 3-5 个真实城市端到端跑通
+Batch 7+     : 根据真实反馈优化            → 以问题驱动，不预设
 ```
 
 ---
 
-## v1.0.0 全部完成
+## Batch 4: Planning Agent 接入 LLM（P0 — 最高优先级）
 
-Phase 0-4 全部交付，552 tests 全量通过，41/41 场景全覆盖。
+### 目标
+替换 `agents/planning_agent.py` 中 6 个方法的 stub 数据为 LLM 调用，让行程生成"活"起来。
+
+### 任务清单
+
+| # | 任务 | 涉及文件 | 描述 |
+|---|------|---------|------|
+| 4.1 | LLM 客户端封装 | `core/llm_client.py` (NEW) | 统一 LLM 调用接口：发送 prompt → 返回结构化响应；超时 30s，重试 3 次指数退避；支持 Claude API（起步用 Haiku 降成本） |
+| 4.2 | 景点搜索接入 LLM | `agents/planning_agent.py` → `search_attractions()` | 替换硬编码"景点A/B/C"为 LLM 按目的地+偏好生成真实景点列表；保留 fallback 到 stub（LLM 不可用时） |
+| 4.3 | 餐厅搜索接入 LLM | `agents/planning_agent.py` → `search_restaurants()` | 替换模板餐厅为 LLM 按菜系偏好+预算生成餐厅推荐；返回结构化 Restaurant 列表 |
+| 4.4 | 住宿搜索接入 LLM | `agents/planning_agent.py` → `search_accommodations()` | 替换固定酒店为 LLM 按位置+预算范围推荐真实酒店；返回结构化 Accommodation 列表 |
+| 4.5 | 行程生成接入 LLM | `agents/planning_agent.py` → `create_itinerary()` | 替换模板行程为 LLM 整合景点+餐厅+住宿+偏好+预算约束，生成完整的 5 天行程 JSON |
+| 4.6 | 预算分配接入 LLM | `agents/planning_agent.py` → `allocate_budget()` | 替换固定比例分配为 LLM 按目的地物价水平+偏好动态分配 |
+| 4.7 | LLM 错误处理 | `agents/planning_agent.py` | 处理：超时(30s)、限流(429)、格式异常(JSON parse失败)、空响应；每种错误有降级策略 |
+| 4.8 | 单元测试 | `tests/test_planning_agent.py` | 新增 LLM 调用的 Mock 测试（不真调 API），覆盖 happy path + 6 种错误模式 + fallback 路径 |
+
+### 约束
+- LLM 调用必须通过 `core/llm_client.py` 统一入口（不直接在 Agent 中裸调 API）
+- 所有 LLM 响应必须做 schema 校验（返回的 JSON 必须能反序列化为对应 model）
+- 对外 API 签名不变（`search_attractions()` 等方法的输入/输出类型保持兼容）
 
 ---
 
-## Pipeline 执行规则（每个模块复用）
+## Batch 5: Execution Agent 接入真实 API（P0 — 最高优先级）
+
+### 目标
+替换 `tools/` 下 4 个 checker 的 stub 实现为真实 API，让价格/地理/时间校验产生有意义的报告。
+
+### 任务清单
+
+| # | 任务 | 涉及文件 | 描述 |
+|---|------|---------|------|
+| 5.1 | 价格 API 接入 | `tools/price_checker.py` | 替换硬编码价格字典；对接免费/低成本价格数据源（如 Amadeus Self-Service API、或爬取公开价格数据）；`check_prices()` 返回真实市场价偏差 |
+| 5.2 | 地理编码 API 接入 | `tools/geo_checker.py` | 替换 stub 坐标；对接地理编码 API（如 Nominatim 免费、Mapbox 免费层）；`check_geography()` 计算真实距离和绕路比 |
+| 5.3 | 交通时间 API 接入 | `tools/time_checker.py` | 替换固定 transit_time = 60min；对接地图 API 获取真实交通时间（驾车/公交/步行）；`calculate_transit_time()` 返回真实耗时 |
+| 5.4 | 执行 Agent 适配 | `agents/execution_agent.py` | 适配 3 个 tool 的新返回格式（字段可能有增减）；确保 `validate_feasibility()` 的 blocking_issues 判定逻辑仍正确 |
+| 5.5 | API 错误处理 | `tools/price_checker.py`, `geo_checker.py`, `time_checker.py` | 处理：API 超时(15s)、限流、配额耗尽、数据缺失；每个 tool 有降级策略和明确错误码 |
+| 5.6 | API 配置管理 | `core/config.py` (NEW) | API key/endpoint/rate_limit 的集中管理；支持环境变量 + 配置文件；不硬编码任何密钥 |
+| 5.7 | 单元测试 | `tests/test_execution_agent.py` + tools 测试 | 新增 API Mock 测试；覆盖正常响应 + 超时 + 限流 + 数据缺失 + 降级路径 |
+
+### 约束
+- API key 通过环境变量注入，禁止出现在源码或 commit 中
+- 每个 tool 必须有明确的降级策略（API 不可用时返回什么、标记什么状态）
+- 优先选择免费层级 API（Nominatim/Mapbox free tier/Amadeus Self-Service）
+
+---
+
+## Batch 6: 集成验证 + 真实案例（P1）
+
+### 目标
+端到端跑通 3-5 个真实城市案例，验证 LLM + API 链路完整，记录问题到 lessons.md。
+
+### 任务清单
+
+| # | 任务 | 描述 |
+|---|------|------|
+| 6.1 | 案例 1: 东京 5 天 | 经典案例，验证已有测试基准不受破坏 |
+| 6.2 | 案例 2: 巴黎 3 天 | 欧洲城市，验证跨洲数据（时区/货币/语言） |
+| 6.3 | 案例 3: 纽约 4 天 | 高物价城市，验证预算约束是否被真实 API 打破 |
+| 6.4 | 案例 4: 成都 2 天 | 国内短途，验证中文输入+国内数据 |
+| 6.5 | 案例 5: 曼谷 7 天 | 长行程+东南亚，验证极限天数+新兴市场数据 |
+| 6.6 | 回归测试 | 552 个现有测试必须全部通过（Mock 层不应受影响） |
+| 6.7 | Lessons 汇总 | 将 Batch 4-5 中遇到的问题写入 `progress/lessons.md`；标注 commit hash |
+
+### 验收标准
+- 5 个案例全部跑通（Gate 0→1→2→3，最终 status = COMPLETED）
+- 0 个回归测试失败
+- 真实案例评分 ≥ 70/100（允许低于 stub 时代的 95，因为真实数据更复杂）
+
+---
+
+## Pipeline 执行规则（每个 Batch 复用）
 
 ```
 主 Agent（你）
   │
   ├─ R1: 启动 Context Agent
-  │    输入: 该模块对应的 spec/ playbook/ evaluation/ progress/ 文件路径
+  │    输入: 目标模块的 spec/ playbook/ evaluation/ progress/ 文件路径
+  │          + progress/lessons.md（检查已知可预防问题）
   │    输出: 结构化上下文摘要（spec要点/现有代码/实现状态/差异标注）
   │    审查: 是否覆盖全部 spec 要求？是否有 blocking 级差异？
   │
@@ -141,22 +117,36 @@ Phase 0-4 全部交付，552 tests 全量通过，41/41 场景全覆盖。
   │    输出: 单元测试 + 集成测试，覆盖率 ≥ 70%
   │    审查: 是否覆盖对应 test_scenarios？覆盖率达标？
   │
-  └─ R5: 启动 Evaluation Agent (Mode A)
-       输入: 代码 + 测试
-       输出: code_quality_report（按 code_quality_rubric.md 评分）
-       审查: composite ≥ 80 (PASS) / < 60 (REJECT) / 60-79 (退回修订)
-       FAIL → 退回 Code/Test Agent，最多 3 轮
-       PASS → 更新 progress/<module>.md，commit
+  ├─ R5: 启动 Evaluation Agent (Mode A)
+  │    输入: 代码 + 测试
+  │    输出: code_quality_report（按 code_quality_rubric.md 评分）
+  │    审查: composite ≥ 80 (PASS) / < 60 (REJECT) / 60-79 (退回修订)
+  │    FAIL → 退回 Code/Test Agent，最多 3 轮
+  │    PASS → 更新 progress/<module>.md，commit
+  │
+  └─ R5.5: Lessons（跨轮次知识传递）
+        写入 progress/lessons.md（commit 列填 待提交）
+        git commit 后由主 Agent 回填实际 commit hash
 ```
 
 ---
 
 ## 关键约束
 
+### API 安全
+- API key / secret 通过环境变量注入，禁止出现在源码或配置文件中
+- `.env` 文件加入 `.gitignore`
+- 示例配置 (`config.example.yaml`) 可以提交，但包含占位值
+
+### 降级策略
+- 每个外部调用必须有降级路径（API 不可用 → stub fallback 或明确错误标记）
+- 降级不得静默进行（必须 log warning 级别以上）
+- 降级后的结果必须标记 `degraded: true`，让上游知道数据质量
+
 ### 契约优先
-- 每个模块必须先读 spec，接口签名必须 100% 对齐
-- `spec/agent_contract.md` 是所有消息的单一事实来源
-- playbook 是 SOP，不可偏离
+- 对外接口签名不变——现有 stub 方法的输入/输出类型保持兼容
+- 如需新增字段，只增不减（向后兼容）
+- `spec/agent_contract.md` 如有更新，必须同步到所有 playbook
 
 ### 质量门
 - Gate 0: 必填项完整（目的地/日期/预算/人数）
@@ -172,22 +162,9 @@ module: core/models/tools/orch/plan/exec/eval/test/meta
 type: feat/fix/refactor/test/docs/chore
 
 ### 进度回写
-- 每完成一个模块 → 更新 `progress/<module>.md`（同步状态 + 任务历史 + spec commit）
-- 更新 `progress/README.md` 阶段状态
-
----
-
-## 遗漏待修（在铺开过程中按需修复）
-
-| 类别 | 问题 | 应修复时机 |
-|------|------|-----------|
-| playbooks | 未显式引用 error_codes（可追溯性缺口） | 编写对应 Agent 时 |
-| evaluator spec | evaluator response types 仅引用式定义 | 实现 evaluation_agent 时 |
-| code_agent §6 | 安全覆盖过窄（缺injection/error泄漏/CVE） | 编码横切关注点 |
-| code_agent §6 | 自评项不映射 rubric 维度 | 评估体系修正 |
-| 评分粒度 | 三文件判断区间粒度不统一（6 vs 3 vs 2级） | 评估体系修正 |
-| test_scenarios | 13个基础设施接口无场景覆盖 | Phase 4 集成测试 |
-| test_scenarios | Mode A（代码质量）不在测试场景中 | Phase 4 集成测试 |
+- 每完成一个模块 → 更新 `progress/<module>.md`
+- 每完成一个 Batch → 更新 `progress/README.md` 阶段状态
+- 每轮 R5.5 → 写入 `progress/lessons.md`
 
 ---
 
@@ -196,39 +173,26 @@ type: feat/fix/refactor/test/docs/chore
 | 类别 | 文件 | 用途 |
 |------|------|------|
 | 总览 | `CLAUDE.md` | 项目架构/Pipeline规则/质量门/commit规范 |
-| 版本 | `VERSION` | `1.0.0-dev` |
-| 路线图 | `ROADMAP.md` | v1.0.0 范围定义+交付物清单 |
-| 交结 | `progress/handoff.md` | 本文档 — 当前状态+下一步 |
+| 版本 | `VERSION` | `1.1.0-dev` |
+| 路线图 | `ROADMAP.md` | 版本范围定义+交付物清单 |
+| 交接 | `progress/handoff.md` | 本文档 — 当前状态+Batch 计划 |
+| 经验 | `progress/lessons.md` | 跨轮次问题记录（Context Agent R1 必读） |
 | 进度 | `progress/README.md` | 阶段总览+模块索引+变更日志 |
-| 进度 | `progress/orchestrator.md` | Orchestrator 同步状态 |
-| 进度 | `progress/planning.md` | Planning Agent 同步状态 |
-| 进度 | `progress/execution.md` | Execution Agent 同步状态 |
-| 进度 | `progress/evaluation.md` | Evaluation Agent 同步状态 |
 | Spec | `spec/agent_contract.md` | 消息格式/TaskType/ErrorCode/超时重试 SSOT |
 | Spec | `spec/system_spec.md` | 系统架构/状态机/数据模型 |
-| Spec | `spec/orchestrator_spec.md` | Orchestrator 接口/路由表/任务分解 |
 | Spec | `spec/planner_spec.md` | Planning Agent 接口 |
 | Spec | `spec/executor_spec.md` | Execution Agent 接口+工具定义 |
-| Spec | `spec/evaluator_spec.md` | Evaluation Agent 接口+Mode A/B/C |
-| Playbook | `playbooks/orchestrator_playbook.md` | Orchestrator SOP |
 | Playbook | `playbooks/planner_playbook.md` | Planning Agent SOP |
 | Playbook | `playbooks/executor_playbook.md` | Execution Agent SOP |
-| Playbook | `playbooks/evaluator_playbook.md` | Evaluation Agent SOP |
-| DevAgent | `devagents/context_agent.md` | Context Agent 约束 |
-| DevAgent | `devagents/plan_agent.md` | Plan Agent 约束 |
 | DevAgent | `devagents/code_agent.md` | Code Agent 约束（含§6自检清单） |
 | DevAgent | `devagents/test_agent.md` | Test Agent 约束 |
+| DevAgent | `devagents/context_agent.md` | Context Agent 约束（含 lessons.md 读取） |
 | 评估 | `evaluation/code_quality_rubric.md` | Mode A 代码质量量表（5维度） |
-| 评估 | `evaluation/plan_quality_rubric.md` | Mode B 方案质量量表（5维度） |
-| 评估 | `evaluation/gate_definitions.md` | Gate 0-3 伪代码+判定逻辑 |
-| 评估 | `evaluation/test_scenarios.md` | 41个测试场景 |
-| 评估 | `evaluation/contribution_metrics.md` | Mode C 贡献度指标 |
-| 评估 | `evaluation/ablation_protocol.md` | LOO 消融实验协议 |
-| 代码 | `core/message.py` | 426行 — AgentMessage/TaskType/ErrorCode/BaseAgent |
-| 代码 | `core/context.py` | 387行 — ContextStatus/SharedContext/LogEntry |
-| 代码 | `core/gate_runner.py` | 586行 — GateRunner/GateResult |
-| 代码 | `core/orchestration_engine.py` | 528行 — TaskDAG/AgentRouter/RetryManager |
-| 代码 | `agents/orchestrator.py` | 333行 — Orchestrator 主控 |
-| 代码 | `agents/planning_agent.py` | 134行 — Planning Agent |
-| 代码 | `agents/execution_agent.py` | 234行 — Execution Agent |
-| 代码 | `agents/evaluation_agent.py` | 284行 — Evaluation Agent |
+| 评估 | `evaluation/test_scenarios.md` | 41个测试场景（API 接入后需扩充） |
+| 代码 | `agents/planning_agent.py` | 134行 — Batch 4 主要改造对象 |
+| 代码 | `agents/execution_agent.py` | 234行 — Batch 5 适配对象 |
+| 代码 | `tools/price_checker.py` | stub — Batch 5 替换为真实 API |
+| 代码 | `tools/geo_checker.py` | stub — Batch 5 替换为真实 API |
+| 代码 | `tools/time_checker.py` | stub — Batch 5 替换为真实 API |
+| 代码 | `core/llm_client.py` | NEW — Batch 4 统一 LLM 调用接口 |
+| 代码 | `core/config.py` | NEW — Batch 5 API 配置管理 |
