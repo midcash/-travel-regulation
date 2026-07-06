@@ -58,7 +58,7 @@ class TestBaseAgentInterface:
         assert orch.agent_name == "orchestrator"
 
     def test_agent_version(self, orch):
-        assert orch.agent_version == "1.0.0"
+        assert orch.agent_version == "1.1.0"
 
     def test_inherits_base_agent(self, orch):
         assert isinstance(orch, BaseAgent)

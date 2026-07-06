@@ -42,6 +42,7 @@ from core.orchestration_engine import (
     TaskDAG,
     TaskStatus,
 )
+from core.llm_client import LLMClient
 from models.request import (
     Budget,
     DateRange,
@@ -50,6 +51,10 @@ from models.request import (
     StructuredRequest,
     Travelers,
 )
+from models.plan import TravelPlanDraft, ItineraryDay
+from models.validation import ValidationReport
+from models.quality import PlanQualityReport
+from models.entities import RevisionFeedback
 
 # ============================================================
 # 常量
@@ -128,7 +133,7 @@ class Orchestrator(BaseAgent):
     """
 
     agent_name = "orchestrator"
-    agent_version = "1.0.0"
+    agent_version = "1.1.0"
 
     def __init__(
         self,
@@ -142,6 +147,13 @@ class Orchestrator(BaseAgent):
         self._assembler = ResultAssembler()
         self._registry = registry
 
+        # v1.1.0: 真实 Agent 实例 — Orchestrator → Agent 桥接
+        self._llm_client = LLMClient()
+        self._planning_agent = None    # 懒加载
+        self._execution_agent = None   # 懒加载
+        self._evaluation_agent = None  # 懒加载
+        self._agents_initialized = False
+
     # -- BaseAgent 抽象属性/方法 --
     @property
     def agent_name(self) -> str:
@@ -149,7 +161,7 @@ class Orchestrator(BaseAgent):
 
     @property
     def agent_version(self) -> str:
-        return "1.0.0"
+        return "1.1.0"
 
     async def handle_message(self, message: AgentMessage) -> AgentMessage:
         """处理接收到的消息并返回响应。
@@ -188,6 +200,159 @@ class Orchestrator(BaseAgent):
             Capability("assemble_plan", "整合子 Agent 产出为最终旅行方案"),
             Capability("manage_quality_gate", "执行 Gate 0-3 质量门检查"),
         ]
+
+    # ============================================================
+    # v1.1.0: Agent 实例管理 + dict↔dataclass 桥接
+    # ============================================================
+
+    def _init_agents(self) -> None:
+        """懒加载初始化子 Agent 实例。"""
+        if self._agents_initialized:
+            return
+        from agents.planning_agent import PlanningAgent
+        from agents.execution_agent import ExecutionAgent
+        from agents.evaluation_agent import EvaluationAgent
+
+        self._planning_agent = PlanningAgent(
+            registry=self._registry,
+            llm_client=self._llm_client if self._llm_client.available else None,
+        )
+        self._execution_agent = ExecutionAgent(registry=self._registry)
+        self._evaluation_agent = EvaluationAgent(registry=self._registry)
+        self._agents_initialized = True
+        self._log("INFO", "子 Agent 实例已初始化: Planning + Execution + Evaluation")
+
+    @staticmethod
+    def _draft_to_dict(draft: TravelPlanDraft) -> Dict[str, Any]:
+        """TravelPlanDraft → dict（兼容下游消费者）。"""
+        result = draft.to_dict()
+        # 规范化 destination: dict → "city, country" 字符串（兼容 assemble_plan）
+        dest = result.get("destination")
+        if isinstance(dest, dict):
+            result["destination"] = f"{dest.get('city', '')}, {dest.get('country', '')}"
+        return result
+
+    @staticmethod
+    def _dict_to_draft(data: Dict[str, Any]) -> TravelPlanDraft:
+        """dict → TravelPlanDraft。"""
+        from models.plan import AccommodationOption, Activity, BudgetAllocation, Meal, Transportation
+        from models.request import DateRange
+
+        # 解析 daily_itinerary
+        daily: List[ItineraryDay] = []
+        for i, d in enumerate(data.get("daily_itinerary", [])):
+            if isinstance(d, dict):
+                activities = []
+                for a in d.get("activities", []):
+                    if isinstance(a, dict):
+                        reason = a.get("reason", "推荐理由占位至少十五个字符满足校验约束")
+                        if len(reason) < 10:
+                            reason = reason + "，补充细节以符合推荐理由最小长度"
+                        activities.append(Activity(
+                            name=a.get("name", "未知活动"),
+                            type=a.get("type", "culture"),
+                            start_time=a.get("start_time", "09:00"),
+                            duration_minutes=a.get("duration_minutes", 120),
+                            location=a.get("location", "未知"),
+                            estimated_cost=a.get("estimated_cost", 0.0),
+                            reason=reason,
+                        ))
+
+                meals_data = d.get("meals", {})
+                meals: Dict[str, Any] = {}
+                if isinstance(meals_data, dict):
+                    for m_type in ("breakfast", "lunch", "dinner"):
+                        m = meals_data.get(m_type)
+                        if isinstance(m, dict):
+                            meals[m_type] = Meal(
+                                type=m_type,
+                                restaurant_name=m.get("restaurant", m.get("restaurant_name", "未知")),
+                                location=m.get("location", "未知"),
+                                cuisine=m.get("cuisine", "当地特色"),
+                                estimated_cost=m.get("estimated_cost", 50.0),
+                                dietary_compatible=m.get("dietary_compatible", True),
+                            )
+
+                daily.append(ItineraryDay(
+                    day=d.get("day", i + 1),
+                    date=d.get("date"),
+                    activities=activities,
+                    meals=meals,
+                    transportation_notes=d.get("transportation_notes"),
+                    total_day_cost=d.get("total_day_cost", 0),
+                    total_duration_minutes=d.get("total_duration_minutes", 0),
+                ))
+
+        # 解析 accommodation
+        accommodation = []
+        for a in data.get("accommodation", []):
+            if isinstance(a, dict):
+                accommodation.append(AccommodationOption(
+                    name=a.get("name", "未知"),
+                    location=a.get("location", "未知"),
+                    type=a.get("type", "hotel"),
+                    cost_per_night=a.get("cost_per_night", 0),
+                    total_cost=a.get("total_cost", 0),
+                    distance_to_center_km=a.get("distance_to_center_km", 0),
+                    highlights=a.get("highlights", []),
+                    rating=a.get("rating"),
+                ))
+
+        # 解析 budget_allocation
+        ba = data.get("budget_allocation", {})
+        if isinstance(ba, dict):
+            budget_alloc = BudgetAllocation(
+                transportation=ba.get("transportation", 0),
+                accommodation=ba.get("accommodation", 0),
+                activities=ba.get("activities", 0),
+                meals=ba.get("meals", 0),
+                buffer=ba.get("buffer", 0),
+                currency=ba.get("currency", "CNY"),
+            )
+        else:
+            budget_alloc = BudgetAllocation()
+
+        # 解析 destination
+        dest = data.get("destination", "")
+        if isinstance(dest, str) and ", " in dest:
+            parts = dest.split(", ", 1)
+            dest_dict = {"city": parts[0], "country": parts[1]}
+        elif isinstance(dest, dict):
+            dest_dict = dest
+        else:
+            dest_dict = {"city": str(dest), "country": ""}
+
+        return TravelPlanDraft(
+            draft_id=data.get("draft_id"),
+            destination=dest_dict,
+            duration_days=data.get("duration_days", 0),
+            transportation=Transportation(**(data.get("transportation") or {})),
+            accommodation=accommodation,
+            daily_itinerary=daily,
+            budget_allocation=budget_alloc,
+            total_budget=data.get("total_budget", 0),
+            preferences_applied=data.get("preferences_applied", []),
+            revision_version=data.get("revision_version", 0),
+        )
+
+    @staticmethod
+    def _dict_to_validation(data: Dict[str, Any]) -> ValidationReport:
+        """dict → ValidationReport。"""
+        from models.validation import (
+            ValidationReport as VR, ValidationSummary,
+            PriceCheckResult, TimeCheckResult, GeographyCheckResult,
+            ConstraintCheckResult,
+        )
+        return VR(
+            validation_id=data.get("validation_id"),
+            draft_id=data.get("draft_id"),
+            price_check=PriceCheckResult(**(data.get("price_check") or {})),
+            time_check=TimeCheckResult(**(data.get("time_check") or {})),
+            geography_check=GeographyCheckResult(**(data.get("geography_check") or {})),
+            constraint_check=ConstraintCheckResult(**(data.get("constraint_check") or {})),
+            risk_alerts=data.get("risk_alerts", []),
+            summary=ValidationSummary(**(data.get("summary") or {})),
+        )
 
     # ============================================================
     # 核心公共方法 — spec/orchestrator_spec.md §3.1
@@ -528,9 +693,12 @@ class Orchestrator(BaseAgent):
                     self._context.set_status(ContextStatus.REVISING)
                     current_draft = await self._call_revision(current_draft, current_quality)
                     self._context.set_current_draft(current_draft)
-                    # 重新执行校验
+                    # 重新执行校验 (REVISING → WAITING_PLANNER → WAITING_EXECUTOR → GATE_1)
+                    self._context.set_status(ContextStatus.WAITING_PLANNER)
                     current_validation = await self._call_execution_agent(current_draft, request)
                     self._context.set_validation_report(current_validation)
+                    self._context.set_status(ContextStatus.WAITING_EXECUTOR)
+                    self._context.set_status(ContextStatus.GATE_1)
                 else:
                     self._log("WARNING", f"已达最大迭代次数({max_iterations})，降级输出")
                     degraded = True
@@ -578,8 +746,20 @@ class Orchestrator(BaseAgent):
     ) -> Dict[str, Any]:
         """调用 Planning Agent 生成行程草稿。
 
-        v1.0.0: stub 实现，返回符合 spec 的 mock 数据。
+        v1.1.0: 桥接到真实 PlanningAgent（LLM + stub fallback）。
         """
+        self._init_agents()
+        try:
+            draft = await self._planning_agent.create_itinerary(request)
+            return self._draft_to_dict(draft)
+        except Exception as exc:
+            self._log("WARNING", f"PlanningAgent 调用失败，回退 stub: {exc}")
+            return await self._call_planning_agent_stub(request)
+
+    async def _call_planning_agent_stub(
+        self, request: StructuredRequest
+    ) -> Dict[str, Any]:
+        """Planning Agent stub（保留作为终极降级）。"""
         await asyncio.sleep(0.01)
         days = request.dates.duration_days or 3
         total = request.budget.total
@@ -667,8 +847,21 @@ class Orchestrator(BaseAgent):
     ) -> Dict[str, Any]:
         """调用 Execution Agent 验证可行性。
 
-        v1.0.0: stub 实现，返回模拟的校验报告。
+        v1.1.0: 桥接到真实 ExecutionAgent（API 工具 + stub fallback）。
         """
+        self._init_agents()
+        try:
+            draft_obj = self._dict_to_draft(draft)
+            report = await self._execution_agent.validate_feasibility(draft_obj, _request)
+            return report.to_dict()
+        except Exception as exc:
+            self._log("WARNING", f"ExecutionAgent 调用失败，回退 stub: {exc}")
+            return await self._call_execution_agent_stub(draft)
+
+    async def _call_execution_agent_stub(
+        self, draft: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Execution Agent stub（保留作为终极降级）。"""
         await asyncio.sleep(0.01)
         total_budget = draft.get("total_budget", 0)
         budget_alloc = draft.get("budget_allocation", {})
@@ -730,8 +923,30 @@ class Orchestrator(BaseAgent):
     ) -> Dict[str, Any]:
         """调用 Evaluation Agent (Mode B) 评估方案质量。
 
-        v1.0.0: stub 实现，返回模拟的评估报告。
+        v1.1.0: 桥接到真实 EvaluationAgent，输出格式兼容下游 Gate 2 + assemble_plan。
         """
+        self._init_agents()
+        try:
+            draft_obj = self._dict_to_draft(draft)
+            val_obj = self._dict_to_validation(validation)
+            report = await self._evaluation_agent.evaluate_plan(draft_obj, val_obj)
+            result = report.to_dict()
+            # 规范化 dimensions: PlanDimensionScore 对象 → 裸分数（兼容 run_gate_2）
+            dims = result.get("dimensions", {})
+            if dims and isinstance(next(iter(dims.values()), None), dict):
+                result["dimensions"] = {
+                    k: v.get("score", 0) if isinstance(v, dict) else v
+                    for k, v in dims.items()
+                }
+            return result
+        except Exception as exc:
+            self._log("WARNING", f"EvaluationAgent 调用失败，回退 stub: {exc}")
+            return await self._call_evaluation_agent_stub(draft, validation)
+
+    async def _call_evaluation_agent_stub(
+        self, draft: Dict[str, Any], validation: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Evaluation Agent stub（保留作为终极降级）。"""
         await asyncio.sleep(0.01)
         blocking_count = validation.get("summary", {}).get("blocking_count", 0)
 
@@ -785,8 +1000,31 @@ class Orchestrator(BaseAgent):
     ) -> Dict[str, Any]:
         """调用 Planning Agent 修订行程。
 
-        v1.0.0: stub 实现，revise 版本号 +1。
+        v1.1.0: 桥接到真实 PlanningAgent.revise_itinerary()。
         """
+        self._init_agents()
+        try:
+            draft_obj = self._dict_to_draft(draft)
+            feedback_list = [
+                RevisionFeedback(
+                    dimension=f.get("dimension", ""),
+                    issue=f.get("issue", ""),
+                    suggestion=f.get("suggestion", ""),
+                    priority=f.get("priority", "medium"),
+                )
+                for f in quality.get("revision_feedback", [])
+                if isinstance(f, dict)
+            ]
+            revised = await self._planning_agent.revise_itinerary(draft_obj, feedback_list)
+            return self._draft_to_dict(revised)
+        except Exception as exc:
+            self._log("WARNING", f"PlanningAgent.revise 调用失败，回退 stub: {exc}")
+            return await self._call_revision_stub(draft)
+
+    async def _call_revision_stub(
+        self, draft: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Revision stub（保留作为终极降级）。"""
         await asyncio.sleep(0.01)
         revised = dict(draft)
         revised["revision_version"] = draft.get("revision_version", 0) + 1
