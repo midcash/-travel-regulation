@@ -219,6 +219,7 @@
 - [ ] 无 flaky test（运行 3 次结果一致）
 - [ ] 测试命名符合规范 (test_<module>_<scenario>)
 - [ ] 发现的 bug 已记录到 bugs_found 并上报
+- [ ] 已记录本轮遇到的问题到 `progress/lessons.md`（按模块分段，commit 列填 `待提交`，类型+描述+解决方案+预防措施）
 
 ---
 

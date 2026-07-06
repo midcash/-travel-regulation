@@ -103,6 +103,12 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 - 未通过质量门 → 退回对应 Agent → 最多 3 轮迭代
 - 通过后代码进入业务 Agent 的集成测试
 
+### R5.5: Lessons (跨轮次知识传递)
+- Code Agent 和 Test Agent 在 R5 评估通过后，将本轮遇到的问题写入 `progress/lessons.md`，commit 列填 `待提交`
+- 按模块分段记录：问题类型 + 描述 + 解决方案 + 预防措施
+- 主 Agent 在 `git commit` 完成后，用实际 commit hash（8位短格式）替换 `待提交`
+- Context Agent 在下一轮 R1 启动时必须读取 `progress/lessons.md`，标注"已知可预防问题"
+
 ### 业务 Agent 工作流 (运行时)
 - 同原有流程: Orchestrator → Planning → Execution → Evaluation(Mode B/C)
 - Quality Gates 0→1→2→3
@@ -152,6 +158,7 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 6. **进度回写**: Code/Test Agent 完成后 → 更新 `progress/<module>.md` 的同步状态和任务历史
 7. **差异阻塞**: Context Agent 发现 blocking 级别的 spec-代码差异 → 阻塞下游直到差异解决
 8. **碎片隔离**: 每个分支只修改自己负责的 `progress/<module>.md`，不修改其他模块的碎片
+9. **经验回写**: Code/Test Agent 在 R5 通过后写入 `progress/lessons.md`（commit 列填 `待提交`），主 Agent 在 git commit 后回填实际 commit hash；Context Agent 在 R1 启动时必须读取
 
 ## Document-Code Synchronization Rules
 
