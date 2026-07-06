@@ -4,7 +4,8 @@
 
 - **版本**: `1.0.0-dev`
 - **分支**: `main`（与 `origin/main` 同步）
-- **已完成**: 试点编码 `core/message.py` + `core/context.py`，Pipeline R1-R5 全部通过（96% 覆盖率，131 tests）
+- **已完成**: Phase 0 (core/models/tools) + Phase 1-3 (4个业务Agent)，164 tests (85% cov)
+- **最近提交**: `7681362` — Batch 2 全面铺开完成
 
 ## 已完成清单
 
@@ -23,91 +24,87 @@
 | 10 | 阻塞 | test_scenarios TS-EXEC-001~009 | ✅ |
 | 11 | 阻塞 | test_scenarios TS-ORCH-001~009 | ✅ |
 
-### 试点编码（core/）
+### Batch 1: core/models/tools（基础层）
 | 文件 | 行数 | 功能 |
 |------|------|------|
 | `core/message.py` | 426 | AgentMessage / TaskType / ErrorCode / AgentIdentity / BaseAgent / AgentRegistry |
 | `core/context.py` | 387 | ContextStatus(15状态) / LogEntry / SharedContext / to_dict / from_dict |
-| `core/__init__.py` | — | 完整公共 API 导出 |
-| `tests/test_message.py` | — | 80+ tests |
-| `tests/test_context.py` | — | 50+ tests |
-| `tests/conftest.py` | — | pytest fixtures |
+| `core/gate_runner.py` | 586 | GateRunner (Gate 0-3 执行器) / BlockingIssue / GateResult |
+| `core/orchestration_engine.py` | 528 | Task / TaskDAG / AgentRouter / RetryManager / ResultAssembler |
+| `models/entities.py` | 451 | Attraction / Restaurant / Accommodation / DestinationInfo / PriceRange 等 |
+| `models/plan.py` | 297 | Transportation / ItineraryDay / BudgetAllocation / TravelPlanDraft / FinalTravelPlan |
+| `models/request.py` | 391 | StructuredRequest / Destination / DateRange / Budget / Travelers / Preferences |
+| `models/validation.py` | 370 | ValidationReport / PriceCheckResult / TimeCheckResult / GeographyCheckResult 等 |
+| `models/quality.py` | 435 | CodeQualityReport / PlanQualityReport / ContributionReport / AblationResults 等 |
+| `tools/price_checker.py` | — | check_prices / check_budget_compliance / estimate_market_price (stub) |
+| `tools/time_checker.py` | — | check_time / check_opening_hours / calculate_transit_time (stub) |
+| `tools/geo_checker.py` | — | check_geography / validate_geography (stub) |
+| `tools/risk_checker.py` | — | check_weather_risk / check_travel_requirements (stub) |
 
-### 现存代码文件
+### Batch 2: 业务Agent（编排层）
+
+| 文件 | 行数 | 功能 | 覆盖率 |
+|------|------|------|--------|
+| `agents/orchestrator.py` | 333 | Orchestrator 主控 — parse_request / decompose_task / route_task / assemble_plan / manage_quality_gate (Gate 0-3) / handle_revision / process_request | 78% |
+| `agents/planning_agent.py` | 134 | Planning Agent — create_itinerary / revise_itinerary / research_destination / search_attractions / search_accommodations / search_restaurants / allocate_budget | 94% |
+| `agents/execution_agent.py` | 234 | Execution Agent — validate_feasibility / check_prices / check_time / check_geography / check_constraints / identify_risks / estimate_market_price | 88% |
+| `agents/evaluation_agent.py` | 284 | Evaluation Agent — Mode A (代码质量5维度) / Mode B (方案质量5维度加权) / Mode C (LOO消融+360°+协同分析+C2C5) | 86% |
+| `agents/__init__.py` | — | 完整公共 API 导出 | — |
+
+**Agent 测试文件**:
+| 文件 | 测试数 |
+|------|--------|
+| `tests/test_orchestrator.py` | 52 tests |
+| `tests/test_planning_agent.py` | 35 tests |
+| `tests/test_execution_agent.py` | 30 tests |
+| `tests/test_evaluation_agent.py` | 41 tests |
+
+### 现存代码文件总览
 ```
 core/
-  message.py  ← 已完成
-  context.py  ← 已完成
-  __init__.py ← 已完成
-models/       ← 空（只有 .gitkeep）
-tools/        ← 空（只有 .gitkeep）
-agents/       ← 空（只有 .gitkeep）
+  message.py              ← 已完成 (Batch 1)
+  context.py              ← 已完成 (Batch 1)
+  gate_runner.py          ← 已完成 (Batch 1)
+  orchestration_engine.py ← 已完成 (Batch 1)
+  __init__.py             ← 已完成
+models/
+  entities.py             ← 已完成 (Batch 1)
+  plan.py                 ← 已完成 (Batch 1)
+  request.py              ← 已完成 (Batch 1)
+  validation.py           ← 已完成 (Batch 1)
+  quality.py              ← 已完成 (Batch 1)
+  __init__.py             ← 已完成
+tools/
+  price_checker.py        ← 已完成 (Batch 1)
+  time_checker.py         ← 已完成 (Batch 1)
+  geo_checker.py          ← 已完成 (Batch 1)
+  risk_checker.py         ← 已完成 (Batch 1)
+  __init__.py             ← 已完成
+agents/
+  orchestrator.py         ← 已完成 (Batch 2A)
+  planning_agent.py       ← 已完成 (Batch 2B)
+  execution_agent.py      ← 已完成 (Batch 2C)
+  evaluation_agent.py     ← 已完成 (Batch 2D)
+  __init__.py             ← 已完成
 tests/
-  test_message.py  ← 已完成
-  test_context.py  ← 已完成
-  conftest.py      ← 已完成
-  __init__.py      ← 已完成
+  test_message.py         ← 已完成
+  test_context.py         ← 已完成
+  test_orchestrator.py    ← 已完成 (Batch 2)
+  test_planning_agent.py  ← 已完成 (Batch 2)
+  test_execution_agent.py ← 已完成 (Batch 2)
+  test_evaluation_agent.py← 已完成 (Batch 2)
+  conftest.py             ← 已完成
+  __init__.py             ← 已完成
 ```
 
 ---
 
-## 下一步：v1.0.0 全面铺开
+## 下一步：Batch 3 — 集成测试 + 消融实验（Phase 4）
 
-### Batch 1: 并行（3 个 Pipeline，无相互依赖）
-
-#### 1A. `core/` 剩余 — gate_runner.py + orchestration_engine.py（P0）
-- **spec**: `spec/system_spec.md`, `spec/orchestrator_spec.md`, `evaluation/gate_definitions.md`
-- **依赖**: core/message.py, core/context.py（已完成）
-- **产出**: GateRunner 类 + orchestration_engine.py（任务分解/路由/整合）
-- **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
-
-#### 1B. `models/` 全部（P0）
-- **spec**: `spec/system_spec.md` §2（Models 层定义）, `spec/agent_contract.md` §3.1（AgentMessage 数据模型）, 各 Agent spec 中的数据结构定义
-- **依赖**: 无代码依赖
-- **产出**: TripPlan / Budget / ItineraryDay / Constraint / UserPreferences / TravelPlanDraft / ValidationReport / PlanQualityReport / FinalTravelPlan 等数据模型
-- **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
-
-#### 1C. `tools/` 全部（P1）
-- **spec**: `spec/executor_spec.md` §2（功能规格，check_prices/check_time/check_geography 定义）, §3（接口规格）
-- **依赖**: models/（逻辑依赖，可先用 dataclass stub）
-- **产出**: check_prices() / check_time() / check_geography() / check_budget_compliance() 等 stub 实现
-- **注意**: v1.0.0 用 stub/mock，不接真实 API
-- **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
-
-### Batch 2: 串行（按依赖链：Orchestrator → Planning → Execution → Evaluation）
-
-#### 2A. `agents/orchestrator.py`（P0）
-- **spec**: `spec/orchestrator_spec.md`, `spec/system_spec.md`
-- **参考**: `playbooks/orchestrator_playbook.md`
-- **依赖**: core/ 全部 + models/ 全部
-- **产出**: Orchestrator 主控（parse_request / decompose_task / route_task / assemble_plan / Gate 0 + Gate 3）
-- **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
-
-#### 2B. `agents/planning_agent.py`（P1）
-- **spec**: `spec/planner_spec.md`
-- **参考**: `playbooks/planner_playbook.md`
-- **依赖**: core/ + models/ + tools/
-- **产出**: Planning Agent（create_itinerary / revise_itinerary / 目的地研究 / 预算分配）
-- **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
-
-#### 2C. `agents/execution_agent.py`（P1）
-- **spec**: `spec/executor_spec.md`
-- **参考**: `playbooks/executor_playbook.md`
-- **依赖**: core/ + models/ + tools/
-- **产出**: Execution Agent（validate_feasibility / check_prices / check_time / check_geography / Gate 1）
-- **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
-
-#### 2D. `agents/evaluation_agent.py`（P1）
-- **spec**: `spec/evaluator_spec.md`
-- **参考**: `playbooks/evaluator_playbook.md`
-- **依赖**: core/ + models/
-- **产出**: Evaluation Agent（Mode A 代码质量 / Mode B 方案质量 / Mode C 贡献度评估 / Gate 2）
-- **Pipeline**: Context → Plan → Code → Test → Evaluate(Mode A)
-
-### Batch 3: 集成测试 + 消融实验（Phase 4）
 - 端到端测试：按 `evaluation/test_scenarios.md` 41 个场景全量覆盖
 - 消融实验：按 `evaluation/ablation_protocol.md` 执行 LOO
 - 回归测试套件建立
+- 集成测试：Orchestrator → Planning → Execution → Evaluation 完整流程测试
 
 ---
 
@@ -174,8 +171,6 @@ type: feat/fix/refactor/test/docs/chore
 
 ## 遗漏待修（在铺开过程中按需修复）
 
-以下为第二轮约束推演中未修复的重要级/优化级问题，在对应模块实现时自然修复：
-
 | 类别 | 问题 | 应修复时机 |
 |------|------|-----------|
 | playbooks | 未显式引用 error_codes（可追溯性缺口） | 编写对应 Agent 时 |
@@ -195,8 +190,12 @@ type: feat/fix/refactor/test/docs/chore
 | 总览 | `CLAUDE.md` | 项目架构/Pipeline规则/质量门/commit规范 |
 | 版本 | `VERSION` | `1.0.0-dev` |
 | 路线图 | `ROADMAP.md` | v1.0.0 范围定义+交付物清单 |
-| 进度 | `progress/README.md` | 阶段总览+模块索引 |
-| 进度 | `progress/core.md` | core/ 模块同步状态 |
+| 交结 | `progress/handoff.md` | 本文档 — 当前状态+下一步 |
+| 进度 | `progress/README.md` | 阶段总览+模块索引+变更日志 |
+| 进度 | `progress/orchestrator.md` | Orchestrator 同步状态 |
+| 进度 | `progress/planning.md` | Planning Agent 同步状态 |
+| 进度 | `progress/execution.md` | Execution Agent 同步状态 |
+| 进度 | `progress/evaluation.md` | Evaluation Agent 同步状态 |
 | Spec | `spec/agent_contract.md` | 消息格式/TaskType/ErrorCode/超时重试 SSOT |
 | Spec | `spec/system_spec.md` | 系统架构/状态机/数据模型 |
 | Spec | `spec/orchestrator_spec.md` | Orchestrator 接口/路由表/任务分解 |
@@ -217,5 +216,11 @@ type: feat/fix/refactor/test/docs/chore
 | 评估 | `evaluation/test_scenarios.md` | 41个测试场景 |
 | 评估 | `evaluation/contribution_metrics.md` | Mode C 贡献度指标 |
 | 评估 | `evaluation/ablation_protocol.md` | LOO 消融实验协议 |
-| 现有代码 | `core/message.py` | 426行 AgentMessage/TaskType/ErrorCode/BaseAgent |
-| 现有代码 | `core/context.py` | 387行 ContextStatus/SharedContext/LogEntry |
+| 代码 | `core/message.py` | 426行 — AgentMessage/TaskType/ErrorCode/BaseAgent |
+| 代码 | `core/context.py` | 387行 — ContextStatus/SharedContext/LogEntry |
+| 代码 | `core/gate_runner.py` | 586行 — GateRunner/GateResult |
+| 代码 | `core/orchestration_engine.py` | 528行 — TaskDAG/AgentRouter/RetryManager |
+| 代码 | `agents/orchestrator.py` | 333行 — Orchestrator 主控 |
+| 代码 | `agents/planning_agent.py` | 134行 — Planning Agent |
+| 代码 | `agents/execution_agent.py` | 234行 — Execution Agent |
+| 代码 | `agents/evaluation_agent.py` | 284行 — Evaluation Agent |
