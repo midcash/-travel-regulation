@@ -49,18 +49,9 @@ from models.validation import (
     ValidationSummary,
 )
 from models.entities import PriceRange
-
-
-# ============================================================
-# Mock 市场价参考数据 (v1.0.0 stub)
-# ============================================================
-
-_MARKET_PRICES: Dict[str, Dict[str, Tuple[float, float, float]]] = {
-    "flight": {"东京": (1500, 3000, 6000), "北京": (500, 1000, 2000), "default": (500, 1500, 4000)},
-    "hotel": {"东京": (300, 600, 1200), "北京": (150, 300, 600), "default": (100, 300, 800)},
-    "attraction": {"default": (30, 100, 300)},
-    "meal": {"default": (20, 60, 200)},
-}
+from tools.price_checker import estimate_market_price as _tools_estimate_market_price
+from tools.price_checker import check_prices as _tools_check_prices
+from tools.price_checker import check_budget_compliance as _tools_check_budget_compliance
 
 
 class ExecutionAgent(BaseAgent):
@@ -458,19 +449,27 @@ class ExecutionAgent(BaseAgent):
     ) -> PriceRange:
         """查询市场行情价。
 
-        v1.0.0: stub 实现，返回预置参考价。
+        v1.1.0: 调用 tools/price_checker，统一数据源。
         """
-        await asyncio.sleep(0.005)
-        type_prices = _MARKET_PRICES.get(item_type, _MARKET_PRICES.get("attraction", {"default": (100, 200, 500)}))
-        location_prices = type_prices.get(location, type_prices.get("default", (100, 200, 500)))
+        # 映射 execution_agent 内部 item_type → tools 的 item_type
+        type_map = {
+            "flight": "flight_domestic",
+            "hotel": "hotel_per_night",
+            "attraction": "attraction_ticket",
+            "meal": "meal_per_person",
+            "local_transport": "local_transport_per_day",
+        }
+        tools_type = type_map.get(item_type, "hotel_per_night")
+
+        result = _tools_estimate_market_price(tools_type, location, date_str if date_str else None)
         return PriceRange(
             item_type=item_type,
             location=location,
-            low=location_prices[0],
-            median=location_prices[1],
-            high=location_prices[2],
-            currency="CNY",
-            source_type="estimated",
+            low=result["low"],
+            median=result["median"],
+            high=result["high"],
+            currency=result.get("currency", "CNY"),
+            source_type=result.get("source_type", "estimated"),
         )
 
     # ============================================================

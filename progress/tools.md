@@ -27,3 +27,4 @@
 | 2026-07-06 | 实现 tools/risk_checker.py | 已完成 | stub 实现，内置天气/签证/安全风险数据库 |
 | 2026-07-06 | 实现 tools/__init__.py | 已完成 | 10个公共函数统一导出 |
 | 2026-07-06 | 编写 tests/test_tools.py | 已完成 | 45 tests，覆盖TS-EXEC-001~009全部价格/时间/地理场景 |
+| 2026-07-06 | Batch 5: API 接入改造 | 已完成 | price: AmadeusPriceClient + 降级; geo: NominatimClient + geocode_async + 降级; time: MapboxDirectionsClient + 降级; 全部保留 stub fallback + degraded 标记 |

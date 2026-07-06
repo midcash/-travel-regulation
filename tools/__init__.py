@@ -18,6 +18,7 @@ from tools.time_checker import (
 )
 from tools.geo_checker import (
     check_geography,
+    geocode_async,
     validate_geography,
 )
 from tools.risk_checker import (
@@ -38,6 +39,7 @@ __all__ = [
     "calculate_transit_time",
     # 地理
     "check_geography",
+    "geocode_async",
     "validate_geography",
     # 风险/证件
     "check_weather_risk",
