@@ -163,7 +163,7 @@ R1 Context → R2 Plan → R3 Execute → R4 Test → R5 Verify → R5.5 Lessons
 |------|--------|
 | v1.0.0 | 基础框架：4 Agent + 4 Gate + stub 数据 |
 | **v1.1.0** | **API 全链路接入：DeepSeek + 高德 + 途牛 MCP** |
-| v1.2.0 | (计划) 多城市/多日优化 + 实时价格 |
+| v1.2.0 | (计划) Agent 质量升级 — Memory · Reasoning · Protocol · Architecture · Evaluation |
 
 ## License
 
