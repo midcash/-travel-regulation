@@ -8,8 +8,8 @@
 
 | spec 文件 | spec commit | 对应代码 | 同步状态 | 备注 |
 |-----------|-------------|---------|---------|------|
-| `spec/planner_spec.md` | 待提交 | `agents/planning_agent.py` | 已完成 | Batch 4 LLM接入 — 381行，86% cov，60 tests |
-| `handoff.md §Batch 4` | 待提交 | `core/llm_client.py` | 已完成 | NEW — LLM 统一客户端，160行，26% cov (需真实API) |
+| `spec/planner_spec.md` | bce72b8 | `agents/planning_agent.py` | 已完成 | Batch 4 LLM接入 — 381行，86% cov，60 tests |
+| `handoff.md §Batch 4` | bce72b8 | `core/llm_client.py` | 已完成 | NEW — LLM 统一客户端，160行，26% cov (需真实API) |
 
 > **spec commit**: 上次确认同步时 spec 文件的 commit hash。`—` 表示尚未开始或首次同步。
 > 检查漂移: `git diff <spec_commit>..HEAD -- <spec_file>`
