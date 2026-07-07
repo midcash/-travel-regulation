@@ -478,24 +478,53 @@ R1 Context → R2 Plan → R3 Execute → R4 Test → R5 Verify → R5.5 Lessons
 ### 依赖关系
 
 ```
-Step 1 (校准+元评估)
+Step 1 (校准+元评估) ← 必须先完成
   │
-  ├──→ Step 2 (Memory) ──┐
-  ├──→ Step 3 (Tool)     │
-  ├──→ Step 4 (RAG)      │
-  ├──→ Step 5 (Reasoning) ├──→ Step 9 (Mode D + 索引)
-  ├──→ Step 6 (Protocol)  │         │
-  ├──→ Step 7 (Safety)    │         ▼
-  └──→ Step 8 (Evolution) │    Step 10 (经验回灌 + Change Log)
-                           │         │
-                           └─────────┘
-                             (Step 10 需读取 Step 3/6 产出)
+  ├──→ Step 2 (Memory)     ──┐   Step 2-8 各自产出不同文件:
+  ├──→ Step 3 (Tool)         │   memory / tool / rag / reasoning /
+  ├──→ Step 4 (RAG)          │   protocol / safety / evolution
+  ├──→ Step 5 (Reasoning)    │   七个 rubric 文件互不重叠
+  ├──→ Step 6 (Protocol)     │
+  ├──→ Step 7 (Safety)       │
+  └──→ Step 8 (Evolution)   ─┘
+           │
+           ▼
+    Step 9 (Mode D + 索引) ← 需引用 Step 2-8 全部产出
+           │
+           ▼
+    Step 10 (经验回灌 + Change Log) ← 需读取 Step 3/6 产出
 ```
 
-- Step 1 必须先完成（为后续提供格式模板 + 元评估标准）
-- Step 2-8 互相独立，可并行执行
-- Step 9 依赖 Step 2-8 全部完成（需引用 7 个新 rubric）
+- Step 1 必须先完成（为后续提供格式模板 `meta_rubric.md` + 元评估标准）
+- **Step 2-8 互相独立，可并行启动多个 Agent 同时执行**：每个 Step 写入不同的 evaluation/ 文件，无合并冲突
+- Step 9 依赖 Step 2-8 全部完成（需引用 7 个新 rubric 文件路径）
 - Step 10 依赖 Step 1-9 全部完成（需回灌到各 rubric + 统一更新日志）
+
+### Step 2-8 并行执行说明
+
+Step 2-8 标记为"可并行"，指的是**开发并行**——多个 Agent 可以同时开始工作，因为：
+
+1. **无数据依赖**：Step 2-8 只依赖 Step 1 产出的 `meta_rubric.md`（格式模板），7 个 Step 之间互不依赖
+2. **无文件冲突**：每个 Step 写入一个独立的 rubric 文件，文件名不重叠
+
+| Step | 产出文件 | 互不重叠 |
+|------|---------|---------|
+| 2 | `evaluation/memory_quality_rubric.md` | ✓ |
+| 3 | `evaluation/tool_quality_rubric.md` | ✓ |
+| 4 | `evaluation/rag_quality_rubric.md` | ✓ |
+| 5 | `evaluation/reasoning_quality_rubric.md` | ✓ |
+| 6 | `evaluation/protocol_quality_rubric.md` | ✓ |
+| 7 | `evaluation/safety_quality_rubric.md` | ✓ |
+| 8 | `evaluation/evolution_quality_rubric.md` | ✓ |
+
+**并行执行流程**：
+1. 主 Agent 确认 Step 1 已完成（`meta_rubric.md` 存在）
+2. 主 Agent 同时启动 7 个 Agent，各分配一个 Step
+3. 每个 Agent 独立读取 handoff.md §11 + `meta_rubric.md` → 产出自己的 rubric 文件
+4. 每个 Agent 完成后独立 commit + push（按完成顺序，git 层面串行但不冲突）
+5. 7 个 Agent 全部完成后，主 Agent 检查 → 进入 Step 9
+
+**为什么"一个 Step 一个 commit"与并行不冲突**：每个 commit 只修改一个不同文件，git 在合并时零冲突。Agent 完成的先后顺序不影响最终结果——7 个 commit 可以以任意顺序 rebase。
 
 ---
 
@@ -506,6 +535,7 @@ Step 1 (校准+元评估)
 3. **rubric 文件统一格式**：(a) 概述 (b) 评分维度与权重表 (c) 逐维度评分锚点（5级）(d) 检查清单 (e) 评分指南 (f) 综合公式 (g) 判定矩阵 (h) 2个计算示例 (i) 变更日志
 4. **提交粒度**: 每个 Step 一个 commit，格式 `[evaluation] feat: Step N — 描述`
 5. **执行前先读**: 每个 Step 启动时必须先读取 Step 1 产出的 `meta_rubric.md` 作为质量标准
+6. **并行约束**: Step 2-8 的 Agent 启动前，主 Agent 必须确认 Step 1 已完成且 `evaluation/meta_rubric.md` 存在于仓库中
 
 ---
 
