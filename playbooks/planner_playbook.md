@@ -47,6 +47,51 @@
 所有推荐项必须包含: 名称、位置、预估价格、推荐理由（1-2句）。
 ```
 
+> **v1.2.0 更新**: 以上手动维护的 system prompt 已废弃。系统提示词现由 `core/prompt_builder.py`
+> 分层组装，模板内容存储在 `core/prompt_templates/` 目录下。修改模板不需要改动 .py 文件。
+
+### 2.1 硬约束 (Hard Constraints)
+
+以下 6 条 MUST/MUST_NOT 约束在每次 LLM 调用时强制注入 prompt，
+定义在 `core/prompt_templates/planner_stable.yaml` 的 `hard_constraints` section：
+
+| 序号 | 约束 | 说明 |
+|------|------|------|
+| 1 | MUST: 同一景点不可在不同天次重复出现 | 景点去重 — e2e 实测发现 LLM 倾向于在同城多日行程中重复推荐 |
+| 2 | MUST: 每日总花费 ≤ total_budget / days × 1.1 | 预算上限，允许 10% 浮动（应对突发消费和汇率波动） |
+| 3 | MUST: 同一天内任意两景点直线距离应尽量 ≤ 30km | 地理聚类约束，避免"上午城东、下午城西"的不合理安排 |
+| 4 | MUST: 每天至少安排 2 个主要活动 + 2 餐推荐 | 行程充实度底线，防止 LLM 懒输出（如"Day 3: 自由探索"） |
+| 5 | MUST_NOT: 不得推荐 excluded_types 中的活动类型 | 用户偏好排除 — 由 PromptBuilder.inject_hard_constraints() 动态生成 |
+| 6 | MUST: 推荐的餐厅应考虑用户的饮食限制（dietary） | 饮食兼容性 — 如素食者不应被推荐和牛餐厅 |
+
+### 2.2 推理链 (Chain of Thought)
+
+4 步推理链引导 LLM 分步思考，提升输出的可追溯性（TRC 维度）。
+定义在 `core/prompt_templates/planner_stable.yaml` 的 `chain_of_thought` section：
+
+| 步骤 | 内容 | 产出 |
+|------|------|------|
+| Step 1 | 分析目的地基本信息：季节、汇率、热门区域、交通概况 | `DestinationResearch` |
+| Step 2 | 基于目的地分析结果筛选景点/住宿/餐厅候选 | `CandidatePool` |
+| Step 3 | 按地理聚类编排每日行程，同时分配预算 | `TravelPlanDraft` |
+| Step 4 | 输出前自查：逐项检查约束满足情况，发现问题先自我修正 | `SelfCheckResult` |
+
+### 2.3 自检 (Self Check)
+
+5 项输出前自查清单，要求 LLM 在生成最终输出前逐项核实。
+定义在 `core/prompt_templates/planner_stable.yaml` 的 `self_check` section：
+
+| 序号 | 检查项 | 对应硬约束 |
+|------|--------|-----------|
+| 1 | 景点是否有重复？同一景点是否在多个天次出现？ | MUST #1 |
+| 2 | 每日花费是否在预算范围内（允许10%浮动）？ | MUST #2 |
+| 3 | 每天是否有 ≥ 2 个活动 + ≥ 2 餐？ | MUST #4 |
+| 4 | 是否推荐了用户排除的类型？ | MUST_NOT #5 |
+| 5 | 餐厅是否兼容用户的饮食限制？ | MUST #6 |
+
+> **设计说明**: 自检指令与硬约束一一对应，形成"约束 → 自查 → 修正"的闭环。
+> 此外，`models/check.py` 中的 SelfCheck 规则引擎可在 LLM 输出后进行结构化二次校验。
+
 ---
 
 ## 3. 标准操作流程 (SOP)

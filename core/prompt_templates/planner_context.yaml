@@ -1,0 +1,105 @@
+# Planner Context 模板 — per-step 的 prompt 段落
+# 为 6 个 LLM 方法各定义一个 context 模板段落
+# PromptBuilder.assemble() 根据 step 参数选择对应模板并填充变量
+# v1.2.0 R1
+
+research:
+  description: "目的地研究阶段"
+  template: |
+    【目的地研究】
+    请对 {destination}（{country}）进行全面的旅行研究：
+    - 当地货币：{currency_hint}
+    - 最佳旅行季节
+    - 热门区域和各自特点
+    - 交通概况和建议
+    - 季节性注意事项
+    - 当地物价水平（参考下方物价数据）
+
+    {price_reference}
+
+attractions:
+  description: "景点搜索阶段"
+  template: |
+    【景点搜索】
+    基于目的地研究结果，为以下需求搜索合适的景点：
+    - 目的地：{destination}
+    - 旅行天数：{duration_days}天
+    - 偏好风格：{style}
+    - 排除类型：{excluded}
+
+    要求：
+    - 每个景点提供：名称、位置、类型、建议游览时长、预估价格、具体推荐理由
+    - 推荐理由必须具体（≥20字），不得泛泛而谈
+    - 景点数量建议：每天 2-3 个主要景点
+
+accommodations:
+  description: "住宿搜索阶段"
+  template: |
+    【住宿搜索】
+    为 {destination} 搜索合适的住宿选项：
+    - 住宿天数：{duration_days}晚
+    - 预算范围：{budget_hint}
+    - 偏好：{preferences_hint}
+
+    要求：
+    - 至少提供 2 个不同价位/风格的选项
+    - 每个选项包含：名称、位置、类型、每晚价格、距市中心距离、亮点
+    - 推荐位置应便于到达主要景点
+
+restaurants:
+  description: "餐厅搜索阶段"
+  template: |
+    【餐厅搜索】
+    为 {destination} 搜索合适的餐厅推荐：
+    - 饮食限制：{dietary}
+    - 预算范围：{budget_hint}
+    - 偏好菜系：{cuisine_preferences}
+
+    要求：
+    - 每个餐厅包含：名称、位置、菜系、人均价格、与景点距离
+    - 必须标注是否兼容用户的饮食限制
+    - 一日三餐应覆盖不同的菜系或风格
+
+itinerary:
+  description: "行程编排阶段"
+  template: |
+    【行程编排】
+    请根据以下信息编排 {duration_days} 天的完整行程：
+
+    目的地分析：{research_summary}
+    候选景点：{candidates_attractions}
+    候选住宿：{candidates_accommodations}
+    候选餐厅：{candidates_restaurants}
+    总预算：{total_budget} {currency}
+
+    编排要求：
+    - 每天按时间顺序排列活动和餐食
+    - 同一天内的景点应地理聚类（避免东奔西跑）
+    - 每项花费应合理估算
+    - 预留交通时间
+
+budget:
+  description: "预算分配阶段"
+  template: |
+    【预算分配】
+    为 {duration_days} 天 {destination} 行程分配总预算 {total_budget} {currency}：
+
+    分配建议：
+    - 交通：{transport_ratio}
+    - 住宿：{accommodation_ratio}
+    - 活动/门票：{activities_ratio}
+    - 餐饮：{meals_ratio}
+    - 缓冲金：{buffer_ratio}（建议 5-10%）
+
+revise:
+  description: "修订阶段"
+  template: |
+    【行程修订】
+    根据以下反馈修订行程：
+
+    {feedback_items}
+
+    修订要求：
+    - 针对每一条反馈精确定位修改
+    - 未被反馈指出的部分尽量保持不变
+    - 修订后重新自查约束满足情况
