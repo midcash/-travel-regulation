@@ -102,6 +102,85 @@ class SharedContext:
 
     约束: Orchestrator 是唯一写入者。子 Agent 只能通过 getter 只读访问。
 
+    状态转换图 (15 状态 × 所有合法转换):
+
+                         ┌──────────┐
+                         │   IDLE   │
+                         └────┬─────┘
+                              │
+                   ┌──────────┴──────────┐
+                   ▼                     ▼
+             ┌──────────┐          ┌──────────┐
+             │VALIDATING│          │  FAILED  │ (终态)
+             └────┬─────┘          └──────────┘
+                  │
+           ┌──────┴──────┐
+           ▼              ▼
+     ┌──────────┐   ┌──────────┐
+     │DECOMPOSING│   │  FAILED  │ (终态)
+     └────┬─────┘   └──────────┘
+          │
+   ┌──────┴──────┐
+   ▼              ▼
+┌──────────┐ ┌──────────┐
+│DISPATCHING│ │  FAILED  │ (终态)
+└────┬─────┘ └──────────┘
+     │
+     ▼
+┌────────────────┐ ── REVISING ──┐
+│ WAITING_PLANNER │              │
+└───────┬────────┘              │
+        │                       │
+   ┌────┴────┬──────┐           │
+   ▼         ▼      ▼           │
+┌───────┐ ┌──────┐ ┌──────┐     │
+│WAITING│ │REVIS-│ │FAILED│     │
+│EXECUTR│ │ ING  │ │(终态)│     │
+└───┬───┘ └──┬───┘ └──────┘     │
+    │        │                   │
+    ▼        └──────────(返回)───┘
+┌────────┐ ── REVISING ──────────────────────────────┐
+│ GATE_1 │                                           │
+└───┬────┘                                           │
+    │                                                │
+┌───┴────┬──────┐                                    │
+▼        ▼      ▼                                    │
+┌──────┐ ┌────┐ ┌──────┐                              │
+│WAITING│ │REVI│ │FAILED│                              │
+│EVALUAT│ │SING│ │(终态)│                              │
+└──┬───┘ └──┬─┘ └──────┘                              │
+   │        │                                         │
+   ▼        └────────────────(返回)───────────────────┘
+┌──────────┐
+│ DECIDING │
+└────┬─────┘
+     │
+┌────┴────┬──────────┬──────────┐
+▼         ▼          ▼          ▼
+┌──────┐ ┌──────┐ ┌────────┐ ┌──────┐
+│ASSEM-│ │REVIS-│ │COMPLETE│ │FAILED│
+│BLING │ │ ING  │ │_DEGRAD │ │(终态)│
+└──┬───┘ └──┬───┘ └────────┘ └──────┘
+   │        │
+   ▼        └────────────(返回 WAITING_PLANNER)────────┐
+┌────────┐                                              │
+│ GATE_3 │                                              │
+└───┬────┘                                              │
+    │                                                   │
+┌───┴────┬──────────┬──────────┐                        │
+▼        ▼          ▼          ▼                        │
+┌──────┐ ┌────────┐ ┌──────┐ ┌────────┐                 │
+│COMPLE│ │COMPLETE│ │FAILED│ │WAITING_│                 │
+│TED   │ │_DEGRAD │ │(终态)│ │PLANNER │ (修订返回入口)  │
+└──────┘ └────────┘ └──────┘ └────────┘                 │
+   (终态)   (终态)                                       │
+                                                        │
+修订闭环 (REVISING 返回路径):                            │
+  REVISING → WAITING_PLANNER (唯一合法出口) ←───────────┘
+
+注: 几乎所有非终态均可直接转换到 FAILED (省略所有 FAILED 边以保持图清晰)。
+    已验证: 当前 _VALID_TRANSITIONS 无死角 (v1.2.0 P2, 2026-07-07)。
+
     使用示例:
         ctx = SharedContext()
         ctx.set_request({"destination": "Tokyo", ...})
@@ -173,7 +252,17 @@ class SharedContext:
         ContextStatus.FAILED: set(),
     }
 
-    def __init__(self):
+    def __init__(
+        self,
+        strict_mode: bool = True,
+        request_id: Optional[str] = None,
+    ):
+        """初始化 SharedContext。
+
+        Args:
+            strict_mode: 严格模式。False 时跳过状态转换合法性校验（测试/调试用）。
+            request_id: 请求标识符，用于日志追踪。None 时自动生成。
+        """
         # -- 业务数据 --
         self._request: Optional[Dict[str, Any]] = None
         self._task_queue: Optional[Dict[str, Any]] = None
@@ -184,6 +273,14 @@ class SharedContext:
         # -- 流程控制 --
         self._iteration_count: int = 0
         self._status: ContextStatus = ContextStatus.IDLE
+
+        # -- 状态机配置 --
+        self.strict_mode: bool = strict_mode
+        """严格模式。False 时跳过状态校验（测试/调试用）。"""
+
+        # -- 请求标识 --
+        self.request_id: str = request_id or f"req-{id(self):x}"
+        """请求标识符，用于日志追踪和调试。"""
 
         # -- 操作审计 --
         self._logs: List[LogEntry] = []
@@ -221,21 +318,100 @@ class SharedContext:
         """设置流水线状态。
 
         执行状态转换校验: 非法转换抛出 ValueError。
+        strict_mode=False 时跳过校验，直接设置。
 
         Raises:
             ValueError: 当前状态不允许转换到目标状态。
+            TypeError: status 不是 ContextStatus 枚举值。
         """
         if not isinstance(status, ContextStatus):
             raise TypeError(f"status 必须是 ContextStatus 枚举值, 实际: {type(status)}")
 
+        if not self.strict_mode:
+            self._status = status
+            return
+
         allowed = self._VALID_TRANSITIONS.get(self._status, set())
         if status not in allowed:
-            allowed_names = sorted(s.name for s in allowed)
+            legal_targets = sorted(s.name for s in allowed)
             raise ValueError(
-                f"非法状态转换: {self._status.name} → {status.name}。"
-                f"当前状态允许转换为: {allowed_names or '(无 — 终态)'}"
+                f"非法状态转换 {self._status.name}→{status.name}，"
+                f"合法目标: {legal_targets or '(无 — 终态)'}"
             )
         self._status = status
+
+    def force_status(self, status: ContextStatus) -> None:
+        """强制设置状态（跳过转换合法性校验）。
+
+        仅在 strict_mode=False 时可用。
+        strict_mode=True 时调用将抛出 RuntimeError。
+
+        Args:
+            status: 目标状态。
+
+        Raises:
+            RuntimeError: strict_mode=True 时调用。
+            TypeError: status 不是 ContextStatus 枚举值。
+        """
+        if not isinstance(status, ContextStatus):
+            raise TypeError(f"status 必须是 ContextStatus 枚举值, 实际: {type(status)}")
+
+        if self.strict_mode:
+            raise RuntimeError(
+                f"force_status() 仅在 strict_mode=False 时可用。"
+                f"当前 strict_mode=True，请使用 set_status() 走正常校验流程。"
+            )
+        self._status = status
+
+    # ============================================================
+    # 状态机辅助工具 (类方法) — v1.2.0 P2
+    # ============================================================
+
+    @classmethod
+    def get_legal_transitions(cls, status: ContextStatus) -> Set[ContextStatus]:
+        """查询给定状态的合法目标状态集合。
+
+        Args:
+            status: 查询的源状态。
+
+        Returns:
+            合法目标状态的集合（终态返回空集合）。
+        """
+        return cls._VALID_TRANSITIONS.get(status, set())
+
+    @classmethod
+    def get_transition_path(
+        cls,
+        from_status: ContextStatus,
+        to_status: ContextStatus,
+    ) -> List[ContextStatus]:
+        """BFS 寻找状态转换的最短路径。
+
+        Args:
+            from_status: 起始状态。
+            to_status: 目标状态。
+
+        Returns:
+            状态列表（含起点和终点）。若无路径，返回空列表。
+        """
+        if from_status == to_status:
+            return [from_status]
+
+        from collections import deque
+
+        queue = deque([[from_status]])
+        visited: Set[ContextStatus] = {from_status}
+
+        while queue:
+            path = queue.popleft()
+            current = path[-1]
+            for next_status in cls._VALID_TRANSITIONS.get(current, set()):
+                if next_status == to_status:
+                    return path + [next_status]
+                if next_status not in visited:
+                    visited.add(next_status)
+                    queue.append(path + [next_status])
+        return []  # 无路径
 
     def add_log(
         self,
