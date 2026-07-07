@@ -161,6 +161,9 @@
 | 2026-07-06 | Batch 4 (planning agent LLM 接入) | 4 | 4 | 0 |
 | 2026-07-06 | Batch 5 (execution agent API 接入) | 4 | 4 | 0 |
 | 2026-07-06 | Batch 6 (集成验证 + 真实案例) | 3 | 3 | 0 |
+| 2026-07-06 | Batch 7 (Orchestrator → Agent 桥接) | 5 | 5 | 0 |
+| 2026-07-06 | Phase 5 (API Provider 切换: DeepSeek+高德+途牛) | 9 | 9 | 0 |
+| 2026-07-07 | Batch 8 (v1.2.0 评估体系升级) | — | — | 0 |
 
 ---
 

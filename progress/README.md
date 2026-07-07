@@ -60,6 +60,7 @@
 | 2026-07-06 | 实现 | core/config.py + tools/price|geo|time_checker.py + agents/execution_agent.py + 75 tests | Batch 5: Execution Agent 接入真实 API — AmadeusPriceClient + NominatimClient + MapboxDirectionsClient，全部双轨架构（API优先→stub降级），degraded 标记传播 |
 | 2026-07-06 | 实现 | tests/test_real_cases.py + 14 tests | Batch 6: 集成验证 + 真实案例 — 5个真实城市(东京/巴黎/纽约/成都/曼谷)端到端跑通，降级场景+跨领域验证，663 tests 0 regressions |
 | 2026-07-06 | 重构 | core/llm_client.py + core/config.py + tools/price|geo|time_checker.py + tests | Phase 5: API Provider 切换 — LLM: Anthropic→DeepSeek (openai SDK), 地图: Mapbox/Nominatim→高德, 价格: Amadeus→途牛 MCP (JSON-RPC 2.0 + SSE 解析), 新增 .env.example, E2E 验证: DeepSeek/高德Geocode/高德Directions/途牛Hotel/途牛Flight 全部 PASS |
+| 2026-07-07 | 新增 | evaluation/ (plan_quality_rubric.md 修改 + meta_rubric.md + memory/tool/rag/reasoning/protocol/safety/evolution_quality_rubric.md + system_metrics.md + metrics.md 修改 + quality_criteria.md 修改) + progress/lessons.md | v1.2.0 评估体系升级 — Step 1-10 全部完成: (1) Mode B 评分校准+维度地板规则+JSON锚点 (2-8) 7 个模块 Layer 2 评估量表新建 (9) Mode D 系统级指标+评估体系统一索引 (10) lessons 经验回灌+Change Log 更新。合计新增 8 个 .md 文件，修改 5 个已有文件。只建尺子不改代码。 |
 
 ---
 

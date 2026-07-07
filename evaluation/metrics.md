@@ -14,12 +14,12 @@
                     ┌──────────────────┐
                     │   量化指标体系     │
                     └────────┬─────────┘
-           ┌─────────────────┼─────────────────┐
-           ▼                 ▼                  ▼
-    ┌─────────────┐  ┌─────────────┐  ┌────────────────┐
-    │ Layer 1      │  │ Layer 2      │  │ Layer 3         │
-    │ 代码质量指标  │  │ 业务产出指标  │  │ Agent 贡献度指标 │
-    └─────────────┘  └─────────────┘  └────────────────┘
+           ┌─────────────────┼─────────────────┬─────────────────┐
+           ▼                 ▼                  ▼                  ▼
+    ┌─────────────┐  ┌─────────────┐  ┌────────────────┐  ┌─────────────┐
+    │ Layer 1      │  │ Layer 2      │  │ Layer 3         │  │ Mode D       │
+    │ 代码质量指标  │  │ 业务产出指标  │  │ Agent 贡献度指标 │  │ 系统级指标    │
+    └─────────────┘  └─────────────┘  └────────────────┘  └─────────────┘
 ```
 
 ---
@@ -230,9 +230,40 @@ Alert: |BI| > 1.0 持续 → 自我认知偏差
 
 ---
 
-## 6. 指标看板 (Dashboard)
+## 6. Layer 2 模块级评估指标索引
 
-### 6.1 实时指标 (每次任务后更新)
+以下 8 个模块各有独立的 Layer 2 评估量表（rubric），定义了各自的维度、权重、评分锚点和判定矩阵：
+
+| 模块 | Rubric 文件 | 维度数 | 核心评估面 |
+|------|-----------|--------|-----------|
+| Plan (方案) | [plan_quality_rubric.md](plan_quality_rubric.md) | 5 | COM/FEA/CON/EXP/ACC |
+| Memory (记忆) | [memory_quality_rubric.md](memory_quality_rubric.md) | 4 | Recall/Consistency/Fidelity/Reuse |
+| Tool (工具) | [tool_quality_rubric.md](tool_quality_rubric.md) | 4 | Availability/Latency/Accuracy/Degradation |
+| RAG (检索) | [rag_quality_rubric.md](rag_quality_rubric.md) | 4 | Precision/Freshness/Speed/Coverage |
+| Reasoning (推理) | [reasoning_quality_rubric.md](reasoning_quality_rubric.md) | 5 | Constraint/Hallucination/SelfCheck/Convergence/Traceability |
+| Protocol (协议) | [protocol_quality_rubric.md](protocol_quality_rubric.md) | 4 | Validity/Compatibility/Recovery/State |
+| Safety (安全) | [safety_quality_rubric.md](safety_quality_rubric.md) | 4 | Block Rate/False Positive/Injection/PII |
+| Evolution (进化) | [evolution_quality_rubric.md](evolution_quality_rubric.md) | 4 | Success/Recurrence/Auto-fix/Growth |
+
+---
+
+## 7. Mode D: 系统级指标
+
+Mode D 定义了 5 个端到端系统级指标，详见 [system_metrics.md](system_metrics.md)：
+
+| 指标ID | 名称 | 缩写 | 目标 | 告警 |
+|--------|------|------|------|------|
+| D1 | 首次通过率 | FPR | ≥ 0.80 | < 0.50 |
+| D2 | 平均迭代轮次 | AI | ≤ 1.5 | > 2.0 |
+| D3 | 降级率 | DR | ≤ 0.15 | > 0.30 |
+| D4 | 时间-质量曲线 | TQC | 边际收益 > 1分/秒 | 异常点 > 10% |
+| D5 | 成本-质量比 | CoQ | 保持基线 ± 15% | > 基线 × 1.3 |
+
+---
+
+## 8. 指标看板 (Dashboard)
+
+### 8.1 实时指标 (每次任务后更新)
 | 指标 | 当前值 | 目标值 | 趋势 |
 |------|--------|--------|------|
 | Composite Quality Score | — | ≥ 80 | — |
@@ -240,7 +271,7 @@ Alert: |BI| > 1.0 持续 → 自我认知偏差
 | Average Iterations | — | ≤ 1.5 | — |
 | Blocking Issues (avg) | — | 0 | — |
 
-### 6.2 趋势指标 (每周更新)
+### 8.2 趋势指标 (每周更新)
 | 指标 | 本周 | 上周 | 变化 |
 |------|------|------|------|
 | Planner CR | — | — | — |
@@ -249,7 +280,7 @@ Alert: |BI| > 1.0 持续 → 自我认知偏差
 | Synergy Efficiency | — | — | — |
 | CoQ | — | — | — |
 
-### 6.3 告警指标 (实时监控)
+### 8.3 告警指标 (实时监控)
 | 告警条件 | 严重级别 |
 |---------|---------|
 | CQS < 60 (连续3次) | CRITICAL |
@@ -261,7 +292,7 @@ Alert: |BI| > 1.0 持续 → 自我认知偏差
 
 ---
 
-## 7. 指标计算示例
+## 9. 指标计算示例
 
 ### 示例: 某次旅行方案评估
 
@@ -284,8 +315,9 @@ CQS = (4×0.25 + 5×0.25 + 4×0.25 + 4×0.15 + 3×0.10) × 20
 
 ---
 
-## 8. 变更日志
+## 10. 变更日志
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | 1.0.0 | 2026-07-05 | 初始版本，三层指标体系的完整定义 |
+| 1.1.0 | 2026-07-07 | Step 9 评估体系统一索引: (a) §2 指标体系总览追加 Mode D 层 (b) §6 新增 Layer 2 模块级评估指标索引（7 个 rubric 文件引用）(c) §7 新增 Mode D 系统级指标汇总（5 指标）(d) 章节重新编号 |
