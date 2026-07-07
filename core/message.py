@@ -34,6 +34,139 @@ RETRY_BACKOFF = [1, 2, 4]   # 指数退避序列 (秒)
 
 TIMESTAMP_TOLERANCE = timedelta(minutes=5)  # AgentMessage.validate() 规则4 容差
 
+# ============================================================
+# 协议版本化常量 — v1.2.0
+# ============================================================
+
+PROTOCOL_VERSION = "1.2"
+"""当前系统支持的协议版本 (MAJOR.MINOR 格式)。"""
+
+
+class VersionPolicy:
+    """协议版本兼容性策略。
+
+    兼容性规则:
+    - 同 MAJOR.MINOR → full (完全兼容)
+    - 同 MAJOR, 不同 MINOR → adapt (忽略未知字段 / 使用默认值)
+    - 不同 MAJOR → reject (不兼容)
+    """
+
+    @staticmethod
+    def server_version() -> str:
+        """返回当前服务端协议版本。"""
+        return PROTOCOL_VERSION
+
+    @staticmethod
+    def check(
+        client_version: str, server_version: str = PROTOCOL_VERSION
+    ) -> "CompatibilityResult":
+        """检查客户端版本与服务器版本的兼容性。
+
+        Args:
+            client_version: 客户端协议版本 (MAJOR.MINOR 格式)。
+            server_version: 服务端协议版本，默认使用当前 PROTOCOL_VERSION。
+
+        Returns:
+            CompatibilityResult (来自 models.protocol)。
+        """
+        # 延迟导入避免循环依赖
+        from models.protocol import CompatibilityResult
+
+        try:
+            client_major, client_minor = VersionPolicy._parse(client_version)
+            server_major, server_minor = VersionPolicy._parse(server_version)
+        except ValueError as e:
+            return CompatibilityResult.reject()
+
+        if client_major != server_major:
+            # 主版本不同 → 不可兼容
+            return CompatibilityResult.reject()
+
+        if client_minor == server_minor:
+            # 完全一致
+            return CompatibilityResult.full(server_version)
+
+        # 同 MAJOR, 不同 MINOR → 可适配
+        return CompatibilityResult.adapt(server_version)
+
+    @staticmethod
+    def negotiate(
+        client_versions: List[str], server_version: str = PROTOCOL_VERSION
+    ) -> Optional[str]:
+        """多版本协商：返回双方共同支持的最高版本。
+
+        在客户端支持的版本列表中，找出与服务端兼容且不超过服务端版本的最高版本。
+
+        Args:
+            client_versions: 客户端支持的版本列表 (降序)。
+            server_version: 服务端协议版本。
+
+        Returns:
+            协商后的版本号字符串。如无兼容版本返回 None。
+
+        Example:
+            negotiate(["1.2", "1.1"], "1.1") → "1.1"
+            negotiate(["1.0"], "1.2") → "1.0"
+        """
+        try:
+            server_tuple = VersionPolicy._parse(server_version)
+        except ValueError:
+            return None
+
+        best: Optional[str] = None
+        best_tuple: Optional[tuple] = None
+
+        for cv in client_versions:
+            result = VersionPolicy.check(cv, server_version)
+            if not result.compatible:
+                continue
+            try:
+                cv_tuple = VersionPolicy._parse(cv)
+            except ValueError:
+                continue
+            # 协商版本不能超过服务端版本
+            if cv_tuple > server_tuple:
+                continue
+            if best_tuple is None or cv_tuple > best_tuple:
+                best_tuple = cv_tuple
+                best = cv
+
+        return best
+
+    @staticmethod
+    def _parse(version: str) -> tuple:
+        """解析 'MAJOR.MINOR' → (major_int, minor_int)。
+
+        Args:
+            version: 版本号字符串。
+
+        Returns:
+            (major, minor) 元组。
+
+        Raises:
+            ValueError: 版本格式不合法。
+        """
+        if not version or not isinstance(version, str):
+            raise ValueError(f"版本号必须为非空字符串, 实际: {version!r}")
+
+        parts = version.strip().split(".")
+        if len(parts) != 2:
+            raise ValueError(
+                f"版本号格式必须为 MAJOR.MINOR, 实际: {version!r}"
+            )
+
+        try:
+            major = int(parts[0])
+            minor = int(parts[1])
+        except ValueError:
+            raise ValueError(f"版本号各部分必须为整数, 实际: {version!r}")
+
+        if major < 0 or minor < 0:
+            raise ValueError(f"版本号不能为负数, 实际: {version!r}")
+
+        return (major, minor)
+
+
 # UUID v4 正则 (8-4-4-4-12 十六进制格式)
 _UUID_V4_RE = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
@@ -232,6 +365,9 @@ class AgentMessage:
     timestamp: datetime
     """消息创建时间 (ISO 8601)。"""
 
+    protocol_version: str = "1.0"
+    """协议版本号 (MAJOR.MINOR 格式)。v1.1.0 及之前默认为 "1.0"，新消息应设为当前 PROTOCOL_VERSION。"""
+
     correlation_id: Optional[str] = None
     """关联请求 ID，用于请求-响应配对。响应消息必须非空。"""
 
@@ -256,6 +392,13 @@ class AgentMessage:
             MessageValidationError: 任何一条校验规则不满足时抛出。
         """
         violations: List[str] = []
+
+        # 规则 0: protocol_version 必须存在且为非空字符串
+        if not self.protocol_version or not isinstance(self.protocol_version, str):
+            violations.append(
+                f"protocol_version 必须为非空字符串, "
+                f"实际: {self.protocol_version!r}"
+            )
 
         # 规则 1: message_id 必须为非空 UUID v4
         if not self.message_id:

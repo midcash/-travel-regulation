@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Error Response",
+  "description": "任意 Specialist → Orchestrator: 标准错误响应的 payload schema",
+  "type": "object",
+  "required": ["error_code", "message"],
+  "properties": {
+    "error_code": {
+      "type": "string",
+      "description": "标准错误码 (如 INVALID_MESSAGE, TIMEOUT 等)",
+      "enum": [
+        "INVALID_MESSAGE",
+        "TASK_NOT_SUPPORTED",
+        "EXECUTION_FAILED",
+        "TIMEOUT",
+        "DATA_UNAVAILABLE",
+        "CONSTRAINT_VIOLATION",
+        "INTERNAL_ERROR"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "description": "人类可读的错误描述"
+    },
+    "details": {
+      "type": "object",
+      "description": "可选，错误详情（如 violations 列表）"
+    },
+    "original_message_id": {
+      "type": "string",
+      "description": "可选，触发错误的原始消息 ID"
+    },
+    "recoverable": {
+      "type": "boolean",
+      "description": "是否可通过重试恢复"
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": ["retry", "skip", "abort", "revise"],
+      "description": "建议的恢复操作"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Abort Control Message",
+  "description": "Orchestrator → All Agents: 全局中止指令的 payload schema",
+  "type": "object",
+  "required": ["reason", "force"],
+  "properties": {
+    "reason": {
+      "type": "string",
+      "enum": ["user_cancel", "fatal_error", "timeout"],
+      "description": "中止原因"
+    },
+    "force": {
+      "type": "boolean",
+      "description": "是否强制中止（true=立即终止, false=允许 Agent 执行清理后终止）"
+    }
+  }
+}
