@@ -726,7 +726,7 @@ class Orchestrator(BaseAgent):
             if not gate3.passed:
                 final_plan["summary"]["degraded"] = True
                 final_plan["summary"]["degraded_reason"] = (
-                    final_plan["summary"].get("degraded_reason", "")
+                    (final_plan["summary"].get("degraded_reason") or "")
                     + "; Gate 3 部分检查未通过"
                 )
                 self._context.set_status(ContextStatus.COMPLETED_DEGRADED)
