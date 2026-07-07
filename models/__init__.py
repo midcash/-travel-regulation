@@ -62,8 +62,25 @@ from models.entities import (
     RevisionDecision,
     RevisionFeedback,
 )
+from models.reasoning import (
+    CandidatePool,
+    CoTResult,
+    DestinationResearch,
+    StepTrace,
+)
+from models.check import (
+    IssueType,
+    SelfCheckIssue,
+    SelfCheckResult,
+)
+from models.feedback import RevisionFeedback as StructuredRevisionFeedback
+from models.protocol import (
+    CompatibilityResult,
+    SchemaError,
+    ValidationResult,
+)
 
-__version__ = "1.0.0-dev"
+__version__ = "1.2.0-dev"
 
 __all__ = [
     # request
@@ -116,4 +133,19 @@ __all__ = [
     "DietaryPreferences",
     "RevisionFeedback",
     "RevisionDecision",
+    # reasoning (v1.2.0)
+    "DestinationResearch",
+    "CandidatePool",
+    "StepTrace",
+    "CoTResult",
+    # check (v1.2.0)
+    "IssueType",
+    "SelfCheckIssue",
+    "SelfCheckResult",
+    # feedback (v1.2.0)
+    "StructuredRevisionFeedback",
+    # protocol (v1.2.0)
+    "SchemaError",
+    "ValidationResult",
+    "CompatibilityResult",
 ]
