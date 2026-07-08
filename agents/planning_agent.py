@@ -9,6 +9,7 @@
 - allocate_budget: 分配预算到各分项
 
 v1.1.0: LLM 接入 — 6 个方法支持 LLM 调用 + stub fallback。
+v1.2.0: CoT 推理管线 — PromptBuilder + SelfCheck 4步推理链。
 来源: spec/planner_spec.md, playbooks/planner_playbook.md, handoff.md §Batch 4
 """
 
@@ -146,9 +147,13 @@ class PlanningAgent(BaseAgent):
         self,
         registry: Optional[AgentRegistry] = None,
         llm_client: Optional[LLMClient] = None,
+        prompt_builder: Optional[Any] = None,
+        self_checker: Optional[Any] = None,
     ):
         self._registry = registry
         self._llm_client = llm_client
+        self._prompt_builder = prompt_builder
+        self._self_checker = self_checker
         self._identity = AgentIdentity(
             name="planning_agent",
             version="1.1.0",
@@ -252,8 +257,47 @@ class PlanningAgent(BaseAgent):
     async def create_itinerary(self, request: StructuredRequest) -> TravelPlanDraft:
         """生成新的旅行行程草稿。
 
-        重构版(≤25行编排器): 参数提取 → 研究 → 日程编排 → 预算分配 → 组装。
+        v1.2.0: CoT 管线优先 — PromptBuilder + LLM 4步推理链。
+        CoT 不可用时回退原有流程 (研究→编排→预算→组装)。
         """
+        # ---- CoT 路径 (v1.2.0) ----
+        if (
+            self._llm_client is not None
+            and self._llm_client.available
+            and self._prompt_builder is not None
+            and self._self_checker is not None
+        ):
+            try:
+                from core.cot_pipeline import CoTPipeline
+
+                pipeline = CoTPipeline(
+                    self._llm_client,
+                    self._prompt_builder,
+                    self._self_checker,
+                )
+                result = await pipeline.execute(request)
+
+                if not result.degraded and result.draft is not None:
+                    logger.info(
+                        f"[PlanningAgent] CoT 生成成功: "
+                        f"attempts={result.attempts}, "
+                        f"latency={result.latency_ms}ms, "
+                        f"token={result.token_count}, "
+                        f"selfcheck_passed={result.selfcheck.passed if result.selfcheck else 'N/A'}"
+                    )
+                    return result.draft
+
+                logger.warning(
+                    f"[PlanningAgent] CoT 降级: "
+                    f"degraded={result.degraded}, "
+                    f"reason={result.degraded_reason} → 回退 legacy 流程"
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"[PlanningAgent] CoT 异常: {exc} → 回退 legacy 流程"
+                )
+
+        # ---- Legacy 路径 (v1.1.0 兼容) ----
         dest, budget, prefs, days = self._extract_params(request)
         dest_info, attractions, accommodations, dietary, restaurants = (
             await self._research_phase(dest, budget, prefs, days)
