@@ -8,12 +8,18 @@
 - agents/execution_agent.py: estimate_market_price 调用 tools/ 集成
 
 所有外部 API 调用均使用 stub 降级路径（不真调 API）。
+真实 API 调用测试见 TestRealAPICalls 类（标记 @pytest.mark.slow）。
 """
 
 import asyncio
 import os
 import pytest
 from unittest.mock import patch, MagicMock
+
+from dotenv import load_dotenv
+
+# 加载 .env 以便真实 API 测试读取密钥
+load_dotenv()
 
 from core.config import APIConfig, get_config, API_TIMEOUT, MAX_RETRIES
 from tools.price_checker import (
@@ -641,3 +647,212 @@ class TestExecutionAgentToolsIntegration:
             price = asyncio.run(agent.estimate_market_price(item_type, "北京"))
             assert price.item_type == item_type
             assert price.low <= price.median <= price.high
+
+
+# ============================================================
+# v1.2.0: 真实 API 调用测试 — 各 API 2 条，共 6 条
+# ============================================================
+
+@pytest.mark.slow
+class TestRealAPICalls:
+    """真实 API 调用冒烟测试。
+
+    每个 API (DeepSeek / 高德 / 途牛) 各 2 条测试，
+    验证真实 API 连通性和基础功能。默认被 pytest.ini 跳过。
+
+    运行方式:
+        pytest -m slow                          # 仅 slow 测试
+        pytest --override-ini='addopts='         # 包含 slow 的全量测试
+    """
+
+    # ════════════════════════════════════════════════════════
+    # DeepSeek LLM — 2 条
+    # ════════════════════════════════════════════════════════
+
+    def test_real_deepseek_simple_research(self):
+        """真实 DeepSeek 调用：简单目的地研究。
+
+        向 DeepSeek 发送简短 research prompt（带 JSON 输出约束），
+        验证返回合法 dict。
+        """
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            pytest.skip("DEEPSEEK_API_KEY not configured")
+
+        from core.llm_client import LLMClient
+        client = LLMClient()
+
+        result = asyncio.run(client.generate(
+            system_prompt="你是一个旅游规划助手。请以 JSON 格式回答。",
+            user_prompt='请用 JSON 介绍成都: {"city":"成都","highlights":["特色1","特色2","特色3"]}',
+            output_schema={
+                "type": "object",
+                "required": ["city", "highlights"],
+                "properties": {
+                    "city": {"type": "string"},
+                    "highlights": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        ))
+
+        assert result is not None, "LLM 返回 None"
+        assert isinstance(result, dict), f"LLM 返回类型异常: {type(result)}"
+        assert "city" in result, f"缺少 city 字段: {list(result.keys())}"
+        assert "成都" in result.get("city", ""), f"city 字段内容异常: {result.get('city')}"
+        assert len(result.get("highlights", [])) >= 1, "highlights 为空"
+
+    def test_real_deepseek_simple_itinerary(self):
+        """真实 DeepSeek 调用：简单景点推荐。
+
+        验证 LLM 能生成结构化的 JSON 景点推荐列表。
+        """
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        if not api_key:
+            pytest.skip("DEEPSEEK_API_KEY not configured")
+
+        from core.llm_client import LLMClient
+        client = LLMClient()
+
+        result = asyncio.run(client.generate(
+            system_prompt="你是一个旅游规划助手。请以 JSON 格式推荐景点。",
+            user_prompt='请推荐成都3个必去景点，JSON格式: {"spots":[{"name":"景点名","reason":"简短理由"}]}',
+            output_schema={
+                "type": "object",
+                "required": ["spots"],
+                "properties": {
+                    "spots": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "required": ["name", "reason"],
+                            "properties": {
+                                "name": {"type": "string"},
+                                "reason": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+        ))
+
+        assert result is not None, "LLM 返回 None"
+        assert isinstance(result, dict), f"LLM 返回类型异常: {type(result)}"
+        spots = result.get("spots", [])
+        assert len(spots) >= 1, f"spots 为空或不足: {spots}"
+        for spot in spots[:3]:
+            assert "name" in spot, f"spot 缺少 name: {spot}"
+            assert "reason" in spot, f"spot 缺少 reason: {spot}"
+
+    # ════════════════════════════════════════════════════════
+    # 高德地图 — 2 条
+    # ════════════════════════════════════════════════════════
+
+    def test_real_amap_geocode(self):
+        """真实高德调用：地理编码。
+
+        对"成都天府广场"进行地理编码，验证返回合法经纬度。
+        """
+        api_key = os.getenv("AMAP_API_KEY")
+        if not api_key:
+            pytest.skip("AMAP_API_KEY not configured")
+
+        from tools.geo_checker import AmapGeocodeClient
+        client = AmapGeocodeClient()
+
+        result = asyncio.run(client.geocode("成都天府广场"))
+
+        assert result is not None, "地理编码返回 None"
+        assert "lat" in result, f"返回缺少 lat: {result}"
+        assert "lng" in result, f"返回缺少 lng: {result}"
+        # 成都天府广场坐标约为 (30.658, 104.066)
+        assert 30.0 <= result["lat"] <= 31.5, (
+            f"纬度异常（期望 30.0-31.5，实际 {result['lat']}）"
+        )
+        assert 103.0 <= result["lng"] <= 105.0, (
+            f"经度异常（期望 103.0-105.0，实际 {result['lng']}）"
+        )
+
+    def test_real_amap_directions(self):
+        """真实高德调用：路径规划。
+
+        计算"成都天府广场→宽窄巷子"的步行/公交时间。
+        """
+        api_key = os.getenv("AMAP_API_KEY")
+        if not api_key:
+            pytest.skip("AMAP_API_KEY not configured")
+
+        from tools.time_checker import AmapDirectionsClient
+        client = AmapDirectionsClient()
+
+        # 天府广场 → 宽窄巷子，直线距离约 1.5km
+        origin = {"lat": 30.658, "lng": 104.066}
+        dest = {"lat": 30.668, "lng": 104.052}
+        result = asyncio.run(client.get_travel_time(
+            origin=origin,
+            destination=dest,
+            mode="walking"
+        ))
+
+        assert result is not None, "路径规划返回 None"
+        assert "duration_minutes" in result or "duration" in result, (
+            f"返回缺少 duration: {list(result.keys()) if isinstance(result, dict) else type(result)}"
+        )
+        # 步行约 1.5km，时间应在 10-40 分钟
+        duration = result.get("duration_minutes", result.get("duration", 0))
+        if isinstance(duration, (int, float)) and duration > 0:
+            assert 5 <= duration <= 60, (
+                f"步行时间异常（1.5km 期望 5-60min，实际 {duration}min）"
+            )
+
+    # ════════════════════════════════════════════════════════
+    # 途牛 MCP — 2 条
+    # ════════════════════════════════════════════════════════
+
+    def test_real_tuniu_hotel_search(self):
+        """真实途牛 MCP 调用：酒店价格查询。
+
+        查询成都酒店价格，验证返回非空价格范围 dict。
+        """
+        api_key = os.getenv("TUNIU_API_KEY")
+        if not api_key:
+            pytest.skip("TUNIU_API_KEY not configured")
+
+        from tools.price_checker import TuniuMCPClient
+        client = TuniuMCPClient()
+
+        result = asyncio.run(client.search_hotel_prices(
+            city_name="成都",
+            check_in="2026-08-15",
+        ))
+
+        assert result is not None, "酒店查询返回 None"
+        assert isinstance(result, dict), f"酒店响应类型异常: {type(result)}"
+        # 成功返回应包含价格范围字段
+        assert "low" in result or "median" in result or "high" in result, (
+            f"返回缺少价格字段: {list(result.keys())}"
+        )
+
+    def test_real_tuniu_flight_search(self):
+        """真实途牛 MCP 调用：机票价格查询。
+
+        查询成都→北京单程机票价格。
+        """
+        api_key = os.getenv("TUNIU_API_KEY")
+        if not api_key:
+            pytest.skip("TUNIU_API_KEY not configured")
+
+        from tools.price_checker import TuniuMCPClient
+        client = TuniuMCPClient()
+
+        result = asyncio.run(client.search_flight_prices(
+            origin="成都",
+            destination="北京",
+            date_str="2026-08-15",
+        ))
+
+        assert result is not None, "机票查询返回 None"
+        assert isinstance(result, dict), f"机票响应类型异常: {type(result)}"
+        assert "low" in result or "median" in result or "high" in result, (
+            f"返回缺少价格字段: {list(result.keys())}"
+        )

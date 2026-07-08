@@ -5,6 +5,15 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
+
+def pytest_configure(config):
+    """注册自定义 marker。"""
+    config.addinivalue_line(
+        "markers",
+        "slow: 耗时测试（真实 API 调用或完整 e2e pipeline），"
+        "默认跳过。手动运行: pytest -m slow"
+    )
+
 from core.message import (
     AgentIdentity,
     AgentMessage,

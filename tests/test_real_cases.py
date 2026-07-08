@@ -39,6 +39,7 @@ class TestRealCityCases:
 
     # ── 6.1 东京 5 天 ──────────────────────────────────
 
+    @pytest.mark.slow
     def test_real_case_001_tokyo_5days(self):
         """6.1 东京 5 天 — 经典案例，验证已有测试基准不受破坏。
 
@@ -78,6 +79,7 @@ class TestRealCityCases:
 
     # ── 6.2 巴黎 3 天 ──────────────────────────────────
 
+    @pytest.mark.slow
     def test_real_case_002_paris_3days(self):
         """6.2 巴黎 3 天 — 欧洲城市，验证跨洲数据（时区/货币/语言）。
 
@@ -110,6 +112,7 @@ class TestRealCityCases:
 
     # ── 6.3 纽约 4 天 ──────────────────────────────────
 
+    @pytest.mark.slow
     def test_real_case_003_newyork_4days(self):
         """6.3 纽约 4 天 — 高物价城市，验证预算约束不被真实 API 打破。
 
@@ -174,6 +177,7 @@ class TestRealCityCases:
 
     # ── 6.5 曼谷 7 天 ──────────────────────────────────
 
+    @pytest.mark.slow
     def test_real_case_005_bangkok_7days(self):
         """6.5 曼谷 7 天 — 长行程+东南亚，验证极限天数+新兴市场数据。
 
@@ -209,6 +213,7 @@ class TestRealCityCases:
 # §6.6 回归验证 — 现有测试兼容性
 # ============================================================
 
+@pytest.mark.slow
 class TestRegressionGuard:
     """Batch 6 回归保护 — 确保新案例不影响现有测试基线。
 
@@ -258,6 +263,7 @@ class TestRegressionGuard:
 # 降级场景 — 验证双轨架构健壮性
 # ============================================================
 
+@pytest.mark.slow
 class TestDegradationScenarios:
     """验证 LLM + API 双轨架构的降级路径。
 
@@ -308,6 +314,7 @@ class TestDegradationScenarios:
 # 跨领域验证 — 货币/语言/时区
 # ============================================================
 
+@pytest.mark.slow
 class TestCrossCuttingConcerns:
     """验证跨领域关注点: 货币、语言、时区处理。"""
 
