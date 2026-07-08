@@ -199,6 +199,7 @@ class TestErrorScenarios:
 # ============================================================
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("real_api_keys")
 class TestPerformance:
     """Performance benchmarks for the travel planning pipeline (慢速 — 需要真实API)."""
 

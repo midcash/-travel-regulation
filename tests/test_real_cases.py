@@ -40,7 +40,7 @@ class TestRealCityCases:
     # ── 6.1 东京 5 天 ──────────────────────────────────
 
     @pytest.mark.slow
-    def test_real_case_001_tokyo_5days(self):
+    def test_real_case_001_tokyo_5days(self, real_api_keys):
         """6.1 东京 5 天 — 经典案例，验证已有测试基准不受破坏。
 
         输入: 日本东京，5天，2人，15000元，美食+文化+舒适住宿
@@ -80,7 +80,7 @@ class TestRealCityCases:
     # ── 6.2 巴黎 3 天 ──────────────────────────────────
 
     @pytest.mark.slow
-    def test_real_case_002_paris_3days(self):
+    def test_real_case_002_paris_3days(self, real_api_keys):
         """6.2 巴黎 3 天 — 欧洲城市，验证跨洲数据（时区/货币/语言）。
 
         输入: 法国巴黎，3天，1人，30000元，文化艺术历史
@@ -113,7 +113,7 @@ class TestRealCityCases:
     # ── 6.3 纽约 4 天 ──────────────────────────────────
 
     @pytest.mark.slow
-    def test_real_case_003_newyork_4days(self):
+    def test_real_case_003_newyork_4days(self, real_api_keys):
         """6.3 纽约 4 天 — 高物价城市，验证预算约束不被真实 API 打破。
 
         输入: 美国纽约，4天，2人，40000元，购物+都市+美食
@@ -145,11 +145,12 @@ class TestRealCityCases:
 
     # ── 6.4 成都 2 天 ──────────────────────────────────
 
-    def test_real_case_004_chengdu_2days(self):
-        """6.4 成都 2 天 — 国内短途，验证中文输入+国内数据。
+    def test_real_case_004_chengdu_2days(self, real_api_keys):
+        """6.4 成都 2 天 — 国内短途，真实 API e2e 冒烟测试。
 
+        L3 层唯一默认运行的 e2e 测试，使用真实 DeepSeek + 高德 + 途牛 API。
         输入: 四川成都，2天，1人，3000元，美食+休闲
-        验证: 短途国内城市正常处理，中文输入无异常
+        验证: 全链路通过，输出结构完整，评分 ≥ 70
         """
         orch = Orchestrator()
         result = asyncio.run(orch.process_request(
@@ -178,7 +179,7 @@ class TestRealCityCases:
     # ── 6.5 曼谷 7 天 ──────────────────────────────────
 
     @pytest.mark.slow
-    def test_real_case_005_bangkok_7days(self):
+    def test_real_case_005_bangkok_7days(self, real_api_keys):
         """6.5 曼谷 7 天 — 长行程+东南亚，验证极限天数+新兴市场数据。
 
         输入: 泰国曼谷，7天，2人，15000元，寺庙+按摩+美食
@@ -214,6 +215,7 @@ class TestRealCityCases:
 # ============================================================
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("real_api_keys")
 class TestRegressionGuard:
     """Batch 6 回归保护 — 确保新案例不影响现有测试基线。
 
@@ -264,6 +266,7 @@ class TestRegressionGuard:
 # ============================================================
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("real_api_keys")
 class TestDegradationScenarios:
     """验证 LLM + API 双轨架构的降级路径。
 
@@ -315,6 +318,7 @@ class TestDegradationScenarios:
 # ============================================================
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("real_api_keys")
 class TestCrossCuttingConcerns:
     """验证跨领域关注点: 货币、语言、时区处理。"""
 

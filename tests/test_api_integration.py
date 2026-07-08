@@ -654,6 +654,7 @@ class TestExecutionAgentToolsIntegration:
 # ============================================================
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("real_api_keys")
 class TestRealAPICalls:
     """真实 API 调用冒烟测试。
 

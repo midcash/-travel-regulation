@@ -3,6 +3,7 @@
 import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +17,10 @@ def pytest_configure(config):
     )
 
 
+# API key 白名单
+_API_KEY_NAMES = ("DEEPSEEK_API_KEY", "AMAP_API_KEY", "TUNIU_API_KEY")
+
+
 @pytest.fixture(autouse=True)
 def _disable_real_apis(monkeypatch):
     """强制测试环境使用 stub 路径，避免意外触发真实 API 调用。
@@ -23,11 +28,45 @@ def _disable_real_apis(monkeypatch):
     在测试期间 UNSET 所有真实 API 的环境变量，使 LLMClient/AmapClient/TuniuClient
     降级为不可用状态，Agent 自动回退 stub 路径。
 
-    需要真实 API 的测试（如 test_real_cases.py 的慢速用例）应在测试内部
-    显式设置环境变量，并标记为 @pytest.mark.slow。
+    需要真实 API 的测试使用 real_api_keys fixture 恢复密钥。
     """
-    for key in ("DEEPSEEK_API_KEY", "AMAP_API_KEY", "TUNIU_API_KEY"):
+    for key in _API_KEY_NAMES:
         monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture
+def real_api_keys(monkeypatch):
+    """为需要真实 API 的测试恢复密钥（从项目根目录 .env 读取）。
+
+    用法::
+
+        def test_chengdu_e2e(self, real_api_keys):
+            orch = Orchestrator()
+            result = asyncio.run(orch.process_request("去成都2天..."))
+            # 此测试将使用真实的 DeepSeek + 高德 + 途牛 API
+
+    注意:
+    - 此 fixture 应在需要真实 API 的测试函数中显式请求
+    - 没有此 fixture 的测试将继续使用 stub 路径 (_disable_real_apis 生效)
+    - 标记为 @pytest.mark.slow 的测试也应使用此 fixture
+    """
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.is_file():
+        return
+
+    restored = {}
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            if key in _API_KEY_NAMES and val.strip():
+                restored[key] = val.strip()
+
+    for key, val in restored.items():
+        monkeypatch.setenv(key, val)
 
 from core.message import (
     AgentIdentity,
