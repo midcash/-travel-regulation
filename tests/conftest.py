@@ -1,5 +1,6 @@
 """共享 pytest fixtures — Phase 4 Batch 3 扩展。"""
 
+import os
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
@@ -13,6 +14,20 @@ def pytest_configure(config):
         "slow: 耗时测试（真实 API 调用或完整 e2e pipeline），"
         "默认跳过。手动运行: pytest -m slow"
     )
+
+
+@pytest.fixture(autouse=True)
+def _disable_real_apis(monkeypatch):
+    """强制测试环境使用 stub 路径，避免意外触发真实 API 调用。
+
+    在测试期间 UNSET 所有真实 API 的环境变量，使 LLMClient/AmapClient/TuniuClient
+    降级为不可用状态，Agent 自动回退 stub 路径。
+
+    需要真实 API 的测试（如 test_real_cases.py 的慢速用例）应在测试内部
+    显式设置环境变量，并标记为 @pytest.mark.slow。
+    """
+    for key in ("DEEPSEEK_API_KEY", "AMAP_API_KEY", "TUNIU_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
 
 from core.message import (
     AgentIdentity,

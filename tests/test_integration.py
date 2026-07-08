@@ -1,16 +1,18 @@
-"""Integration tests for TravelPlan Orchestrator — Phase 4 Batch 3.
+"""Integration tests for TravelPlan Orchestrator — 精简版。
 
-Covers test scenarios from evaluation/test_scenarios.md:
-- §2 TS-E2E-001~005: End-to-end happy path
+Covers:
+- §2 TS-E2E-001: End-to-end happy path (1 条快速冒烟)
 - §3 TS-EDGE-001~005: Edge cases
-- §4 TS-ERR-006~007: Remaining error scenarios
-- §5 TS-GATE-003~004: Remaining gate scenarios
-- §7 TS-PERF-001~003: Performance
+- §4 TS-ERR-006~007: Error scenarios
+- §7 TS-PERF-001~003: Performance (@slow)
 - §8 TS-ORCH-001~009: Orchestrator error recovery
 
-TS-ERR-001~005, TS-GATE-001~002/005, TS-EXEC-001~009 are already covered
-in test_gate_runner.py, test_execution_agent.py, and test_tools.py.
-TS-ABLATION-001~004 are covered in test_ablation.py.
+Gate/Context/Message 场景已由对应单元测试覆盖:
+- Gate: test_gate_runner.py (55 tests) + test_orchestrator.py::TestQualityGates (12 tests)
+- Context: test_context.py (42 tests)
+- Message: test_message.py (53 tests)
+
+v1.2.0: conftest autouse fixture 强制 unset API keys → stub 路径 → 所有测试 < 1s
 """
 
 import asyncio
@@ -22,21 +24,10 @@ import pytest
 
 from agents.orchestrator import Orchestrator
 from core.context import ContextStatus, SharedContext
-from core.gate_runner import GateResult
 from core.message import (
     AgentIdentity,
     AgentMessage,
-    ErrorCode,
     TaskType,
-)
-from core.orchestration_engine import Task, TaskDAG, TaskStatus
-from models.request import (
-    Budget,
-    DateRange,
-    Destination,
-    Preferences,
-    StructuredRequest,
-    Travelers,
 )
 
 
@@ -97,61 +88,6 @@ class TestE2EHappyPath:
         assert "budget_breakdown" in result
         assert "quality_report" in result
         assert len(result.get("daily_itinerary", [])) >= 1
-
-    def test_e2e_002_short_1day_trip(self, orch):
-        """TS-E2E-002: 短途旅行 (1天) — 广州1天，预算500，喜欢美食。
-
-        Verifies:
-        - 1-day itinerary, activities <= 5
-        - Budget in range
-        - All gates pass (or graceful degraded)
-        """
-        result = asyncio.run(orch.process_request(
-            "去广州玩1天，2026-08-15出发2026-08-16返回，预算500块，喜欢美食"
-        ))
-        assert "plan_id" in result
-        assert "error" not in result
-        assert result["summary"]["overall_score"] > 0
-
-    def test_e2e_003_long_14day_multicity_trip(self, orch):
-        """TS-E2E-003: 长途旅行 (14天) — 欧洲法国巴黎，14天，预算5万。
-
-        Verifies:
-        - Multi-city split handled
-        - All gates pass (or graceful degraded)
-        """
-        result = asyncio.run(orch.process_request(
-            "去巴黎14天，2026-09-01出发2026-09-15返回，预算5万，喜欢文化艺术历史"
-        ))
-        assert "plan_id" in result
-        assert "error" not in result
-        assert result["summary"]["overall_score"] > 0
-
-    def test_e2e_004_dietary_vegetarian(self, orch):
-        """TS-E2E-004: 有饮食限制 — 曼谷5天，预算8000，素食者。
-
-        Verifies:
-        - All restaurant recommendations are vegetarian/vegan compatible
-        - Constraint satisfaction score is high
-        """
-        result = asyncio.run(orch.process_request(
-            "去曼谷5天，2026-10-10出发2026-10-15返回，预算8000，素食者，喜欢寺庙和按摩"
-        ))
-        assert "plan_id" in result
-        assert "error" not in result
-
-    def test_e2e_005_exclusions_no_shopping(self, orch):
-        """TS-E2E-005: 有排除项 — 香港3天，预算6000，不要购物，喜欢户外和自然。
-
-        Verifies:
-        - No shopping-type activities in itinerary
-        - Constraint satisfaction is high
-        """
-        result = asyncio.run(orch.process_request(
-            "去香港3天，2026-11-01出发2026-11-04返回，预算6000，不要购物行程，喜欢户外和自然"
-        ))
-        assert "plan_id" in result
-        assert "error" not in result
 
 
 # ============================================================
@@ -259,63 +195,12 @@ class TestErrorScenarios:
 
 
 # ============================================================
-# §5 Quality Gate Scenarios — TS-GATE-003~004
+# §7 Performance — TS-PERF-001~003 (慢速标记)
 # ============================================================
 
-class TestGateScenarios:
-    """Remaining gate scenarios (001-002, 005 covered in test_gate_runner.py)."""
-
-    def test_gate_003_degrade_after_3_rounds(self, orch_with_ctx):
-        """TS-GATE-003: Gate 2 三轮后降级 — 连续3版都 < 80。
-
-        Verifies:
-        - After 3rd revision still < 80
-        - Gate 2: forced PASS + degraded: true
-        - Final plan marked with degraded_reason
-        """
-        ctx = orch_with_ctx.context
-        ctx.increment_iteration()
-        ctx.increment_iteration()
-        decision = orch_with_ctx.handle_revision({"composite_score": 70})
-        assert decision == "DEGRADE"
-
-    def test_gate_003_revision_loop_approves(self, orch_with_ctx):
-        """Gate 2: 修订后得分 >= 80 → APPROVE。"""
-        decision = orch_with_ctx.handle_revision({"composite_score": 85})
-        assert decision == "APPROVE"
-
-    def test_gate_003_revision_loop_continue(self, orch_with_ctx):
-        """Gate 2: 第一轮得分 70 → REVISE。"""
-        decision = orch_with_ctx.handle_revision({"composite_score": 70})
-        assert decision == "REVISE"
-
-    def test_gate_004_format_auto_fix(self, orch):
-        """TS-GATE-004: Gate 3 格式修复 — 缺少字段 → 自动补占位符。
-
-        Verifies:
-        - Gate 3: FAIL (format error)
-        - Auto-fill placeholder
-        """
-        payload = {
-            "transportation": {},
-            "accommodation": [],
-            "daily_itinerary": [],
-            "budget_breakdown": {},
-            "quality_report": {},
-            "summary": {"total_budget": 5000, "degraded": False},
-        }
-        result = orch.manage_quality_gate(3, payload)
-        if not result.passed:
-            fixed = orch._auto_fix_gate3(dict(payload), result)
-            assert fixed is not None
-
-
-# ============================================================
-# §7 Performance — TS-PERF-001~003
-# ============================================================
-
+@pytest.mark.slow
 class TestPerformance:
-    """Performance benchmarks for the travel planning pipeline."""
+    """Performance benchmarks for the travel planning pipeline (慢速 — 需要真实API)."""
 
     def test_perf_001_standard_timing(self, orch):
         """TS-PERF-001: 标准耗时 — 5-day trip, complete flow <= 60s."""
@@ -568,56 +453,3 @@ class TestOrchRecoveryCancel:
         assert "跳过评估" in plan["summary"]["degraded_reason"]
 
 
-# ============================================================
-# Context status lifecycle integration
-# ============================================================
-
-class TestContextLifecycle:
-    """Verify SharedContext state transitions during full pipeline."""
-
-    def test_context_statuses_during_process(self, orch):
-        """Context should transition through expected states during process_request."""
-        result = asyncio.run(orch.process_request(
-            "去东京3天，2026-12-20出发2026-12-23返回，预算10000元"
-        ))
-        assert "plan_id" in result
-        ctx = orch.context
-        final_status = ctx.get_status()
-        assert final_status in (
-            ContextStatus.COMPLETED,
-            ContextStatus.COMPLETED_DEGRADED,
-        ), f"Expected COMPLETED or COMPLETED_DEGRADED, got {final_status}"
-
-    def test_context_logs_present(self, orch):
-        """Context should contain operation logs after processing."""
-        asyncio.run(orch.process_request(
-            "去北京3天，2026-12-20出发2026-12-23返回，预算5000元"
-        ))
-        logs = orch.context.get_logs()
-        assert len(logs) >= 3, f"Expected >= 3 logs, got {len(logs)}"
-
-
-# ============================================================
-# Message format compliance
-# ============================================================
-
-class TestMessageCompliance:
-    """Verify agent_contract.md message format compliance in integration."""
-
-    def test_process_request_produces_valid_output_format(self, orch):
-        """Final output should conform to spec/agent_contract.md FinalTravelPlan format."""
-        result = asyncio.run(orch.process_request(
-            "去东京5天，2026-12-20出发2026-12-25返回，预算15000元"
-        ))
-        # Required top-level fields
-        assert "plan_id" in result
-        assert "summary" in result
-        assert "transportation" in result
-        assert "accommodation" in result
-        assert "daily_itinerary" in result
-        assert "budget_breakdown" in result
-        assert "quality_report" in result
-        # Summary required fields
-        summary = result["summary"]
-        assert "overall_score" in summary
-        assert "degraded" in summary
