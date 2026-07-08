@@ -213,9 +213,21 @@ class Orchestrator(BaseAgent):
         from agents.execution_agent import ExecutionAgent
         from agents.evaluation_agent import EvaluationAgent
 
+        # v1.2.0 R3: CoT 依赖注入 — PromptBuilder + SelfChecker
+        # 仅在 LLM 可用时注入（LLM 不可用时 CoT 无意义）
+        _prompt_builder = None
+        _self_checker = None
+        if self._llm_client.available:
+            from core.prompt_builder import PromptBuilder
+            from core.self_check import SelfChecker
+            _prompt_builder = PromptBuilder()
+            _self_checker = SelfChecker()
+
         self._planning_agent = PlanningAgent(
             registry=self._registry,
             llm_client=self._llm_client if self._llm_client.available else None,
+            prompt_builder=_prompt_builder,
+            self_checker=_self_checker,
         )
         self._execution_agent = ExecutionAgent(registry=self._registry)
         self._evaluation_agent = EvaluationAgent(registry=self._registry)
