@@ -1,6 +1,6 @@
 # models/ — 进度跟踪
 
-**所属阶段**: Phase 0: 基础设施
+**所属阶段**: Phase 0: 基础设施 + v1.2.0 Step 0 新增
 
 ---
 
@@ -14,6 +14,10 @@
 | `spec/evaluator_spec.md` §2 | HEAD | `models/quality.py` | 已完成 | CodeQualityReport / PlanQualityReport / ContributionReport (Mode A/B/C) |
 | `spec/planner_spec.md` §4 | HEAD | `models/entities.py` | 已完成 | Attraction / Restaurant / Accommodation / DestinationInfo / PriceRange / RevisionFeedback |
 | `spec/agent_contract.md` §3.1 | HEAD | `models/request.py` | 已完成 | 数据模型对齐消息payload结构 |
+| `progress/handoff.md` §12 Phase 0 | eb74644 | `models/reasoning.py` | 已完成 | v1.2.0: DestinationResearch / CandidatePool / CoTResult / StepTrace |
+| `progress/handoff.md` §12 Phase 0 | eb74644 | `models/check.py` | 已完成 | v1.2.0: IssueType(7项) / SelfCheckIssue / SelfCheckResult |
+| `progress/handoff.md` §12 Phase 0 | eb74644 | `models/feedback.py` | 已完成 | v1.2.0: RevisionFeedback (精确修订指令, issue: SelfCheckIssue) |
+| `progress/handoff.md` §12 Phase 0 | eb74644 | `models/protocol.py` | 已完成 | v1.2.0: SchemaError / ValidationResult / CompatibilityResult |
 
 > **spec commit**: 上次确认同步时 spec 文件的 commit hash。检查漂移: `git diff <spec_commit>..HEAD -- <spec_file>`
 
@@ -30,3 +34,4 @@
 | 2026-07-06 | 实现 models/entities.py | 已完成 | Attraction/Restaurant/Accommodation/DestinationInfo/PriceRange/RevisionFeedback等 |
 | 2026-07-06 | 实现 models/__init__.py | 已完成 | 52个公共类统一导出 |
 | 2026-07-06 | 编写 tests/test_models.py | 已完成 | 55+ tests，覆盖构造/校验/to_dict/边界 |
+| 2026-07-08 | v1.2.0 Step 0: 数据模型集中定义 | 已完成 | reasoning.py + check.py + feedback.py + protocol.py, 13 dataclass (eb74644) |

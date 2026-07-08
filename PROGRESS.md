@@ -8,7 +8,7 @@
 
 | 模块 | 详细文件 | 所属阶段 | 状态 |
 |------|---------|---------|------|
-| core/ | [progress/core.md](progress/core.md) | Phase 0 | 已完成 |
+| core/ | [progress/core.md](progress/core.md) | Phase 0 + v1.2.0 | 已完成 (R1+R2+P1+P2 已交付) |
 | models/ | [progress/models.md](progress/models.md) | Phase 0 | 已完成 |
 | tools/ | [progress/tools.md](progress/tools.md) | Phase 0 | 已完成 |
 | Orchestrator | [progress/orchestrator.md](progress/orchestrator.md) | Phase 1 | 已完成 |

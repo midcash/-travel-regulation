@@ -266,6 +266,47 @@
 
 ---
 
+## Batch 9: v1.2.0 Reasoning + Protocol 实现 (Step 0 + R1 + R2 + P1 + P2)
+
+> 日期: 2026-07-08 | 并行: 4 Agent 同时开发，零文件冲突
+
+### models/ (Step 0: 数据模型集中定义)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-08 | eb74644 | Code Agent | 接口不匹配 | `models/feedback.py` 的 `RevisionFeedback` 与 `models/entities.py` 已有的 `RevisionFeedback` 同名冲突。前者是 v1.2.0 精确修订指令（issue: SelfCheckIssue + source），后者是 Evaluation Agent 的维度级反馈（dimension + issue + suggestion），字段结构完全不同 | 在 `models/__init__.py` 中将新类型别名为 `StructuredRevisionFeedback`，避免导入歧义 | 新建 model 文件前先检查 `models/__init__.py` 已有导出，避免同名冲突；若同名不可避免，使用模块别名区分 |
+
+### core/ (R1: PromptBuilder + 模板)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-08 | 3af481f | Code Agent | 设计权衡 | `planner_context.yaml` 中的 `{placeholder}` 变量名需与 `StructuredRequest` 字段严格对应，否则 PromptBuilder.assemble() 填充时 KeyError。模板内容和 Python 代码有隐式契约 | PromptBuilder 内部用 `try/except KeyError` 包裹每个 placeholder 填充，缺失变量替换为 "N/A" 并记录 warning | 模板文件的 placeholder 命名应与数据模型字段保持一致；在 CI 中增加"模板变量与数据模型字段一致性"检查 |
+
+### core/ (R2: SelfCheck 规则引擎)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-08 | 0936c68 | Code Agent | 设计权衡 | 地理检查使用 Haversine 直线距离，与实际交通时间/路径距离不对等。若设为 blocking，会误杀绕湖/绕山的合理路线（如湖对岸的景点直线距离 <30km 但实际绕行 >50km，反之直线 >30km 但地铁直达可能 20min） | `_check_geo()` 的 severity 设为 "warning"（非 "blocking"），且仅当所有景点都有 geo 信息才检查。`SelfCheckResult.passed` 不会因 warning 而变 False | 规则引擎中，任何依赖近似计算（非精确 API 数据）的检查项 severity 都应为 warning；只有基于明确数值比较的检查（预算/重复）才可 blocking |
+
+### core/ (P1: MessageValidator + 版本化)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-08 | 28a20bd | Code Agent | 接口不匹配 | `AgentMessage` 是 frozen dataclass，新增 `protocol_version` 字段若没有默认值，会导致所有现有构造代码（72+ 测试）`TypeError: missing required argument` | 默认值设为 `"1.0"`（表示 v1.1.0 及之前的消息），新消息应显式设为 `"1.2"` | frozen dataclass 新增字段必须带默认值；修改前先 `grep` 所有构造点估计影响面 |
+| 2026-07-08 | 28a20bd | Code Agent | 工具限制 | `jsonschema` 库可能未安装，MessageValidator 直接 import 会导致整个模块无法加载 | try/except 导入 jsonschema，不可用时回退到基本字段存在性检查，记录 warning | 可选依赖的导入始终 try/except；关键路径（如消息校验）不应因可选依赖缺失而阻断 |
+
+### core/ (P2: StateMachine 完善)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-08 | 8727e26 | Code Agent | Pipeline问题 | handoff.md §12 提到"可能死角在 REVISING → WAITING_PLANNER"，要求 P2 开工前先验证。若直接假设死角存在而修改状态机，可能引入不必要的转换 | 先追踪 Orchestrator 全部调用时序 vs `_VALID_TRANSITIONS`，确认 `REVISING → WAITING_PLANNER` 已于 Batch 7 (035c2d4) 补全，当前无死角。仅添加开发辅助工具（ASCII图/strict_mode/BFS） | 类似"可能存在"的描述应先验证再修改；若验证结果与假设相反，在 commit message 中明确注明 |
+
+### tests/ (测试策略优化)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-08 | 3ba9fae | Code Agent | 设计权衡 | `test_real_cases.py` 5城市 e2e + `test_api_integration.py` 75 tests 全跑超时（>30min）。需要快速 CI 路径 + 真实 API 冒烟覆盖 | pytest.ini `addopts = -m "not slow"` 默认跳过 19 个慢测试；成都 e2e 作为快速代表；新增 6 条真实 API 冒烟（DeepSeek×2 + 高德×2 + 途牛×2）标记 @pytest.mark.slow | e2e 测试套件应区分"快速冒烟"和"全量回归"，用 pytest marker 控制；CI 跑快速路径，手动/定时跑全量 |
+
 ## Batch 7: Orchestrator → Agent 桥接 (v1.1.0 收尾)
 
 ### agents/orchestrator.py

@@ -14,6 +14,11 @@
 | `spec/orchestrator_spec.md` | a79ba76 | `core/context.py` | 已完成 | 15状态枚举 / 状态转换校验 |
 | `spec/orchestrator_spec.md` | HEAD | `core/orchestration_engine.py` | 已完成 | TaskDAG / AgentRouter / RetryManager / ResultAssembler |
 | `evaluation/gate_definitions.md` | HEAD | `core/gate_runner.py` | 已完成 | GateRunner(Gate 0-3) / GateResult / BlockingIssue / Warning |
+| `evaluation/reasoning_quality_rubric.md` | 3af481f | `core/prompt_builder.py` | 已完成 | v1.2.0 R1: PromptBuilder 分层组装 |
+| `evaluation/reasoning_quality_rubric.md` | 0936c68 | `core/self_check.py` | 已完成 | v1.2.0 R2: SelfCheck 规则引擎 |
+| `evaluation/protocol_quality_rubric.md` | 28a20bd | `core/message_validator.py` | 已完成 | v1.2.0 P1: MessageValidator + 9 Schema |
+| `spec/agent_contract.md` | 28a20bd | `core/message.py` | 已完成 | v1.2.0 P1: VersionPolicy + protocol_version |
+| `evaluation/protocol_quality_rubric.md` | 8727e26 | `core/context.py` | 已完成 | v1.2.0 P2: ASCII图 + strict_mode + BFS路径 |
 
 ## 任务历史
 
@@ -33,3 +38,9 @@
 | 2026-07-06 | 编写 tests/test_orchestration_engine.py | 已完成 | 44 tests，覆盖TaskDAG/路由/重试/整合 |
 | 2026-07-06 | Phase 5: LLM 切换 Anthropic→DeepSeek | 已完成 | llm_client.py: openai SDK (AsyncOpenAI) + base_url→api.deepseek.com + DEEPSEEK_API_KEY; 公共API不变 |
 | 2026-07-06 | Phase 5: API 配置重构 | 已完成 | config.py: Mapbox→高德(amap_api_key), Amadeus→途牛(tuniu_api_key), auth_headers()→auth_params(), 新增 tuniu_mcp_hotel/flight/ticket 三端点 |
+| 2026-07-07 | v1.2.0 Step 0: 数据模型集中定义 | 已完成 | models/reasoning.py + check.py + feedback.py + protocol.py (eb74644) |
+| 2026-07-07 | v1.2.0 R1: PromptBuilder + YAML模板 | 已完成 | core/prompt_builder.py (390行) + 3模板文件 + planner_playbook.md §2更新 (3af481f) |
+| 2026-07-07 | v1.2.0 R2: SelfCheck规则引擎 | 已完成 | core/self_check.py (456行)，5项纯计算检查 (0936c68) |
+| 2026-07-07 | v1.2.0 P1: MessageValidator + 版本化 | 已完成 | core/message_validator.py (293行) + 9 JSON Schema + VersionPolicy (28a20bd) |
+| 2026-07-07 | v1.2.0 P2: StateMachine完善 | 已完成 | ASCII状态图 + strict_mode + force_status() + BFS路径 (8727e26) |
+| 2026-07-07 | v1.2.0 测试策略优化 | 已完成 | pytest.ini slow marker + 6条真实API冒烟 + 成都快速e2e (3ba9fae) |
