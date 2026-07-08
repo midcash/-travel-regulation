@@ -301,6 +301,12 @@
 |------|--------|----------|------|---------|---------|---------|
 | 2026-07-08 | 8727e26 | Code Agent | Pipeline问题 | handoff.md §12 提到"可能死角在 REVISING → WAITING_PLANNER"，要求 P2 开工前先验证。若直接假设死角存在而修改状态机，可能引入不必要的转换 | 先追踪 Orchestrator 全部调用时序 vs `_VALID_TRANSITIONS`，确认 `REVISING → WAITING_PLANNER` 已于 Batch 7 (035c2d4) 补全，当前无死角。仅添加开发辅助工具（ASCII图/strict_mode/BFS） | 类似"可能存在"的描述应先验证再修改；若验证结果与假设相反，在 commit message 中明确注明 |
 
+### core/ (R3: CoTPipeline — wiring 收尾)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-08 | e4a7b07 | Code Agent | Pipeline问题 | R3 CoTPipeline 核心代码（`core/cot_pipeline.py`）和 PlanningAgent CoT 路径（`create_itinerary`）已在 `da41b39` 提交，但 `orchestrator.py::_init_agents()` 未注入 `prompt_builder` 和 `self_checker`，导致 PlanningAgent 的 `self._prompt_builder is not None` 检查永远为 False，CoT 路径不可达。handoff §12 v2 修订记录中已标注 "R3 wiring" 但执行时遗漏 | 在 `_init_agents()` 中创建 `PromptBuilder()` + `SelfChecker()` 实例并注入 PlanningAgent，仅在 `LLMClient.available` 时注入 | 任何 Step 在"需修改的文件"中列出的 wiring 文件必须与核心文件同时交付，不得拆分到后续 commit。执行约定 §10（wiring 完备原则）要求每个 Agent 新增构造参数 → 必须同步修改 `_init_agents()` |
+
 ### tests/ (测试策略优化)
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |

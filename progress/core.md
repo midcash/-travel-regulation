@@ -19,6 +19,7 @@
 | `evaluation/protocol_quality_rubric.md` | 28a20bd | `core/message_validator.py` | 已完成 | v1.2.0 P1: MessageValidator + 9 Schema |
 | `spec/agent_contract.md` | 28a20bd | `core/message.py` | 已完成 | v1.2.0 P1: VersionPolicy + protocol_version |
 | `evaluation/protocol_quality_rubric.md` | 8727e26 | `core/context.py` | 已完成 | v1.2.0 P2: ASCII图 + strict_mode + BFS路径 |
+| `evaluation/reasoning_quality_rubric.md` | e4a7b07 | `core/cot_pipeline.py` | 已完成 | v1.2.0 R3: CoTPipeline 4步推理链 + wiring收尾 |
 
 ## 任务历史
 
@@ -44,3 +45,4 @@
 | 2026-07-07 | v1.2.0 P1: MessageValidator + 版本化 | 已完成 | core/message_validator.py (293行) + 9 JSON Schema + VersionPolicy (28a20bd) |
 | 2026-07-07 | v1.2.0 P2: StateMachine完善 | 已完成 | ASCII状态图 + strict_mode + force_status() + BFS路径 (8727e26) |
 | 2026-07-07 | v1.2.0 测试策略优化 | 已完成 | pytest.ini slow marker + 6条真实API冒烟 + 成都快速e2e (3ba9fae) |
+| 2026-07-08 | v1.2.0 R3: CoTPipeline + wiring收尾 | 已完成 | core/cot_pipeline.py (1005行) + orchestrator wiring (e4a7b07) |
