@@ -871,6 +871,10 @@ v1.2.0 的 Reasoning + Protocol 改造遵循四个核心设计原则：
 - `agents/planning_agent.py` — 改造：
   - `create_itinerary` 改为调用 `CoTPipeline.execute()`
   - 6 个现有 LLM 方法的 prompt 来源从硬编码 f-string 改为 PromptBuilder
+  - `__init__` 新增 `prompt_builder` 和 `self_checker` 可选参数
+- `agents/orchestrator.py` — **wiring（v2 修订新增）**：
+  - `_init_agents()` 创建 `PromptBuilder()` + `SelfChecker()` 实例并注入 PlanningAgent
+  - 仅在 `self._llm_client.available` 时注入（LLM 不可用时 CoT 无意义）
 
 **需读取的文件**:
 - `agents/planning_agent.py`（完整，1314 行）
@@ -903,8 +907,11 @@ v1.2.0 的 Reasoning + Protocol 改造遵循四个核心设计原则：
   - 从 `ValidationReport.blocking_issues` + `EvaluationReport.dimensions` 中提取具体问题
   - 逐条构造 `RevisionFeedback`（使用 `models/feedback.py` Step 0 定义的类型）
   - 调用 `feedback.format_for_prompt()` 注入 revision prompt
+  - **import 变更**: 当前从 `models/entities` import `RevisionFeedback`（维度级），需改为从 `models/feedback` import（问题定位级）。两者字段不同：
+    - `entities.RevisionFeedback`: `dimension + issue + suggestion + priority`（通用维度反馈）
+    - `feedback.RevisionFeedback`: `issue: SelfCheckIssue + suggestion + priority + source`（精确定位反馈）
 - `agents/planning_agent.py` — `revise_itinerary()` 改造：
-  - 参数从 `List[dict]` 改为 `List[RevisionFeedback]`
+  - 参数从 `List[dict]` 改为 `List[feedback.RevisionFeedback]`
   - 在 revision prompt 中逐条注入 `format_for_prompt()` 输出
 
 **需读取的文件**:
@@ -1035,6 +1042,10 @@ v1.2.0 的 Reasoning + Protocol 改造遵循四个核心设计原则：
   - 修复后附带 `_auto_fixed: List[str]` 元数据字段
   - 修复后消息需通过二次校验（MessageValidator）
   - 所有修复操作记录 warning 日志
+- `core/message.py` — **集成点（v2 修订新增）**：
+  - `AgentMessage.validate()` 调用 MessageValidator.validate() 后，若失败则调用 auto_fix() 尝试修复
+  - 修复成功 → 返回修复后 message + warning 日志
+  - 修复失败 → 保持原有 MessageValidationError 抛出行为
 
 **需读取的文件**:
 - `core/message_validator.py`（P1 产出）
@@ -1159,6 +1170,7 @@ R3: CoT 改造               │      P3: ErrorRecovery           │
 7. **PromptBuilder 不调 API**: PromptBuilder 是纯文本引擎，不依赖任何外部服务
 8. **SelfChecker 不调 API/LLM**: SelfChecker 是纯规则引擎，Haversine 公式本地计算
 9. **CoT 降级策略**: 4 步中任一步 LLM 失败 → 整链回退 stub（不混合 LLM+stub）
+10. **wiring 完备原则 (v2 修订新增)**: 每个 Step 在"需修改的文件"中必须列出调用链上所有需修改的文件。特别是 `agents/orchestrator.py::_init_agents()` 作为全局集中 wiring 点，任何 Agent 新增构造函数参数（如 Step R3 的 `prompt_builder`/`self_checker`）都必须同步修改 `_init_agents()` 完成注入。不得假设"上游模块会自动获得新依赖"。
 
 ---
 
@@ -1178,6 +1190,10 @@ R3: CoT 改造               │      P3: ErrorRecovery           │
 | 地理检查 severity | 未区分 | blocking vs warning | Haversine 直线距离 ≠ 实际交通时间，不应 blocking |
 | 版本协商 | 仅检查兼容性 | 新增 `negotiate()` 多版本协商 | 只检查不协商无法解决版本不匹配 |
 | P3 开工前验证 | 直接开工 | 先验证死角是否真的存在 | 当前 `_VALID_TRANSITIONS` 中 `REVISING → WAITING_PLANNER` 已是合法转换 |
+| R3 wiring | 未提及 | `orchestrator.py::_init_agents()` 注入 PromptBuilder + SelfChecker | CoT 路径因 `_init_agents()` 未传依赖而永远不可达 |
+| R4 import | 未提及 | `orchestrator.py` 需从 `models/entities.RevisionFeedback` 切换为 `models/feedback.RevisionFeedback` | 两个 RevisionFeedback 字段不同，不可混用 |
+| P3 wiring | 未提及 | `message.py::validate()` 集成 auto_fix 调用 | auto_fix 方法写了但无调用者 |
+| 执行约定§10 | 无 | wiring 完备原则：任何 Agent 新增构造参数 → 必须改 `_init_agents()` | 防止 Step 产出死代码 |
 
 ---
 
