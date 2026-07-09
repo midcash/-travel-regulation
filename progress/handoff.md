@@ -1068,7 +1068,7 @@ v1.2.0 的 Reasoning + Protocol 改造遵循四个核心设计原则：
 
 ---
 
-#### I1: 集成测试 ✅ 已完成 — `（待git commit后回填hash）`
+#### I1: 集成测试 ✅ 已完成 — `77cd8c3`
 
 **目标**: Reasoning + Protocol 模块的联合测试。
 
@@ -1086,7 +1086,7 @@ v1.2.0 的 Reasoning + Protocol 改造遵循四个核心设计原则：
 
 ---
 
-#### I2: E2E 回归验证 + Spec 同步 + Handoff 收尾 ✅ 已完成 — `（待git commit后回填hash）`
+#### I2: E2E 回归验证 + Spec 同步 + Handoff 收尾 ✅ 已完成 — `77cd8c3`
 
 **目标**: 完整的评估驱动验证 + spec 一致性检查 + 进度文件更新 + 发布 v1.2.0 tag。
 
