@@ -54,7 +54,8 @@ from models.request import (
 from models.plan import TravelPlanDraft, ItineraryDay
 from models.validation import ValidationReport
 from models.quality import PlanQualityReport
-from models.entities import RevisionFeedback
+from models.check import IssueType, SelfCheckIssue
+from models.feedback import RevisionFeedback
 
 # ============================================================
 # 常量
@@ -703,7 +704,9 @@ class Orchestrator(BaseAgent):
                 if iteration < max_iterations:
                     self._log("INFO", f"Gate 2 需修订 (第{iteration}轮)")
                     self._context.set_status(ContextStatus.REVISING)
-                    current_draft = await self._call_revision(current_draft, current_quality)
+                    current_draft = await self._call_revision(
+                        current_draft, current_validation, current_quality
+                    )
                     self._context.set_current_draft(current_draft)
                     # 重新执行校验 (REVISING → WAITING_PLANNER → WAITING_EXECUTOR → GATE_1)
                     self._context.set_status(ContextStatus.WAITING_PLANNER)
@@ -1008,30 +1011,244 @@ class Orchestrator(BaseAgent):
         }
 
     async def _call_revision(
-        self, draft: Dict[str, Any], quality: Dict[str, Any]
+        self,
+        draft: Dict[str, Any],
+        validation: Dict[str, Any],
+        quality: Dict[str, Any],
     ) -> Dict[str, Any]:
         """调用 Planning Agent 修订行程。
 
-        v1.1.0: 桥接到真实 PlanningAgent.revise_itinerary()。
+        v1.2.0 R4: 将 Execution/Evaluation 输出转为精确定位的结构化反馈。
         """
         self._init_agents()
         try:
             draft_obj = self._dict_to_draft(draft)
-            feedback_list = [
-                RevisionFeedback(
-                    dimension=f.get("dimension", ""),
-                    issue=f.get("issue", ""),
-                    suggestion=f.get("suggestion", ""),
-                    priority=f.get("priority", "medium"),
-                )
-                for f in quality.get("revision_feedback", [])
-                if isinstance(f, dict)
-            ]
+            feedback_list = self._build_revision_feedback(validation, quality)
             revised = await self._planning_agent.revise_itinerary(draft_obj, feedback_list)
             return self._draft_to_dict(revised)
         except Exception as exc:
             self._log("WARNING", f"PlanningAgent.revise 调用失败，回退 stub: {exc}")
             return await self._call_revision_stub(draft)
+
+    @classmethod
+    def _build_revision_feedback(
+        cls, validation: Dict[str, Any], quality: Dict[str, Any]
+    ) -> List[RevisionFeedback]:
+        """从校验/评估报告构造结构化修订反馈。"""
+        feedback: List[RevisionFeedback] = []
+        feedback.extend(cls._feedback_from_validation(validation or {}))
+        feedback.extend(cls._feedback_from_quality_feedback(quality or {}))
+        feedback.extend(cls._feedback_from_quality_dimensions(quality or {}))
+        return cls._dedupe_revision_feedback(feedback)
+
+    @classmethod
+    def _feedback_from_validation(
+        cls, validation: Dict[str, Any]
+    ) -> List[RevisionFeedback]:
+        """提取 Execution Agent 发现的可定位问题。"""
+        data = cls._as_plain_dict(validation)
+        items: List[RevisionFeedback] = []
+        constraints = data.get("constraint_check", {}).get("blocking_issues", [])
+        for issue in constraints:
+            if isinstance(issue, dict):
+                items.append(cls._feedback_from_constraint_issue(issue))
+
+        anomalies = data.get("price_check", {}).get("anomalies", [])
+        for anomaly in anomalies:
+            if isinstance(anomaly, dict) and anomaly.get("severity") == "high":
+                items.append(cls._feedback_from_price_anomaly(anomaly))
+        return items
+
+    @classmethod
+    def _feedback_from_quality_feedback(
+        cls, quality: Dict[str, Any]
+    ) -> List[RevisionFeedback]:
+        """兼容 Evaluation Agent 旧版 revision_feedback。"""
+        data = cls._as_plain_dict(quality)
+        items: List[RevisionFeedback] = []
+        for raw in data.get("revision_feedback", []):
+            if not isinstance(raw, dict):
+                continue
+            if isinstance(raw.get("issue"), dict):
+                items.append(RevisionFeedback.from_dict(raw))
+                continue
+            text = raw.get("issue", "")
+            dimension = raw.get("dimension", "")
+            suggestion = raw.get("suggestion", "")
+            priority = cls._priority_from_raw(raw.get("priority", "medium"))
+            items.append(RevisionFeedback(
+                issue=SelfCheckIssue(
+                    type=cls._infer_issue_type(dimension, text),
+                    location=raw.get("location") or cls._infer_location(text, dimension),
+                    actual_value=raw.get("actual_value", text),
+                    expected=raw.get("expected", suggestion or "按建议修正"),
+                    severity=priority,
+                ),
+                suggestion=suggestion,
+                priority=priority,
+                source="evaluation_agent",
+            ))
+        return items
+
+    @classmethod
+    def _feedback_from_quality_dimensions(
+        cls, quality: Dict[str, Any]
+    ) -> List[RevisionFeedback]:
+        """将低分维度转为补充性修订反馈。"""
+        data = cls._as_plain_dict(quality)
+        items: List[RevisionFeedback] = []
+        dimensions = data.get("dimensions", {})
+        for dimension, raw_score in dimensions.items():
+            score = cls._extract_dimension_score(raw_score)
+            if score is None or score >= 4:
+                continue
+            priority = "blocking" if score <= 3 else "warning"
+            items.append(RevisionFeedback(
+                issue=SelfCheckIssue(
+                    type=cls._infer_issue_type(dimension, dimension),
+                    location=f"quality.{dimension}",
+                    actual_value=score,
+                    expected=">=4",
+                    severity=priority,
+                ),
+                suggestion=cls._dimension_suggestion(dimension),
+                priority=priority,
+                source="evaluation_agent",
+            ))
+        return items
+
+    @classmethod
+    def _feedback_from_constraint_issue(
+        cls, issue: Dict[str, Any]
+    ) -> RevisionFeedback:
+        """将硬约束阻断问题转为结构化反馈。"""
+        constraint = issue.get("constraint", "constraint")
+        actual = issue.get("actual", "")
+        expected = issue.get("expected", "满足硬约束")
+        suggestion = issue.get("fix_suggestion") or issue.get("suggestion", "")
+        return RevisionFeedback(
+            issue=SelfCheckIssue(
+                type=cls._infer_issue_type(constraint, suggestion, actual),
+                location=cls._infer_location(constraint, suggestion, actual),
+                actual_value=actual,
+                expected=expected,
+                severity="blocking",
+            ),
+            suggestion=suggestion or "请按期望值修正该硬约束问题",
+            priority="blocking",
+            source="execution_agent",
+        )
+
+    @classmethod
+    def _feedback_from_price_anomaly(
+        cls, anomaly: Dict[str, Any]
+    ) -> RevisionFeedback:
+        """将高严重度价格异常转为结构化反馈。"""
+        item = anomaly.get("item", "price_check")
+        median = anomaly.get("market_median", "")
+        expected = f"接近市场中位价 {median}" if median != "" else "价格回到市场合理区间"
+        return RevisionFeedback(
+            issue=SelfCheckIssue(
+                type=IssueType.BUDGET_OVERSPEND,
+                location=cls._infer_location(item, anomaly.get("suggestion", "")),
+                actual_value=anomaly.get("estimated"),
+                expected=expected,
+                severity="blocking",
+            ),
+            suggestion=anomaly.get("suggestion") or "替换为同区域预算内选项",
+            priority="blocking",
+            source="execution_agent",
+        )
+
+    @staticmethod
+    def _as_plain_dict(value: Any) -> Dict[str, Any]:
+        """兼容 dataclass/to_dict 与裸 dict。"""
+        if hasattr(value, "to_dict"):
+            return value.to_dict()
+        return value if isinstance(value, dict) else {}
+
+    @staticmethod
+    def _extract_dimension_score(raw_score: Any) -> Optional[float]:
+        """从裸分数或 PlanDimensionScore dict 中提取 score。"""
+        if isinstance(raw_score, (int, float)):
+            return float(raw_score)
+        if isinstance(raw_score, dict) and isinstance(raw_score.get("score"), (int, float)):
+            return float(raw_score["score"])
+        return None
+
+    @staticmethod
+    def _priority_from_raw(raw_priority: Any) -> str:
+        """将 high/medium/low 映射到 blocking/warning。"""
+        return "blocking" if str(raw_priority).lower() == "high" else "warning"
+
+    @staticmethod
+    def _infer_issue_type(*parts: Any) -> IssueType:
+        """根据描述文本推断 SelfCheckIssue 类型。"""
+        text = " ".join(str(part).lower() for part in parts if part is not None)
+        if any(token in text for token in ("duplicate", "重复")):
+            return IssueType.DUPLICATE_ATTRACTION
+        if any(token in text for token in ("geo", "route", "distance", "地理", "绕路", "距离")):
+            return IssueType.GEO_DISTANCE
+        if any(token in text for token in ("缺餐", "餐食不足", "missing meal")):
+            return IssueType.MISSING_MEAL
+        if any(token in text for token in ("budget", "price", "cost", "预算", "价格", "超支", "超出")):
+            return IssueType.BUDGET_OVERSPEND
+        if any(token in text for token in ("schedule", "time", "activity", "行程", "时间", "活动")):
+            return IssueType.MISSING_ACTIVITY
+        if any(token in text for token in ("exclude", "排除", "禁止")):
+            return IssueType.EXCLUDED_TYPE
+        return IssueType.STYLE_MISMATCH
+
+    @staticmethod
+    def _infer_location(*parts: Any) -> str:
+        """从自然语言片段里推断 day_x.meal 形式的位置。"""
+        text = " ".join(str(part) for part in parts if part is not None)
+        day_match = re.search(r"(?:day[_\s-]*|第)(\d+)", text, re.IGNORECASE)
+        day = day_match.group(1) if day_match else None
+        meal = None
+        if re.search(r"dinner|晚餐", text, re.IGNORECASE):
+            meal = "dinner"
+        elif re.search(r"lunch|午餐", text, re.IGNORECASE):
+            meal = "lunch"
+        elif re.search(r"breakfast|早餐", text, re.IGNORECASE):
+            meal = "breakfast"
+        if day and meal:
+            return f"day_{day}.{meal}"
+        if day:
+            return f"day_{day}"
+        return "plan"
+
+    @staticmethod
+    def _dimension_suggestion(dimension: str) -> str:
+        """给低分维度提供保守的补充修订建议。"""
+        suggestions = {
+            "feasibility": "优先消除 Execution Agent 标出的阻断问题",
+            "constraint_satisfaction": "逐项核对用户硬约束并修正不满足项",
+            "experience_quality": "优化节奏、去重景点并减少绕行",
+            "information_accuracy": "替换无法验证或价格偏离过大的推荐",
+            "completeness": "补齐交通、住宿、餐食、预算等缺失结构",
+        }
+        return suggestions.get(dimension, "按该维度的扣分原因进行针对性修订")
+
+    @staticmethod
+    def _dedupe_revision_feedback(
+        feedback: List[RevisionFeedback],
+    ) -> List[RevisionFeedback]:
+        """按类型、位置和期望值去重，保留首次出现的更具体反馈。"""
+        seen = set()
+        unique: List[RevisionFeedback] = []
+        for item in feedback:
+            key = (
+                item.issue.type.value,
+                item.issue.location,
+                str(item.issue.actual_value),
+                item.issue.expected,
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(item)
+        return unique
 
     async def _call_revision_stub(
         self, draft: Dict[str, Any]

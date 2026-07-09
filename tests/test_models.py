@@ -17,6 +17,8 @@ from models.entities import (
     RevisionDecision,
     RevisionFeedback,
 )
+from models.check import IssueType, SelfCheckIssue
+from models.feedback import RevisionFeedback as StructuredRevisionFeedback
 from models.plan import (
     AccommodationOption,
     Activity,
@@ -507,6 +509,50 @@ class TestRevisionFeedback:
             suggestion="add dinner recommendation", priority="high",
         )
         assert f.priority == "high"
+
+
+class TestStructuredRevisionFeedback:
+    def test_format_budget_overspend(self):
+        issue = SelfCheckIssue(
+            type=IssueType.BUDGET_OVERSPEND,
+            location="day_2.dinner",
+            actual_value=8000,
+            expected="≤1500",
+            severity="blocking",
+        )
+        feedback = StructuredRevisionFeedback(
+            issue=issue,
+            suggestion="替换为同区域 1500 日元以内餐厅",
+            priority="blocking",
+            source="execution_agent",
+        )
+        text = feedback.format_for_prompt()
+        assert "[BLOCKING] day_2.dinner" in text
+        assert "当前=8000" in text
+        assert "期望=≤1500" in text
+        assert "替换为同区域" in text
+
+    def test_format_duplicate_attraction(self):
+        issue = SelfCheckIssue(
+            type=IssueType.DUPLICATE_ATTRACTION,
+            location="day_4.activity",
+            actual_value="浅草寺",
+            expected="不重复",
+            severity="blocking",
+        )
+        feedback = StructuredRevisionFeedback(issue=issue, priority="blocking")
+        assert "当前=浅草寺" in feedback.format_for_prompt()
+
+    def test_format_missing_meal_warning(self):
+        issue = SelfCheckIssue(
+            type=IssueType.MISSING_MEAL,
+            location="day_1.lunch",
+            actual_value="missing",
+            expected="补齐午餐",
+            severity="warning",
+        )
+        feedback = StructuredRevisionFeedback(issue=issue, priority="warning")
+        assert feedback.format_for_prompt().startswith("[WARNING] day_1.lunch")
 
 
 class TestRevisionDecision:

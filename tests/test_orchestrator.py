@@ -28,6 +28,7 @@ from core.context import SharedContext, ContextStatus
 from core.gate_runner import GateResult, GateRunner
 from core.orchestration_engine import Task, TaskDAG, TaskStatus
 from models.request import StructuredRequest, Destination, DateRange, Budget, Travelers, Preferences
+from models.check import IssueType
 
 
 # ============================================================
@@ -405,6 +406,39 @@ class TestAssemblePlan:
         assert "plan_id" in plan
         assert plan["summary"]["overall_score"] == 0
 
+
+# ============================================================
+# structured revision feedback
+# ============================================================
+
+class TestStructuredRevisionFeedback:
+    def test_build_revision_feedback_from_execution_budget_issue(self):
+        validation = {
+            "constraint_check": {
+                "blocking_issues": [{
+                    "constraint": "budget_ceiling",
+                    "expected": "≤1500",
+                    "actual": 8000,
+                    "fix_suggestion": "Day 2 晚餐替换为同区域 1500 日元以内餐厅",
+                }]
+            },
+            "price_check": {"anomalies": []},
+        }
+        quality = {
+            "dimensions": {"feasibility": 3, "completeness": 5},
+            "revision_feedback": [],
+        }
+
+        feedback = Orchestrator._build_revision_feedback(validation, quality)
+
+        budget_feedback = feedback[0]
+        assert budget_feedback.source == "execution_agent"
+        assert budget_feedback.issue.type == IssueType.BUDGET_OVERSPEND
+        assert budget_feedback.issue.location == "day_2.dinner"
+        assert budget_feedback.issue.actual_value == 8000
+        prompt_text = budget_feedback.format_for_prompt()
+        assert "[BLOCKING] day_2.dinner" in prompt_text
+        assert "期望=≤1500" in prompt_text
 
 # ============================================================
 # handle_revision

@@ -51,8 +51,9 @@ from models.entities import (
     PriceRange,
     Restaurant,
     RevisionDecision,
-    RevisionFeedback,
 )
+from models.check import IssueType, SelfCheckIssue
+from models.feedback import RevisionFeedback
 from models.plan import (
     AccommodationOption,
     Activity,
@@ -198,15 +199,12 @@ class PlanningAgent(BaseAgent):
 
             elif message.task_type == TaskType.TASK_REVISE_ITINERARY:
                 draft_data = message.payload.get("original_draft")
-                feedback_data = message.payload.get("revision_feedback", [])
+                feedback_data = message.payload.get("revision_feedback")
+                if feedback_data is None:
+                    feedback_data = message.payload.get("feedback_items", [])
                 draft = self._parse_draft(draft_data)
                 feedback = [
-                    RevisionFeedback(
-                        dimension=f.get("dimension", ""),
-                        issue=f.get("issue", ""),
-                        suggestion=f.get("suggestion", ""),
-                        priority=f.get("priority", "medium"),
-                    )
+                    self._coerce_revision_feedback(f)
                     for f in feedback_data
                 ]
                 revised = await self.revise_itinerary(draft, feedback)
@@ -345,15 +343,19 @@ class PlanningAgent(BaseAgent):
             constraints_unmet=list(draft.constraints_unmet),
         )
 
-        if not feedback:
+        structured_feedback = [
+            self._coerce_revision_feedback(item)
+            for item in feedback
+        ]
+        if not structured_feedback:
             return revised
 
         # Step 2: 尝试 LLM 修订，失败则保持 stub 行为
-        if self._llm_client is not None and feedback:
+        if self._llm_client is not None and structured_feedback:
             result = await self._llm_or_stub(
                 "revise_itinerary",
-                lambda: self._revise_with_llm(revised, feedback),
-                lambda: self._revise_itinerary_stub(revised, feedback),
+                lambda: self._revise_with_llm(revised, structured_feedback),
+                lambda: self._revise_itinerary_stub(revised, structured_feedback),
             )
             if isinstance(result, TravelPlanDraft):
                 revised = result
@@ -1058,27 +1060,17 @@ class PlanningAgent(BaseAgent):
         )
 
     # ============================================================
-    # LLM 修订实现
+    # 结构化修订反馈
     # ============================================================
-
     async def _revise_with_llm(
         self,
         revised: TravelPlanDraft,
         feedback: List[RevisionFeedback],
     ) -> TravelPlanDraft:
         """使用 LLM 进行实质性修订。"""
-        draft_json = revised.to_dict()
-        feedback_json = [f.to_dict() for f in feedback]
-
         result = await self._llm_client.generate(
             system_prompt=_SYSTEM_REVISE,
-            user_prompt=(
-                f"原始行程:\n{json_dumps(draft_json)}\n\n"
-                f"修订反馈:\n{json_dumps(feedback_json)}\n\n"
-                f"请仅修改反馈中指出的问题。保持未指出的 day/activity/meal 完全不变。"
-                f"输出完整的修订后行程 JSON。\n"
-                f"{_JSON_FORMAT_INSTRUCTION}\n"
-            ),
+            user_prompt=self._build_revision_prompt(revised, feedback),
         )
 
         # 从 LLM 响应重建 TravelPlanDraft
@@ -1095,6 +1087,126 @@ class PlanningAgent(BaseAgent):
 
         return revised
 
+    def _build_revision_prompt(
+        self,
+        revised: TravelPlanDraft,
+        feedback: List[RevisionFeedback],
+    ) -> str:
+        """构造包含精确反馈定位的修订 prompt。"""
+        if self._prompt_builder is not None:
+            request = self._request_from_draft(revised)
+            feedback_prompt = self._prompt_builder.assemble(
+                request,
+                step="revise",
+                feedback=feedback,
+                iteration=revised.revision_version,
+            )
+        else:
+            feedback_prompt = self._format_revision_feedback(feedback)
+
+        return (
+            f"{feedback_prompt}\n\n"
+            f"原始行程:\n{json_dumps(revised.to_dict())}\n\n"
+            "请仅修改反馈中指出的问题。保持未指出的 day/activity/meal 完全不变。"
+            "输出完整的修订后行程 JSON。\n"
+            f"{_JSON_FORMAT_INSTRUCTION}\n"
+        )
+
+    @staticmethod
+    def _format_revision_feedback(feedback: List[RevisionFeedback]) -> str:
+        """无 PromptBuilder 时的结构化反馈格式化。"""
+        return "\n".join(
+            f"{index}. {item.format_for_prompt()}"
+            for index, item in enumerate(feedback, 1)
+        )
+
+    @staticmethod
+    def _request_from_draft(draft: TravelPlanDraft) -> StructuredRequest:
+        """从草稿恢复 revise prompt 所需的最小请求上下文。"""
+        destination = draft.destination or {}
+        if isinstance(destination, str):
+            destination = {"city": destination, "country": ""}
+        return StructuredRequest(
+            destination=Destination(
+                city=destination.get("city", "未知"),
+                country=destination.get("country", ""),
+            ),
+            dates=DateRange(duration_days=draft.duration_days),
+            budget=Budget(total=draft.total_budget),
+            travelers=Travelers(),
+            preferences=Preferences(style=list(draft.preferences_applied)),
+        )
+
+    @staticmethod
+    def _coerce_revision_feedback(raw: Any) -> RevisionFeedback:
+        """兼容新结构化反馈、旧维度反馈和裸 dict。"""
+        if isinstance(raw, RevisionFeedback):
+            return raw
+        if isinstance(raw, dict) and isinstance(raw.get("issue"), dict):
+            return RevisionFeedback.from_dict(raw)
+        if isinstance(raw, dict):
+            return PlanningAgent._legacy_feedback_to_structured(raw)
+        legacy = {
+            "dimension": getattr(raw, "dimension", ""),
+            "issue": getattr(raw, "issue", str(raw)),
+            "suggestion": getattr(raw, "suggestion", ""),
+            "priority": getattr(raw, "priority", "medium"),
+        }
+        return PlanningAgent._legacy_feedback_to_structured(legacy)
+
+    @staticmethod
+    def _legacy_feedback_to_structured(raw: Dict[str, Any]) -> RevisionFeedback:
+        """将旧 dimension/issue/suggestion 反馈转为 R4 结构。"""
+        dimension = raw.get("dimension", "")
+        text = raw.get("issue", "")
+        suggestion = raw.get("suggestion", "")
+        priority = "blocking" if raw.get("priority") == "high" else "warning"
+        return RevisionFeedback(
+            issue=SelfCheckIssue(
+                type=PlanningAgent._infer_feedback_issue_type(dimension, text),
+                location=raw.get("location") or PlanningAgent._infer_feedback_location(text),
+                actual_value=raw.get("actual_value", text),
+                expected=raw.get("expected", suggestion or "按建议修正"),
+                severity=priority,
+            ),
+            suggestion=suggestion,
+            priority=priority,
+            source=raw.get("source", "evaluation_agent"),
+        )
+
+    @staticmethod
+    def _infer_feedback_issue_type(*parts: Any) -> IssueType:
+        """根据旧反馈文本推断结构化问题类型。"""
+        text = " ".join(str(part).lower() for part in parts if part is not None)
+        if any(token in text for token in ("duplicate", "重复")):
+            return IssueType.DUPLICATE_ATTRACTION
+        if any(token in text for token in ("distance", "geo", "route", "距离", "绕路")):
+            return IssueType.GEO_DISTANCE
+        if any(token in text for token in ("budget", "price", "cost", "预算", "价格", "超")):
+            return IssueType.BUDGET_OVERSPEND
+        if any(token in text for token in ("missing meal", "缺餐", "餐食不足")):
+            return IssueType.MISSING_MEAL
+        if any(token in text for token in ("activity", "schedule", "行程", "活动")):
+            return IssueType.MISSING_ACTIVITY
+        return IssueType.STYLE_MISMATCH
+
+    @staticmethod
+    def _infer_feedback_location(text: Any) -> str:
+        """从旧反馈文本中提取粗粒度位置。"""
+        text_value = str(text)
+        import re as _re
+
+        day_match = _re.search(r"(?:day[_\s-]*|第)(\d+)", text_value, _re.IGNORECASE)
+        day = day_match.group(1) if day_match else None
+        if not day:
+            return "plan"
+        if _re.search(r"dinner|晚餐", text_value, _re.IGNORECASE):
+            return f"day_{day}.dinner"
+        if _re.search(r"lunch|午餐", text_value, _re.IGNORECASE):
+            return f"day_{day}.lunch"
+        if _re.search(r"breakfast|早餐", text_value, _re.IGNORECASE):
+            return f"day_{day}.breakfast"
+        return f"day_{day}"
     # ============================================================
     # Stub 回退方法 (原实现，方法名加 _stub 后缀)
     # ============================================================

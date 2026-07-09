@@ -313,6 +313,12 @@
 |------|--------|----------|------|---------|---------|---------|
 | 2026-07-08 | 3ba9fae | Code Agent | 设计权衡 | `test_real_cases.py` 5城市 e2e + `test_api_integration.py` 75 tests 全跑超时（>30min）。需要快速 CI 路径 + 真实 API 冒烟覆盖 | pytest.ini `addopts = -m "not slow"` 默认跳过 19 个慢测试；成都 e2e 作为快速代表；新增 6 条真实 API 冒烟（DeepSeek×2 + 高德×2 + 途牛×2）标记 @pytest.mark.slow | e2e 测试套件应区分"快速冒烟"和"全量回归"，用 pytest marker 控制；CI 跑快速路径，手动/定时跑全量 |
 
+### agents/orchestrator.py + agents/planning_agent.py (R4 StructuredFeedback)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-09 | 待提交 | Code Agent | 接口不匹配 | `models/entities.py::RevisionFeedback` 与 `models/feedback.py::RevisionFeedback` 同名但字段不同；R4 需要问题定位级反馈，旧导入会继续传 dimension 级信息，导致修订 prompt 无法定位到 day/meal/activity | Orchestrator 改从 `models.feedback` 导入 R4 类型；PlanningAgent 在入口层统一将新结构化反馈、旧维度反馈和裸 dict 归一为 `models.feedback.RevisionFeedback` | 任何同名模型迁移必须在 import 层使用模块别名或明确来源；测试应覆盖旧格式兼容和新格式路径 |
+| 2026-07-09 | 待提交 | Test Agent | 测试盲区 | R4 不需要新增测试文件；现有 `test_models.py`、`test_orchestrator.py`、`test_planning_agent.py` 已能覆盖 format、构造、prompt 注入三层行为 | 复用现有测试文件新增 5 个定向用例，避免创建过细的新测试文件 | Test Agent 编写测试前先盘点现有测试归属；只有现有文件无法表达新行为时再新增测试文件 |
 ## Batch 7: Orchestrator → Agent 桥接 (v1.1.0 收尾)
 
 ### agents/orchestrator.py
@@ -350,3 +356,4 @@
 | 2026-07-06 | 新增 Batch 6 全部 3 个问题，commit hash = `9d51662` |
 | 2026-07-06 | 新增 Phase 5 全部 9 个问题（API Provider 切换: DeepSeek 1 + config 2 + 途牛 3 + 高德 1 + 测试 1 + 飞猪探索 1），commit 列 = `待提交` |
 | 2026-07-06 | 新增 Batch 7 全部 5 个问题（Orchestrator → Agent 桥接: dimensions规范化 + 状态转换链 + degraded断言），commit hash = `035c2d4` |
+| 2026-07-09 | 新增 R4 StructuredFeedback 2 条经验（Code/Test Agent），commit 列 = 待提交 |

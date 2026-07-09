@@ -26,6 +26,8 @@ from core.message import (
 from models.request import StructuredRequest, Destination, DateRange, Budget, Travelers, Preferences
 from models.plan import TravelPlanDraft, ItineraryDay, BudgetAllocation
 from models.entities import DestinationInfo, Attraction, Accommodation, Restaurant, DietaryPreferences, RevisionFeedback
+from models.check import IssueType, SelfCheckIssue
+from models.feedback import RevisionFeedback as StructuredRevisionFeedback
 
 
 @pytest.fixture
@@ -189,6 +191,41 @@ class TestReviseItinerary:
         revised = asyncio.run(agent.revise_itinerary(draft, []))
         assert revised.revision_version == draft.revision_version + 1
 
+    def test_structured_feedback_injected_into_revision_prompt(self, sample_request):
+        draft = asyncio.run(PlanningAgent().create_itinerary(sample_request))
+        mock_llm = _make_mock_llm({})
+        prompt_builder = MagicMock()
+        prompt_builder.assemble.return_value = (
+            "【行程修订】\n"
+            "1. [BLOCKING] day_2.dinner: 当前=8000, 期望=≤1500."
+        )
+        agent = PlanningAgent(
+            llm_client=mock_llm,
+            prompt_builder=prompt_builder,
+        )
+        feedback = [StructuredRevisionFeedback(
+            issue=SelfCheckIssue(
+                type=IssueType.BUDGET_OVERSPEND,
+                location="day_2.dinner",
+                actual_value=8000,
+                expected="≤1500",
+                severity="blocking",
+            ),
+            suggestion="替换为同区域预算内餐厅",
+            priority="blocking",
+            source="execution_agent",
+        )]
+
+        revised = asyncio.run(agent.revise_itinerary(draft, feedback))
+
+        assert revised.revision_version == draft.revision_version + 1
+        prompt_builder.assemble.assert_called_once()
+        _, kwargs = prompt_builder.assemble.call_args
+        assert kwargs["step"] == "revise"
+        assert kwargs["feedback"] == feedback
+        prompt = mock_llm.generate.call_args.kwargs["user_prompt"]
+        assert "[BLOCKING] day_2.dinner" in prompt
+        assert "原始行程" in prompt
 
 # ============================================================
 # research_destination

@@ -896,7 +896,7 @@ v1.2.0 的 Reasoning + Protocol 改造遵循四个核心设计原则：
 
 ---
 
-#### R4: StructuredFeedback — 修订反馈标准化 (原 R5)
+#### R4: StructuredFeedback — 修订反馈标准化 (原 R5) ✅ 已完成 — `待提交`
 
 **目标**: 将修订反馈从"传总分/维度分"升级为"传具体问题定位 + 期望修正值"。
 
@@ -1203,6 +1203,6 @@ R3: CoT 改造               │      P3: ErrorRecovery           │
 > 
 > v1.2.0 的目标是实现 Reasoning (PromptBuilder + CoT + SelfCheck + StructuredFeedback) 和 Protocol (MessageValidator + 版本化 + StateMachine + ErrorRecovery) 的完整开发，使 e2e 得分从 82 → 90+。
 > 
-> **本文件 §12 v2 为 10 Step (Step 0 + R1-R4 + P1-P3 + I1-I2)**。
+> **本文件 §12 v2 为 10 Step (Step 0 + R1-R4 + P1-P3 + I1-I2)**。当前 R4 已完成，P3/I1/I2 仍待开发；I2 完成后才达到 v1.2.0。
 > 
 > **首先执行 Step 0（数据模型定义）**——接口先行，所有后续 Step 引用 Step 0 定义的类型。Step 0 完成后，R1 + R2 + P1 + P2 可 4 路并行启动。
