@@ -323,7 +323,7 @@
 
 | 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
 |------|--------|----------|------|---------|---------|---------|
-| 2026-07-09 | 待提交 | Code Agent | 接口不匹配 | `AgentMessage` 是 frozen dataclass，auto_fix 需返回修复后的新实例，但 `validate()` 原返回 `bool`。调用方 (4 个 Agent handler + 2 个测试文件) 不捕获返回值直接用原 message，修复后数据丢失 | 将 `validate()` 返回类型从 `bool` 改为 `AgentMessage`（返回 self 或 fixed copy），4 个 Agent 的 `handle_message()` 改为 `message = message.validate()` | frozen dataclass + auto-fix 模式下，validate() 返回修复后实例是最小侵入方案；调用方必须捕获返回值 |
+| 2026-07-09 | e4e23e2 | Code Agent | 接口不匹配 | `AgentMessage` 是 frozen dataclass，auto_fix 需返回修复后的新实例，但 `validate()` 原返回 `bool`。调用方 (4 个 Agent handler + 2 个测试文件) 不捕获返回值直接用原 message，修复后数据丢失 | 将 `validate()` 返回类型从 `bool` 改为 `AgentMessage`（返回 self 或 fixed copy），4 个 Agent 的 `handle_message()` 改为 `message = message.validate()` | frozen dataclass + auto-fix 模式下，validate() 返回修复后实例是最小侵入方案；调用方必须捕获返回值 |
 | 2026-07-09 | 待提交 | Code Agent | 设计权衡 | `MessageValidator.auto_fix()` 的二次校验依赖 `validate()` 中已注册的 schema。auto-loaded schema（如 `response.result` 要求 `status`/`data` 字段）可能比修复后的 payload 更严格，导致 re-validation 失败 | 在 `auto_fix()` 内调用 `self.validate()` 执行二次校验；测试中为 `RESPONSE_RESULT` 注册宽松覆盖 schema | auto_fix 的二次校验使用与初次校验相同的 validator 实例；测试环境需覆盖 auto-loaded schema 的必填字段约束 |
 | 2026-07-09 | 待提交 | Code Agent | 边界遗漏 | `auto_fix()` 最初在 schema 错误为空时直接 `return None`，跳过后续的 envelope 主动检查（correlation_id/timestamp），导致仅 envelope 问题无法修复 | 移除提前 return，改为无 schema 错误时仍执行 envelope 主动检查，仅在无任何修复时返回 None | 提前 return 前检查后续逻辑是否仍需执行；在所有出口前做完整性检查 |
 
