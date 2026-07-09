@@ -9,7 +9,7 @@
 | 来源 | spec commit | 对应代码 | 同步状态 | 备注 |
 |------|-------------|---------|---------|------|
 | `evaluation/test_scenarios.md` | `035c2d4` | `tests/` | 已完成 | 41 场景全覆盖 + Batch 6 真实案例 + Batch 7 桥接适配 |
-| `handoff.md §12 R4` | `待提交` | `tests/test_models.py`, `tests/test_orchestrator.py`, `tests/test_planning_agent.py` | 已完成 | 复用现有测试文件，新增 5 个 StructuredFeedback 定向用例 |
+| `handoff.md §12 R4` | `98e27e6` | `tests/test_models.py`, `tests/test_orchestrator.py`, `tests/test_planning_agent.py` | 已完成 | 复用现有测试文件，新增 5 个 StructuredFeedback 定向用例 |
 | `evaluation/ablation_protocol.md` | `4c74fa1` | `tests/test_ablation.py` | 已完成 | LOO + AIS + 360° + 协同 + 成本-质量 |
 
 > **spec commit**: 上次确认同步时 spec 文件的 commit hash。

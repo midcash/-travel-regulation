@@ -9,7 +9,7 @@
 | spec 文件 | spec commit | 对应代码 | 同步状态 | 备注 |
 |-----------|-------------|---------|---------|------|
 | `spec/orchestrator_spec.md` | `035c2d4` | `agents/orchestrator.py` | 已完成 | v1.1.0 — Orchestrator→Agent 桥接, 1146行, version 1.1.0 |
-| `progress/handoff.md §12 R4` | `待提交` | `agents/orchestrator.py` | 已完成 | v1.2.0 R4 StructuredFeedback: validation/quality → models.feedback.RevisionFeedback |
+| `progress/handoff.md §12 R4` | `98e27e6` | `agents/orchestrator.py` | 已完成 | v1.2.0 R4 StructuredFeedback: validation/quality → models.feedback.RevisionFeedback |
 
 > **spec commit**: 上次确认同步时 spec 文件的 commit hash。`—` 表示尚未开始或首次同步。
 > 检查漂移: `git diff <spec_commit>..HEAD -- <spec_file>`

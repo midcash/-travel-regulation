@@ -11,7 +11,7 @@
 | `spec/planner_spec.md` | bce72b8 | `agents/planning_agent.py` | 已完成 | Batch 4 LLM接入 — 381行，86% cov，60 tests |
 | `handoff.md §Batch 4` | Phase5 | `core/llm_client.py` | 已完成 | NEW — LLM 统一客户端; Phase 5: Anthropic→DeepSeek (openai SDK + api.deepseek.com), E2E PASS |
 | `handoff.md §12 R3` | e4a7b07 | `core/cot_pipeline.py` + `agents/planning_agent.py` | 已完成 | v1.2.0 R3: CoT 4步推理管线 + PromptBuilder/SelfChecker 注入 |
-| `handoff.md §12 R4` | `待提交` | `agents/planning_agent.py` | 已完成 | StructuredFeedback: 新反馈类型兼容解析 + PromptBuilder revise 注入 |
+| `handoff.md §12 R4` | `98e27e6` | `agents/planning_agent.py` | 已完成 | StructuredFeedback: 新反馈类型兼容解析 + PromptBuilder revise 注入 |
 
 > **spec commit**: 上次确认同步时 spec 文件的 commit hash。`—` 表示尚未开始或首次同步。
 > 检查漂移: `git diff <spec_commit>..HEAD -- <spec_file>`
