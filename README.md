@@ -2,8 +2,8 @@
 
 旅游规划多 Agent 编排系统 — 基于混合专家模型（一主多从）的智能行程生成平台。
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/midcash/-travel-regulation/releases/tag/v1.1.0)
-[![Tests](https://img.shields.io/badge/tests-661%20passed-green)](https://github.com/midcash/-travel-regulation/actions)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue)](https://github.com/midcash/-travel-regulation/releases/tag/v1.2.0)
+[![Tests](https://img.shields.io/badge/tests-739%20passed-green)](https://github.com/midcash/-travel-regulation/actions)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 
 ## 架构
@@ -74,7 +74,7 @@ cp .env.example .env
 ### 运行测试
 
 ```bash
-# 运行全部测试 (661 tests)
+# 运行全部测试 (739 tests)
 venv/Scripts/python.exe -m pytest tests/ -v
 
 # 运行单个模块
@@ -132,7 +132,7 @@ asyncio.run(main())
 │   ├── geo_checker.py   # 高德地图 (地理编码/绕路检测)
 │   ├── time_checker.py  # 高德地图 (路径规划/交通时间)
 │   └── risk_checker.py  # 天气/签证/安全风险
-├── tests/               # 测试 (661 tests)
+├── tests/               # 测试 (739 tests)
 ├── spec/                # 系统/模块规格
 ├── playbooks/           # Agent 操作手册
 ├── evaluation/          # 评估准则/质量门/消融协议
@@ -163,7 +163,7 @@ R1 Context → R2 Plan → R3 Execute → R4 Test → R5 Verify → R5.5 Lessons
 |------|--------|
 | v1.0.0 | 基础框架：4 Agent + 4 Gate + stub 数据 |
 | **v1.1.0** | **API 全链路接入：DeepSeek + 高德 + 途牛 MCP** |
-| v1.2.0 | (计划) Agent 质量升级 — Memory · Reasoning · Protocol · Architecture · Evaluation |
+| **v1.2.0** | **Reasoning + Protocol 完整开发：PromptBuilder + CoT + SelfCheck + StructuredFeedback + MessageValidator + VersionPolicy + StateMachine + ErrorRecovery** |
 
 ## License
 

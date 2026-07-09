@@ -454,3 +454,156 @@ class TestOrchRecoveryCancel:
         assert "跳过评估" in plan["summary"]["degraded_reason"]
 
 
+# ============================================================
+# v1.2.0 I1 — Reasoning + Protocol 全链路集成测试
+# ============================================================
+
+
+class TestReasoningProtocolIntegration:
+    """CoT → SelfCheck → StructuredFeedback → Revision 全链路集成。"""
+
+    def test_selfcheck_detects_blocking_issue_and_returns_issues(self):
+        """SelfChecker 检出 blocking 问题 → passed=False + blocking_issues 非空。"""
+        from models.check import IssueType, SelfCheckIssue, SelfCheckResult
+        from models.plan import (
+            Activity, BudgetAllocation, ItineraryDay, TravelPlanDraft,
+        )
+        from core.self_check import SelfChecker
+        from models.request import Budget, DateRange, Destination, StructuredRequest, Travelers, Preferences
+
+        # 构造一个预算超标的 draft
+        day = ItineraryDay(day=1, activities=[
+            Activity(
+                name="天价景点", type="culture", start_time="09:00",
+                duration_minutes=120, location="某地",
+                estimated_cost=999999, reason="详细的推荐理由满足最少字符限制",
+            ),
+        ], meals={}, total_day_cost=999999)
+
+        draft = TravelPlanDraft(
+            draft_id="test-001",
+            destination={"city": "东京", "country": "日本"},
+            duration_days=1,
+            daily_itinerary=[day],
+            total_budget=1000,
+            budget_allocation=BudgetAllocation(
+                transportation=300, accommodation=300,
+                activities=150, meals=150, buffer=100,
+            ),
+        )
+        request = StructuredRequest(
+            request_id="req-001",
+            destination=Destination(city="东京", country="日本"),
+            dates=DateRange(arrival="2026-12-20", departure="2026-12-21", duration_days=1),
+            budget=Budget(total=1000, currency="CNY"),
+            travelers=Travelers(adults=1, children=0),
+            preferences=Preferences(style=["culture"]),
+        )
+        checker = SelfChecker()
+        result = checker.check(draft, request)
+        assert result.passed is False
+        assert len(result.blocking_issues) >= 1
+        budget_issues = [i for i in result.blocking_issues if i.type == IssueType.BUDGET_OVERSPEND]
+        assert len(budget_issues) >= 1
+
+    def test_revision_feedback_roundtrip_to_prompt(self):
+        """RevisionFeedback 从构造到 format_for_prompt() 全链路。"""
+        from models.check import IssueType, SelfCheckIssue
+        from models.feedback import RevisionFeedback
+
+        issue = SelfCheckIssue(
+            type=IssueType.DUPLICATE_ATTRACTION,
+            location="景点 '浅草寺'",
+            actual_value="出现于第1, 3天",
+            expected="不重复",
+            severity="blocking",
+        )
+        fb = RevisionFeedback(
+            issue=issue,
+            suggestion="每景点仅出现一次，去掉第3天的浅草寺",
+            priority="blocking",
+            source="self_check",
+        )
+        prompt_text = fb.format_for_prompt()
+        assert "[BLOCKING]" in prompt_text
+        assert "浅草寺" in prompt_text
+        assert "不重复" in prompt_text
+        assert "去掉第3天" in prompt_text
+
+    def test_prompt_builder_revise_with_structured_feedback(self):
+        """PromptBuilder.assemble() revise step + RevisionFeedback → prompt 含具体问题。"""
+        from core.prompt_builder import PromptBuilder
+        from models.check import IssueType, SelfCheckIssue
+        from models.feedback import RevisionFeedback
+        from models.request import Budget, DateRange, Destination, StructuredRequest, Travelers, Preferences
+
+        builder = PromptBuilder()
+        request = StructuredRequest(
+            request_id="req-001",
+            destination=Destination(city="东京", country="日本"),
+            dates=DateRange(arrival="2026-12-20", departure="2026-12-25", duration_days=5),
+            budget=Budget(total=15000, currency="CNY"),
+            travelers=Travelers(adults=2, children=0),
+            preferences=Preferences(style=["food", "culture"]),
+        )
+        issue = SelfCheckIssue(
+            type=IssueType.BUDGET_OVERSPEND,
+            location="第2天晚餐",
+            actual_value=8000,
+            expected="≤ 1500 CNY",
+            severity="blocking",
+        )
+        fb = RevisionFeedback(
+            issue=issue,
+            suggestion="替换为同区域 1500 日元以内的居酒屋",
+            priority="blocking",
+            source="execution_agent",
+        )
+        prompt = builder.assemble(request, step="revise", feedback=[fb], iteration=1)
+        assert "第2天晚餐" in prompt or "8000" in prompt or "BLOCKING" in prompt or "BUDGET" in prompt
+
+    def test_version_policy_pipeline_full_adapt_reject(self):
+        """VersionPolicy 三种兼容性级别: full → adapt → reject。"""
+        from core.message import VersionPolicy
+
+        r_full = VersionPolicy.check("1.2", "1.2")
+        assert r_full.level == "full"
+
+        r_adapt = VersionPolicy.check("1.5", "1.2")
+        assert r_adapt.level == "adapt"
+
+        r_reject = VersionPolicy.check("3.0", "1.2")
+        assert r_reject.level == "reject"
+
+    def test_message_validator_error_recovery_pipeline(self):
+        """MessageValidator → auto_fix → revalidate 完整管线。"""
+        import uuid as uuid_mod
+        from datetime import datetime, timezone
+        from core.message import AgentIdentity, AgentMessage, TaskType
+        from core.message_validator import MessageValidator
+        from models.protocol import ValidationResult, SchemaError
+
+        identity = AgentIdentity("test", "1.0", ["test"], "test://", "online")
+        validator = MessageValidator(strict_mode=False)
+        validator.register_schema(TaskType.RESPONSE_RESULT, {
+            "type": "object",
+            "properties": {"dimensions": {"type": "object"}},
+        })
+
+        msg = AgentMessage(
+            message_id=str(uuid_mod.uuid4()),
+            sender=identity, receiver=identity,
+            task_type=TaskType.RESPONSE_RESULT,
+            payload={"dimensions": {"completeness": {"score": 5.0, "weight": 0.25}}},
+            timestamp=datetime.now(timezone.utc),
+            correlation_id=str(uuid_mod.uuid4()),
+        )
+        result = ValidationResult(valid=False, errors=[
+            SchemaError("payload.dimensions.completeness", "number",
+                       "object (keys=['score', 'weight'])", "should be number"),
+        ])
+        fixed = validator.auto_fix(msg, result)
+        assert fixed is not None
+        assert fixed.payload["dimensions"]["completeness"] == 5.0
+        re_result = validator.validate(fixed)
+        assert re_result.valid

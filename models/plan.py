@@ -135,6 +135,8 @@ class Activity:
     """预估费用（门票/消费等）。"""
     reason: str
     """推荐理由，必须具体且至少 10 个字符。"""
+    geo: Optional[Any] = None
+    """可选的地理坐标（GeoLocation），用于 SelfCheck 地理距离计算。"""
     notes: Optional[str] = None
     """备注信息（可选，如注意事项、提示等）。"""
 

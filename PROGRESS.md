@@ -17,6 +17,7 @@
 | Evaluation Agent | [progress/evaluation.md](progress/evaluation.md) | Phase 3 | 已完成 |
 | tests/ | [progress/tests.md](progress/tests.md) | Phase 4 | 已完成 |
 | evaluation/ (评估量表) | — | Phase 6 — v1.2.0 | 已完成 |
+| Reasoning + Protocol | — | Phase 7 — v1.2.0 | 已完成 |
 
 **详细内容见 [progress/README.md](progress/README.md)**（阶段进度、变更日志、评估知识影响追踪）
 

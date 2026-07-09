@@ -524,3 +524,96 @@ class TestSharedContextFullFlow:
         # 回到 Planning
         sample_context.set_status(ContextStatus.WAITING_PLANNER)
         assert sample_context.get_status() == ContextStatus.WAITING_PLANNER
+
+
+# ============================================================
+# v1.2.0 I1 — StateMachine 辅助工具测试 (P2)
+# ============================================================
+
+
+class TestStateMachineTools:
+    """get_legal_transitions / get_transition_path / force_status / strict_mode。"""
+
+    def test_get_legal_transitions_idle(self):
+        """get_legal_transitions(IDLE) → {VALIDATING, FAILED}。"""
+        allowed = SharedContext.get_legal_transitions(ContextStatus.IDLE)
+        names = {s.name for s in allowed}
+        assert "VALIDATING" in names
+        assert "FAILED" in names
+        assert len(allowed) == 2
+
+    def test_get_legal_transitions_completed(self):
+        """get_legal_transitions(COMPLETED) → 空集合（终态不可转出）。"""
+        allowed = SharedContext.get_legal_transitions(ContextStatus.COMPLETED)
+        assert len(allowed) == 0
+
+    def test_get_legal_transitions_deciding(self):
+        """get_legal_transitions(DECIDING) 包含 ASSEMBLING, REVISING 等。"""
+        allowed = SharedContext.get_legal_transitions(ContextStatus.DECIDING)
+        names = {s.name for s in allowed}
+        assert "ASSEMBLING" in names
+        assert "REVISING" in names
+        assert "COMPLETED_DEGRADED" in names
+        assert "FAILED" in names
+
+    def test_get_transition_path_idle_to_failed(self):
+        """get_transition_path(IDLE, FAILED) → [IDLE, FAILED]（直接路径）。"""
+        path = SharedContext.get_transition_path(
+            ContextStatus.IDLE, ContextStatus.FAILED
+        )
+        assert len(path) == 2
+        assert path[0] == ContextStatus.IDLE
+        assert path[1] == ContextStatus.FAILED
+
+    def test_get_transition_path_idle_to_completed(self):
+        """get_transition_path(IDLE, COMPLETED) → 非空 BFS 路径。"""
+        path = SharedContext.get_transition_path(
+            ContextStatus.IDLE, ContextStatus.COMPLETED
+        )
+        assert len(path) > 1
+        assert path[0] == ContextStatus.IDLE
+        assert path[-1] == ContextStatus.COMPLETED
+
+    def test_get_transition_path_same_state(self):
+        """同状态间路径 → [状态]。"""
+        path = SharedContext.get_transition_path(
+            ContextStatus.IDLE, ContextStatus.IDLE
+        )
+        assert path == [ContextStatus.IDLE]
+
+    def test_get_transition_path_no_path_returns_empty(self):
+        """不可达状态对返回空列表（如 COMPLETED → IDLE 为终态逆转换）。"""
+        path = SharedContext.get_transition_path(
+            ContextStatus.COMPLETED, ContextStatus.IDLE
+        )
+        assert path == []
+
+    def test_force_status_non_strict(self):
+        """strict_mode=False → force_status() 成功。"""
+        ctx = SharedContext(strict_mode=False)
+        ctx.force_status(ContextStatus.DECIDING)
+        assert ctx.get_status() == ContextStatus.DECIDING
+
+    def test_force_status_strict_raises(self):
+        """strict_mode=True → force_status() 抛 RuntimeError。"""
+        ctx = SharedContext(strict_mode=True)
+        with pytest.raises(RuntimeError, match="strict_mode"):
+            ctx.force_status(ContextStatus.DECIDING)
+
+    def test_set_status_error_message_format(self):
+        """set_status 非法转换时错误消息包含'合法目标'。"""
+        ctx = SharedContext(strict_mode=True)
+        with pytest.raises(ValueError, match="合法目标"):
+            ctx.set_status(ContextStatus.COMPLETED)  # IDLE → COMPLETED 非法
+
+    def test_set_status_non_strict_skips_validation(self):
+        """strict_mode=False → set_status 跳过转换合法性校验。"""
+        ctx = SharedContext(strict_mode=False)
+        ctx.set_status(ContextStatus.COMPLETED)
+        assert ctx.get_status() == ContextStatus.COMPLETED
+
+    def test_force_status_non_enum_raises(self):
+        """force_status 传入非 ContextStatus 类型 → TypeError。"""
+        ctx = SharedContext(strict_mode=False)
+        with pytest.raises(TypeError, match="ContextStatus"):
+            ctx.force_status("IDLE")

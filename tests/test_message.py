@@ -625,3 +625,107 @@ class TestConstants:
     def test_timestamp_tolerance(self):
         """时间戳容差为 5 分钟。"""
         assert TIMESTAMP_TOLERANCE == timedelta(minutes=5)
+
+
+# ============================================================
+# v1.2.0 I1 — protocol_version + auto_fix 测试
+# ============================================================
+
+
+class TestProtocolVersion:
+    """AgentMessage protocol_version 字段测试。"""
+
+    def test_protocol_version_defaults_to_1_0(self, sample_message):
+        """protocol_version 默认值 "1.0"。"""
+        assert sample_message.protocol_version == "1.0"
+
+    def test_protocol_version_preserved(self, sample_identity, sample_identity2):
+        """设置 protocol_version="1.2" 后被正确保留。"""
+        msg = AgentMessage(
+            message_id=str(uuid.uuid4()),
+            sender=sample_identity2,
+            receiver=sample_identity,
+            task_type=TaskType.TASK_CREATE_ITINERARY,
+            payload={"destination": "Tokyo"},
+            timestamp=datetime.now(timezone.utc),
+            protocol_version="1.2",
+        )
+        assert msg.protocol_version == "1.2"
+
+    def test_auto_fixed_initially_none(self, sample_message):
+        """_auto_fixed 初始值为 None。"""
+        assert sample_message._auto_fixed is None
+
+
+class TestAutoFixIntegration:
+    """AgentMessage.validate() 内联 auto_fix 集成测试。"""
+
+    def test_validate_returns_same_message_when_no_issues(
+        self, sample_identity, sample_identity2
+    ):
+        """validate() 合法的请求消息 → 返回原消息。"""
+        msg = AgentMessage(
+            message_id=str(uuid.uuid4()),
+            sender=sample_identity2,
+            receiver=sample_identity,
+            task_type=TaskType.TASK_CREATE_ITINERARY,
+            payload={"destination": "Tokyo"},
+            timestamp=datetime.now(timezone.utc),
+        )
+        result = msg.validate()
+        assert result is msg or (
+            result.message_id == msg.message_id and result._auto_fixed is None
+        )
+
+    def test_validate_auto_fixes_old_timestamp(
+        self, sample_identity, sample_identity2
+    ):
+        """旧 timestamp → validate() 自动修复，返回修复后消息。"""
+        old_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+        msg = AgentMessage(
+            message_id=str(uuid.uuid4()),
+            sender=sample_identity2,
+            receiver=sample_identity,
+            task_type=TaskType.TASK_CREATE_ITINERARY,
+            payload={"destination": "Tokyo"},
+            timestamp=old_time,
+        )
+        fixed = msg.validate()
+        assert fixed._auto_fixed is not None
+        assert "timestamp_corrected_to_utc_now" in fixed._auto_fixed
+
+    def test_validate_auto_fixes_missing_correlation_id(
+        self, sample_identity, sample_identity2
+    ):
+        """响应消息缺 correlation_id → validate() 自动生成 UUID。"""
+        msg = AgentMessage(
+            message_id=str(uuid.uuid4()),
+            sender=sample_identity,
+            receiver=sample_identity2,
+            task_type=TaskType.RESPONSE_RESULT,
+            payload={"result": "ok"},
+            timestamp=datetime.now(timezone.utc),
+        )
+        fixed = msg.validate()
+        assert fixed._auto_fixed is not None
+        assert "correlation_id_auto_generated" in fixed._auto_fixed
+        assert fixed.correlation_id is not None
+
+    def test_validate_auto_fixes_both_timestamp_and_correlation(
+        self, sample_identity, sample_identity2
+    ):
+        """同时缺 correlation_id + 旧 timestamp → 两项均修复。"""
+        old_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+        msg = AgentMessage(
+            message_id=str(uuid.uuid4()),
+            sender=sample_identity,
+            receiver=sample_identity2,
+            task_type=TaskType.RESPONSE_RESULT,
+            payload={"result": "ok"},
+            timestamp=old_time,
+        )
+        fixed = msg.validate()
+        assert fixed._auto_fixed is not None
+        fixes = fixed._auto_fixed
+        assert "timestamp_corrected_to_utc_now" in fixes
+        assert "correlation_id_auto_generated" in fixes

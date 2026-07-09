@@ -164,6 +164,8 @@
 | 2026-07-06 | Batch 7 (Orchestrator → Agent 桥接) | 5 | 5 | 0 |
 | 2026-07-06 | Phase 5 (API Provider 切换: DeepSeek+高德+途牛) | 9 | 9 | 0 |
 | 2026-07-07 | Batch 8 (v1.2.0 评估体系升级) | — | — | 0 |
+| 2026-07-09 | Batch 9 (v1.2.0 Reasoning + Protocol 实现) | 6 | 6 | 0 |
+| 2026-07-09 | Batch 10 (v1.2.0 I1+I2 收尾) | 4 | 4 | 0 |
 
 ---
 
@@ -326,6 +328,24 @@
 | 2026-07-09 | e4e23e2 | Code Agent | 接口不匹配 | `AgentMessage` 是 frozen dataclass，auto_fix 需返回修复后的新实例，但 `validate()` 原返回 `bool`。调用方 (4 个 Agent handler + 2 个测试文件) 不捕获返回值直接用原 message，修复后数据丢失 | 将 `validate()` 返回类型从 `bool` 改为 `AgentMessage`（返回 self 或 fixed copy），4 个 Agent 的 `handle_message()` 改为 `message = message.validate()` | frozen dataclass + auto-fix 模式下，validate() 返回修复后实例是最小侵入方案；调用方必须捕获返回值 |
 | 2026-07-09 | 待提交 | Code Agent | 设计权衡 | `MessageValidator.auto_fix()` 的二次校验依赖 `validate()` 中已注册的 schema。auto-loaded schema（如 `response.result` 要求 `status`/`data` 字段）可能比修复后的 payload 更严格，导致 re-validation 失败 | 在 `auto_fix()` 内调用 `self.validate()` 执行二次校验；测试中为 `RESPONSE_RESULT` 注册宽松覆盖 schema | auto_fix 的二次校验使用与初次校验相同的 validator 实例；测试环境需覆盖 auto-loaded schema 的必填字段约束 |
 | 2026-07-09 | 待提交 | Code Agent | 边界遗漏 | `auto_fix()` 最初在 schema 错误为空时直接 `return None`，跳过后续的 envelope 主动检查（correlation_id/timestamp），导致仅 envelope 问题无法修复 | 移除提前 return，改为无 schema 错误时仍执行 envelope 主动检查，仅在无任何修复时返回 None | 提前 return 前检查后续逻辑是否仍需执行；在所有出口前做完整性检查 |
+
+## Batch 10: v1.2.0 I1+I2 收尾 (集成测试 + Handoff)
+
+> 日期: 2026-07-09 | 产出: 新增 73 tests, 739 passed, 0 regressions | v1.2.0 完成
+
+### models/plan.py (Activity.geo 字段缺失)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-09 | 待提交 | Code Agent | 规格遗漏 | `SelfChecker._get_activity_geo()` 检查 `activity.geo` 属性，但 `Activity` 类缺少 `geo` 字段。`getattr(activity, "geo", None)` 永远返回 None，导致 SelfCheck 第2项（地理距离检查）对所有标准 Activity 对象成为死代码 | 为 `Activity` 新增 `geo: Optional[Any] = None` 字段 | 编写调用链路代码时，必须验证被调方法中的属性确实存在于目标类型上；仅靠 `getattr` 防御性编程会掩盖规格遗漏 |
+
+### tests/ (测试设计经验)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-09 | 待提交 | Test Agent | 测试盲区 | Budget overspend 测试中 `daily_budget_limit = total_budget / len(daily_itinerary) * 1.1`，但 draft 有 1 天行程、`total_budget=15000` → limit=16500，测试构造的 4300 花费不触发 overspend | 测试构造参数需精确匹配算法的实际计算路径：总预算、天数、花费三者必须公式自洽 | 测试数据构造后，建议做 hand-calculation 验证：在注释中标注期望的中间计算值（如 `limit = 1000 / 1 * 1.1 = 1100`） |
+| 2026-07-09 | 待提交 | Test Agent | 测试盲区 | Geo distance 测试使用 东京塔→横滨 坐标（Haversine 距离 ~25km），未超过 30km 阈值，geo warning 不触发 | 替换为 东京塔→箱根方向 坐标（~63km），确认超过 30km 阈值 | 空间距离测试应预先用 Haversine 公式手算验证距离值，或使用已知远距离的坐标对（如城市对） |
+| 2026-07-09 | 待提交 | Test Agent | 设计权衡 | Protocol 模块测试分布在 4 个已有文件中（test_message_validator.py / test_message.py / test_context.py / test_p1_message_validator_acceptance.py），优先扩展现有文件而非新建 test_protocol.py | 在已有文件中追加 33 个新测试，文件间零冲突 | test-agent 编写测试前先 grep 已有覆盖，判断能否扩展现有文件；只有完全无覆盖的新模块才新建测试文件 |
 
 ## Batch 7: Orchestrator → Agent 桥接 (v1.1.0 收尾)
 
