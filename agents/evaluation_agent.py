@@ -96,7 +96,7 @@ class EvaluationAgent(BaseAgent):
     async def handle_message(self, message: AgentMessage) -> AgentMessage:
         """消息处理入口 — 按 task_type 路由到 Mode A/B/C。"""
         try:
-            message.validate()
+            message = message.validate()
         except MessageValidationError as exc:
             return self._error_response(message, ErrorCode.INVALID_MESSAGE, str(exc))
 

@@ -230,8 +230,8 @@ def test_10_backward_compatible():
         timestamp=datetime.now(timezone.utc),
     )
     result_old = old_style_msg.validate()
-    assert result_old is True, "Old-style message should validate"
-    print(f"  PASS: validate()={result_old}, protocol_version={old_style_msg.protocol_version}\n")
+    assert isinstance(result_old, AgentMessage), "Old-style message should validate"
+    print(f"  PASS: validate() returned AgentMessage, protocol_version={old_style_msg.protocol_version}\n")
 
     # 10b: validate() rule 0 catches empty protocol_version
     print("[Test 10b] validate() rule 0 catches empty protocol_version")

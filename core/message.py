@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 # ============================================================
 # 模块级常量 — spec/agent_contract.md §5
@@ -371,8 +371,20 @@ class AgentMessage:
     correlation_id: Optional[str] = None
     """关联请求 ID，用于请求-响应配对。响应消息必须非空。"""
 
-    def validate(self, registry: Optional[AgentRegistry] = None) -> bool:
-        """验证消息格式的合法性。
+    _auto_fixed: Optional[List[str]] = None
+    """自动修复记录（v1.2.0 P3 ErrorRecovery）。
+    None = 未经过 auto_fix；非空 list = 已应用的修复操作描述列表。
+    由 MessageValidator.auto_fix() 或 AgentMessage.validate() 内部填充。"""
+
+    # ----------------------------------------------------------
+    # 可自动修复的违规类型标识 (v1.2.0 P3 ErrorRecovery)
+    # ----------------------------------------------------------
+
+    _FIXABLE_TIMESTAMP = "timestamp 偏差"
+    _FIXABLE_CORRELATION = "必须携带 correlation_id"
+
+    def validate(self, registry: Optional[AgentRegistry] = None) -> "AgentMessage":
+        """验证消息格式的合法性，尝试自动修复可修复的问题。
 
         验证规则 (spec/agent_contract.md §3.1):
         1. message_id 必须为非空 UUID v4
@@ -381,17 +393,21 @@ class AgentMessage:
         4. timestamp 必须在 ±5 分钟容差范围内
         5. 若为响应消息 (task_type.is_response())，correlation_id 必须非空
 
+        v1.2.0 P3 ErrorRecovery: 若违规仅包含可自动修复项（timestamp 偏差、
+        correlation_id 缺失），则自动修复并返回新消息实例，而非抛出异常。
+
         Args:
             registry: 可选的 AgentRegistry，用于校验 sender/receiver 注册状态。
                       为 None 时跳过规则 2。
 
         Returns:
-            True 表示消息合法。
+            合法的 AgentMessage（可能是修复后的新实例）。
 
         Raises:
-            MessageValidationError: 任何一条校验规则不满足时抛出。
+            MessageValidationError: 存在不可自动修复的违规项时抛出。
         """
         violations: List[str] = []
+        fixable_violations: List[str] = []
 
         # 规则 0: protocol_version 必须存在且为非空字符串
         if not self.protocol_version or not isinstance(self.protocol_version, str):
@@ -419,8 +435,6 @@ class AgentMessage:
 
         # 规则 2: sender/receiver 注册状态 (仅在 registry 提供时检查)
         if registry is not None:
-            # 注意: 此检查涉及异步 I/O，在同步 validate() 中仅做存在性检查
-            # 完整异步校验应在 BaseAgent.handle_message() 入口处完成
             if not isinstance(self.sender, AgentIdentity):
                 violations.append("sender 不是 AgentIdentity 实例")
             if not isinstance(self.receiver, AgentIdentity):
@@ -434,25 +448,25 @@ class AgentMessage:
 
         # 规则 4: timestamp 必须在 ±5 分钟范围内
         now = datetime.now(timezone.utc)
-        # 将 timestamp 统一转为 UTC 比较
         ts = self.timestamp
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         diff = abs(now - ts)
         if diff > TIMESTAMP_TOLERANCE:
-            violations.append(
+            ts_violation = (
                 f"timestamp 偏差 {diff.total_seconds():.0f}s "
                 f"超出容差 {TIMESTAMP_TOLERANCE.total_seconds():.0f}s"
             )
+            fixable_violations.append(ts_violation)
 
         # 规则 5: 响应消息必须带 correlation_id
-        # 仅在 task_type 为合法 TaskType 枚举值时检查 (否则规则 3 已捕获)
         if isinstance(self.task_type, TaskType) and self.task_type.is_response():
             if not self.correlation_id:
-                violations.append(
+                corr_violation = (
                     f"响应消息 (task_type={self.task_type.value}) "
                     f"必须携带 correlation_id"
                 )
+                fixable_violations.append(corr_violation)
             elif self.correlation_id and not isinstance(self.correlation_id, str):
                 violations.append(
                     f"correlation_id 必须是字符串类型, "
@@ -463,12 +477,69 @@ class AgentMessage:
                     f"correlation_id 不是合法的 UUID v4: {self.correlation_id!r}"
                 )
 
-        if violations:
-            raise MessageValidationError(
-                message=f"消息校验失败: {'; '.join(violations)}",
-                violations=violations,
-            )
-        return True
+        # v1.2.0 P3: 尝试自动修复
+        if violations or fixable_violations:
+            # 如果存在不可修复的违规 → 直接抛异常
+            if violations:
+                all_violations = violations + fixable_violations
+                raise MessageValidationError(
+                    message=f"消息校验失败: {'; '.join(all_violations)}",
+                    violations=all_violations,
+                )
+
+            # 仅剩可修复项 → 自动修复
+            return self._apply_auto_fix(fixable_violations)
+
+        return self
+
+    def _apply_auto_fix(self, fixable_violations: List[str]) -> "AgentMessage":
+        """对可修复的违规项自动修复，返回新 AgentMessage 实例。
+
+        修复项:
+        - timestamp 偏差 → 修正为当前 UTC 时间
+        - correlation_id 缺失 (响应消息) → 自动生成 UUID v4
+
+        Args:
+            fixable_violations: 可修复的违规描述列表。
+
+        Returns:
+            修复后的新 AgentMessage 实例（_auto_fixed 字段记录修复操作）。
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        fixes_applied: List[str] = []
+
+        fixed_timestamp = self.timestamp
+        fixed_correlation_id = self.correlation_id
+
+        for v in fixable_violations:
+            if v.startswith(self._FIXABLE_TIMESTAMP):
+                fixed_timestamp = datetime.now(timezone.utc)
+                fixes_applied.append("timestamp_corrected_to_utc_now")
+                logger.warning(
+                    "auto_fix: message=%s timestamp 已修正为当前 UTC 时间",
+                    self.message_id,
+                )
+            elif self._FIXABLE_CORRELATION in v:
+                fixed_correlation_id = str(uuid4())
+                fixes_applied.append("correlation_id_auto_generated")
+                logger.warning(
+                    "auto_fix: message=%s correlation_id 已自动生成 UUID v4",
+                    self.message_id,
+                )
+
+        # 使用 object.__setattr__ 绕过 frozen 创建新实例
+        return AgentMessage(
+            message_id=self.message_id,
+            sender=self.sender,
+            receiver=self.receiver,
+            task_type=self.task_type,
+            payload=self.payload,
+            timestamp=fixed_timestamp,
+            protocol_version=self.protocol_version,
+            correlation_id=fixed_correlation_id,
+            _auto_fixed=fixes_applied,
+        )
 
 
 # ============================================================

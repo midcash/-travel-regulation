@@ -284,8 +284,10 @@ class TestAgentMessage:
     # --- validate() 规则1: message_id ---
 
     def test_validate_passes_for_valid_message(self, sample_message):
-        """合法消息 validate() 返回 True。"""
-        assert sample_message.validate() is True
+        """合法消息 validate() 返回 AgentMessage 实例（v1.2.0 P3: 返回类型改为 AgentMessage）。"""
+        result = sample_message.validate()
+        assert isinstance(result, AgentMessage)
+        assert result._auto_fixed is None
 
     def test_validate_fails_for_empty_message_id(self, sample_identity, sample_identity2):
         """空 message_id 抛出 MessageValidationError。"""
@@ -339,7 +341,7 @@ class TestAgentMessage:
             payload={},
             timestamp=datetime.now(timezone.utc),
         )
-        assert msg.validate(registry=None) is True
+        assert isinstance(msg.validate(registry=None), AgentMessage)
 
     # --- validate() 规则3: task_type ---
 
@@ -360,8 +362,8 @@ class TestAgentMessage:
 
     # --- validate() 规则4: timestamp ---
 
-    def test_validate_fails_for_old_timestamp(self, sample_identity, sample_identity2):
-        """超出容差的旧时间戳抛出 MessageValidationError。"""
+    def test_validate_auto_fixes_old_timestamp(self, sample_identity, sample_identity2):
+        """v1.2.0 P3: 仅 timestamp 偏差时可自动修复，返回修正后消息。"""
         old_time = datetime.now(timezone.utc) - timedelta(minutes=10)
         msg = AgentMessage(
             message_id=str(uuid.uuid4()),
@@ -371,11 +373,16 @@ class TestAgentMessage:
             payload={},
             timestamp=old_time,
         )
-        with pytest.raises(MessageValidationError, match="timestamp"):
-            msg.validate()
+        fixed = msg.validate()
+        assert isinstance(fixed, AgentMessage)
+        assert fixed._auto_fixed is not None
+        assert "timestamp_corrected_to_utc_now" in fixed._auto_fixed
+        # 修复后 timestamp 应在容差范围内
+        diff = abs(datetime.now(timezone.utc) - fixed.timestamp)
+        assert diff < TIMESTAMP_TOLERANCE
 
-    def test_validate_fails_for_future_timestamp(self, sample_identity, sample_identity2):
-        """超出容差的未来时间戳抛出 MessageValidationError。"""
+    def test_validate_auto_fixes_future_timestamp(self, sample_identity, sample_identity2):
+        """v1.2.0 P3: 仅 timestamp 偏差时可自动修复。"""
         future_time = datetime.now(timezone.utc) + timedelta(minutes=10)
         msg = AgentMessage(
             message_id=str(uuid.uuid4()),
@@ -385,8 +392,10 @@ class TestAgentMessage:
             payload={},
             timestamp=future_time,
         )
-        with pytest.raises(MessageValidationError, match="timestamp"):
-            msg.validate()
+        fixed = msg.validate()
+        assert isinstance(fixed, AgentMessage)
+        assert fixed._auto_fixed is not None
+        assert "timestamp_corrected_to_utc_now" in fixed._auto_fixed
 
     def test_validate_passes_for_timestamp_within_tolerance(self, sample_identity, sample_identity2):
         """容差范围内的时间戳通过校验。"""
@@ -399,12 +408,12 @@ class TestAgentMessage:
             payload={},
             timestamp=within,
         )
-        assert msg.validate() is True
+        assert isinstance(msg.validate(), AgentMessage)
 
     # --- validate() 规则5: correlation_id ---
 
-    def test_validate_fails_for_response_without_correlation_id(self, sample_identity, sample_identity2):
-        """响应消息缺少 correlation_id 抛出 MessageValidationError。"""
+    def test_validate_auto_fixes_missing_correlation_id(self, sample_identity, sample_identity2):
+        """v1.2.0 P3: 仅 correlation_id 缺失时可自动修复。"""
         msg = AgentMessage(
             message_id=str(uuid.uuid4()),
             sender=sample_identity,
@@ -413,13 +422,18 @@ class TestAgentMessage:
             payload={},
             timestamp=datetime.now(timezone.utc),
         )
-        with pytest.raises(MessageValidationError, match="correlation_id"):
-            msg.validate()
+        fixed = msg.validate()
+        assert isinstance(fixed, AgentMessage)
+        assert fixed._auto_fixed is not None
+        assert "correlation_id_auto_generated" in fixed._auto_fixed
+        assert fixed.correlation_id is not None
+        # 验证是合法 UUID v4
+        assert uuid.UUID(fixed.correlation_id).version == 4
 
     def test_validate_passes_for_request_without_correlation_id(self, sample_message):
         """请求消息不需要 correlation_id，应通过校验。"""
         assert sample_message.correlation_id is None
-        assert sample_message.validate() is True
+        assert isinstance(sample_message.validate(), AgentMessage)
 
     def test_validate_checks_correlation_id_uuid_format(self, sample_identity, sample_identity2):
         """correlation_id 存在时校验 UUID v4 格式。"""
@@ -437,7 +451,7 @@ class TestAgentMessage:
 
     def test_validate_passes_for_response_with_valid_correlation_id(self, sample_response_message):
         """响应消息带合法 correlation_id 通过校验。"""
-        assert sample_response_message.validate() is True
+        assert isinstance(sample_response_message.validate(), AgentMessage)
 
     # --- 多违规 ---
 

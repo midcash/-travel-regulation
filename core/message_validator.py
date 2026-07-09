@@ -140,6 +140,202 @@ class MessageValidator:
 
         return result
 
+    # ----------------------------------------------------------
+    # ErrorRecovery — 格式错误自动修复 (v1.2.0 P3)
+    # ----------------------------------------------------------
+
+    def auto_fix(
+        self, message: AgentMessage, validation_result: ValidationResult
+    ) -> Optional[AgentMessage]:
+        """尝试自动修复消息的格式错误。
+
+        修复边界：仅修复可安全推断的格式问题。内容缺失/类型根本错误不修复。
+
+        可修复:
+        - dimensions 嵌套 dict → 扁平（{"completeness": {"score": 5}} → {"completeness": 5}）
+        - correlation_id 缺失 → 自动生成 UUID v4 + warning
+        - timestamp 超出容差 → 修正为当前 UTC 时间 + warning
+
+        不可修复:
+        - payload 为空 → 返回 None
+        - 必填字段缺失 → 返回 None
+
+        同时主动检查消息 envelope（correlation_id / timestamp），
+        这些不由 JSON Schema 校验覆盖。
+
+        Args:
+            message: 原始消息（不会被修改，frozen dataclass）。
+            validation_result: MessageValidator.validate() 的校验结果。
+
+        Returns:
+            修复后的新 AgentMessage 实例（_auto_fixed 字段记录修复操作）。
+            不可修复时返回 None。
+        """
+        import uuid as uuid_mod
+        from datetime import datetime, timedelta, timezone
+
+        from core.message import TIMESTAMP_TOLERANCE
+
+        fixes_applied: List[str] = []
+        unfixable_errors: List[SchemaError] = []
+
+        # 当前修复所需的状态
+        fixed_payload: Optional[Dict[str, Any]] = None
+        fixed_correlation_id: Optional[str] = None
+        fixed_timestamp: Optional[datetime] = None
+
+        # 步骤 1: 处理 schema 校验错误
+        for error in validation_result.errors:
+            field = error.field_path
+
+            # --- dimensions 嵌套 dict → 扁平 ---
+            if self._is_dimensions_nesting_error(error):
+                if fixed_payload is None:
+                    fixed_payload = dict(message.payload)
+                self._flatten_dimensions(fixed_payload, error)
+                fixes_applied.append(f"dimensions_flattened: {field}")
+
+            # --- 不可修复（payload 为空、必填字段缺失等） ---
+            else:
+                unfixable_errors.append(error)
+
+        # 步骤 2: 如果有不可修复的 schema 错误 → 放弃修复
+        if unfixable_errors:
+            logger.info(
+                "auto_fix 放弃: %d 个不可修复错误 (如 %s)",
+                len(unfixable_errors),
+                unfixable_errors[0].field_path,
+            )
+            return None
+
+        # 步骤 3: 主动检查消息 envelope 级别的可修复问题
+        # (这些不会被 JSON Schema 校验覆盖，即使 validation_result 无错误也要检查)
+
+        # correlation_id 缺失检查（仅响应消息）
+        if (
+            isinstance(message.task_type, TaskType)
+            and message.task_type.is_response()
+            and not message.correlation_id
+        ):
+            fixed_correlation_id = str(uuid_mod.uuid4())
+            fixes_applied.append("correlation_id_auto_generated")
+            logger.warning(
+                "auto_fix: message=%s correlation_id 已自动生成 UUID v4",
+                message.message_id,
+            )
+
+        # timestamp 超出容差检查
+        now = datetime.now(timezone.utc)
+        ts = message.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        diff = abs(now - ts)
+        if diff > TIMESTAMP_TOLERANCE:
+            fixed_timestamp = now
+            fixes_applied.append("timestamp_corrected_to_utc_now")
+            logger.warning(
+                "auto_fix: message=%s timestamp 偏差 %.0fs 已修正",
+                message.message_id,
+                diff.total_seconds(),
+            )
+
+        # 没有应用任何修复 → 无需返回新消息
+        if not fixes_applied:
+            return None
+
+        # 构建修复后的新消息
+        new_payload = fixed_payload if fixed_payload is not None else dict(message.payload)
+        new_correlation_id = (
+            fixed_correlation_id
+            if fixed_correlation_id is not None
+            else message.correlation_id
+        )
+        new_timestamp = (
+            fixed_timestamp if fixed_timestamp is not None else message.timestamp
+        )
+
+        fixed_message = AgentMessage(
+            message_id=message.message_id,
+            sender=message.sender,
+            receiver=message.receiver,
+            task_type=message.task_type,
+            payload=new_payload,
+            timestamp=new_timestamp,
+            protocol_version=message.protocol_version,
+            correlation_id=new_correlation_id,
+            _auto_fixed=fixes_applied,
+        )
+
+        # 二次校验：修复后的消息必须通过 MessageValidator
+        re_validation = self.validate(fixed_message)
+        if not re_validation.valid:
+            logger.warning(
+                "auto_fix 修复后消息仍未通过二次校验: %s",
+                [e.message for e in re_validation.errors],
+            )
+            return None
+
+        logger.info(
+            "auto_fix 成功修复 %d 项: %s",
+            len(fixes_applied),
+            fixes_applied,
+        )
+        return fixed_message
+
+    # ----------------------------------------------------------
+    # auto_fix 辅助方法
+    # ----------------------------------------------------------
+
+    @staticmethod
+    def _is_dimensions_nesting_error(error: SchemaError) -> bool:
+        """判断 SchemaError 是否为 dimensions 嵌套 dict 问题。
+
+        特征: field_path 包含 'dimensions'，actual 为 'object' 类型描述，
+        expected 为 'number' 或 'integer'。
+        """
+        return (
+            "dimensions" in error.field_path
+            and ("object" in error.actual.lower() or "keys" in error.actual.lower())
+            and ("number" in error.expected.lower() or "integer" in error.expected.lower())
+        )
+
+    @staticmethod
+    def _flatten_dimensions(payload: Dict[str, Any], error: SchemaError) -> None:
+        """将 payload 中嵌套的 dimensions dict 扁平化。
+
+        例如: {"completeness": {"score": 5.0, "weight": 0.25}}
+           →  {"completeness": 5.0}
+
+        Args:
+            payload: 待修改的 payload 字典（原地修改）。
+            error: 关联的 SchemaError（用于定位字段路径）。
+        """
+        field_path = error.field_path
+        # field_path 格式: 'payload.dimensions.completeness'
+        # 我们需要定位到 'dimensions' → 然后在 dimensions 下扁平化
+        parts = field_path.split(".")
+
+        # 找到 dimensions 在 payload 中的位置
+        current: Any = payload
+        for i, part in enumerate(parts):
+            if part == "payload":
+                continue
+            if part == "dimensions":
+                # current 应该是包含 dimensions 的 dict
+                if isinstance(current, dict) and "dimensions" in current:
+                    dims = current["dimensions"]
+                    if isinstance(dims, dict):
+                        for key, value in dims.items():
+                            if isinstance(value, dict) and "score" in value:
+                                dims[key] = value["score"]
+                return
+            if isinstance(current, dict):
+                current = current.get(part)
+                if current is None:
+                    return
+            else:
+                return
+
     def register_schema(self, task_type: TaskType, schema: dict) -> None:
         """注册消息类型对应的 JSON Schema。
 

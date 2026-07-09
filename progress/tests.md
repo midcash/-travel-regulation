@@ -35,7 +35,8 @@
 | `test_ablation.py` | ~15 | 已完成 |
 | `test_api_integration.py` | 75 | Batch 5 新建 |
 | `test_real_cases.py` | 14 | Batch 6 新建 |
-| **总计** | **~692** | **654 passed, 22 deselected (2026-07-09 默认测试，slow 跳过)** |
+| `test_message_validator.py` | 12 | P3 新建 — MessageValidator.auto_fix() 单元测试 |
+| **总计** | **~704** | **666 passed, 22 deselected (2026-07-09 P3 完成)** |
 
 ---
 
@@ -56,3 +57,4 @@
 | 2026-07-06 | Batch 6: test_real_cases.py | 已完成 | 5真实城市端到端 (14 tests) |
 | 2026-07-06 | Batch 7: 桥接适配 | 已完成 | version 1.1.0 + degraded 宽松断言, 661 passed 0 regressions |
 | 2026-07-09 | v1.2.0 R4: StructuredFeedback 测试 | 已完成 | 复用现有测试文件新增 5 个用例；默认全套 654 passed, 22 deselected |
+| 2026-07-09 | v1.2.0 P3: ErrorRecovery 测试 | 已完成 | test_message.py 适配 (validate 返回类型变更) + test_message_validator.py 新建 (12 tests)；默认全套 666 passed, 22 deselected |
