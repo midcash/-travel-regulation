@@ -672,7 +672,8 @@ class Orchestrator(BaseAgent):
         # Gate 1
         self._context.set_status(ContextStatus.GATE_1)
         gate1 = self.manage_quality_gate(1, current_validation)
-        if not gate1.passed:
+        gate1_passed = gate1.passed
+        if not gate1_passed:
             self._log("WARNING", f"Gate 1 未通过: {len(gate1.blocking_issues)} 个阻断问题")
 
         # Phase 3: Evaluation + 修订循环
@@ -687,6 +688,24 @@ class Orchestrator(BaseAgent):
             self._context.increment_iteration()
 
             if gate2.passed and not gate2.degraded:
+                if not gate1_passed and iteration == 1:
+                    # Gate 1 有阻断问题但 Gate 2 评分通过 → 强制修订一次
+                    self._log("INFO", f"Gate 2 通过 (第{iteration}轮)，但 Gate 1 有 {len(gate1.blocking_issues)} 个阻断问题，强制修订")
+                    self._context.set_status(ContextStatus.REVISING)
+                    current_draft = await self._call_revision(
+                        current_draft, current_validation, current_quality
+                    )
+                    self._context.set_current_draft(current_draft)
+                    self._context.set_status(ContextStatus.WAITING_PLANNER)
+                    current_validation = await self._call_execution_agent(current_draft, request)
+                    self._context.set_validation_report(current_validation)
+                    self._context.set_status(ContextStatus.WAITING_EXECUTOR)
+                    self._context.set_status(ContextStatus.GATE_1)
+                    gate1 = self.manage_quality_gate(1, current_validation)
+                    gate1_passed = gate1.passed
+                    if not gate1_passed:
+                        self._log("WARNING", f"修订后 Gate 1 仍不通过: {len(gate1.blocking_issues)} 个阻断问题")
+                    continue
                 self._log("INFO", f"Gate 2 通过 (第{iteration}轮)")
                 break
             elif gate2.degraded:

@@ -32,6 +32,9 @@ class IssueType(Enum):
     DUPLICATE_ATTRACTION = "duplicate_attraction"
     """同一景点在多个天次重复出现。"""
 
+    DUPLICATE_RESTAURANT = "duplicate_restaurant"
+    """同一餐厅在多个天次重复出现。"""
+
     MISSING_MEAL = "missing_meal"
     """某天缺少推荐的餐食（不足 2 餐）。"""
 

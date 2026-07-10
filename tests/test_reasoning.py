@@ -375,6 +375,72 @@ class TestSelfChecker:
         assert len(meal_issues) >= 1
         assert meal_issues[0].severity == "warning"
 
+    def test_check_restaurant_duplication_blocking(self, sample_request):
+        """同一餐厅跨天重复 → blocking (v1.2.1 P0 修复)。"""
+        shared_restaurant = "陈麻婆豆腐"
+        day1 = ItineraryDay(day=1, activities=[
+            _make_activity("大熊猫基地", "nature", 55, 30.73, 104.14),
+            _make_activity("宽窄巷子", "food", 100, 30.67, 104.05),
+        ], meals={
+            "lunch": _make_meal("lunch", shared_restaurant, 75),
+            "dinner": _make_meal("dinner", "蜀九香火锅", 120),
+        })
+        day2 = ItineraryDay(day=2, activities=[
+            _make_activity("文殊院", "culture", 0, 30.68, 104.06),
+            _make_activity("太古里", "shopping", 100, 30.65, 104.08),
+        ], meals={
+            "lunch": _make_meal("lunch", shared_restaurant, 75),
+            "dinner": _make_meal("dinner", "玉林串串", 150),
+        })
+        draft = TravelPlanDraft(
+            draft_id=str(uuid.uuid4()),
+            destination={"city": "成都", "country": "中国"},
+            duration_days=2,
+            daily_itinerary=[day1, day2],
+            total_budget=3000,
+            budget_allocation=BudgetAllocation(
+                transportation=800, accommodation=900,
+                activities=500, meals=500, buffer=300,
+            ),
+        )
+        checker = SelfChecker()
+        result = checker.check(draft, sample_request)
+        dup_issues = [i for i in result.issues if i.type == IssueType.DUPLICATE_RESTAURANT]
+        assert len(dup_issues) >= 1
+        assert shared_restaurant in dup_issues[0].location
+
+    def test_check_no_restaurant_duplication_passes(self, sample_request):
+        """不同餐厅 → 不产生重复违规。"""
+        day1 = ItineraryDay(day=1, activities=[
+            _make_activity("大熊猫基地", "nature", 55, 30.73, 104.14),
+            _make_activity("宽窄巷子", "food", 100, 30.67, 104.05),
+        ], meals={
+            "lunch": _make_meal("lunch", "陈麻婆豆腐", 75),
+            "dinner": _make_meal("dinner", "蜀九香火锅", 120),
+        })
+        day2 = ItineraryDay(day=2, activities=[
+            _make_activity("文殊院", "culture", 0, 30.68, 104.06),
+            _make_activity("太古里", "shopping", 100, 30.65, 104.08),
+        ], meals={
+            "lunch": _make_meal("lunch", "龙抄手", 30),
+            "dinner": _make_meal("dinner", "玉林串串", 150),
+        })
+        draft = TravelPlanDraft(
+            draft_id=str(uuid.uuid4()),
+            destination={"city": "成都", "country": "中国"},
+            duration_days=2,
+            daily_itinerary=[day1, day2],
+            total_budget=3000,
+            budget_allocation=BudgetAllocation(
+                transportation=800, accommodation=900,
+                activities=500, meals=500, buffer=300,
+            ),
+        )
+        checker = SelfChecker()
+        result = checker.check(draft, sample_request)
+        dup_issues = [i for i in result.issues if i.type == IssueType.DUPLICATE_RESTAURANT]
+        assert len(dup_issues) == 0
+
     def test_check_excluded_type_blocking(self, request_with_excluded):
         """推荐了 excluded_types 中的类型 → blocking。"""
         day = ItineraryDay(day=1, activities=[

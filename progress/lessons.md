@@ -166,6 +166,7 @@
 | 2026-07-07 | Batch 8 (v1.2.0 评估体系升级) | — | — | 0 |
 | 2026-07-09 | Batch 9 (v1.2.0 Reasoning + Protocol 实现) | 6 | 6 | 0 |
 | 2026-07-09 | Batch 10 (v1.2.0 I1+I2 收尾) | 4 | 4 | 0 |
+| 2026-07-10 | Batch 11 (v1.2.1 P0 修复: SelfCheck餐厅重复检测 + Gate1修订回路) | 2 | 2 | 0 |
 
 ---
 
@@ -385,3 +386,25 @@
 | 2026-07-06 | 新增 Phase 5 全部 9 个问题（API Provider 切换: DeepSeek 1 + config 2 + 途牛 3 + 高德 1 + 测试 1 + 飞猪探索 1），commit 列 = `待提交` |
 | 2026-07-06 | 新增 Batch 7 全部 5 个问题（Orchestrator → Agent 桥接: dimensions规范化 + 状态转换链 + degraded断言），commit hash = `035c2d4` |
 | 2026-07-09 | 新增 R4 StructuredFeedback 2 条经验（Code/Test Agent），commit hash = `98e27e6` |
+
+## Batch 11: v1.2.1 P0 修复 — SelfCheck 餐厅重复检测 + Gate 1 修订回路
+
+> 日期: 2026-07-10 | 产出: 2 项修复, 741 passed, 0 regressions
+
+### core/self_check.py (P0-1: 新增餐厅重复检测)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-10 | 8810f0b | Code Agent | 边界遗漏 | `_check_duplication()` 仅检查 `day.activities` 中的景点名称重复，不检查 `day.meals` 中的 `restaurant_name`。成都 e2e 实测发现 v1.2.0 产出的行程中"陈麻婆豆腐总店"在 Day1+Day2 lunch 均出现，未触发任何 SelfCheck 违规。IssueType 枚举中只有 DUPLICATE_ATTRACTION，无餐厅级重复类型 | 新增 `IssueType.DUPLICATE_RESTAURANT`；新增 `_check_restaurant_duplication()` 独立方法，收集全部天次 meal.restaurant_name，跨天重复产生 blocking 级违规；接入 `check()` 方法 | 规则引擎的检查范围应与 e2e 实测中发现的实际问题对齐；每类业务对象（景点/餐厅/住宿）都应有独立的重复检测 |
+| 2026-07-10 | 8810f0b | Code Agent | 设计权衡 | 餐厅重复检测是否应该 blocking？对于高端定制游（用户特意要求同一餐厅），跨天重复是合理的。但默认行程不应推荐同一餐厅两次——缺乏选择多样性 | severity 设为 blocking，但阈值预留浮动：只有当同一餐厅名完全一致时才触发（考虑"陈麻婆豆腐（骡马市店）"vs"陈麻婆豆腐（总店）"是不同分店，不会被检测为重复） | 规则检查的粒度（全名匹配 vs 模糊匹配）决定了误报率；先从严（全名匹配），根据实际反馈调宽 |
+
+### agents/orchestrator.py (P0-2: Gate 1 阻断问题强制修订)
+
+| 日期 | commit | 来源Agent | 类型 | 问题描述 | 解决方案 | 预防措施 |
+|------|--------|----------|------|---------|---------|---------|
+| 2026-07-10 | 8810f0b | Code Agent | Pipeline问题 | `_run_planning_cycle()` 中 Gate 1 检出阻断问题后仅打 WARNING 日志，Gate 2 若 score≥80 直接 break，Gate 1 问题从未传入修订回路。成都 e2e 两者均报 "Gate 1 未通过: 1 个阻断问题" 但迭代轮次=1 且 feasibility 始终=3。`_call_revision()` 已通过 `_feedback_from_validation()` 提取 Gate 1 问题，但从未被触发 | 在 Gate 2 passed 判断中增加条件：若 `!gate1_passed && iteration==1`，强制走一次修订。修订后重新跑 Execution→Gate 1 检查，仅在第 2 轮不再强制（防死循环）。`_call_revision` 已有 validation→RevisionFeedback 转换逻辑，无需修改 | 质量门之间的状态转换路径必须完整覆盖"门通过但前置门不通过"的组合；仅打日志不构成闭环——每个 WARNING 都应有对应的 action |
+| 2026-07-10 | 8810f0b | Code Agent | 设计权衡 | 修订后 Gate 1 可能仍不通过（成都 e2e 实测：修订后"Gate 1 仍不通过: 1 个阻断问题"）。此时第 2 轮不再强制修订——需要后续排查阻断问题的具体类型 | 第 2 轮正常 exit + 记录日志；不无限重试 | 修订回路应有收敛边界：强行修订最多 1 次，若问题无法通过修订修复，标记为"已知未解决"供下一版本排查 |
+
+### 跨模块问题
+
+无新问题。

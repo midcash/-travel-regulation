@@ -96,6 +96,7 @@ class SelfChecker:
         issues.extend(self._check_budget(draft, request))
         issues.extend(self._check_geo(draft, request))
         issues.extend(self._check_duplication(draft, request))
+        issues.extend(self._check_restaurant_duplication(draft, request))
         issues.extend(self._check_completeness(draft, request))
         issues.extend(self._check_constraints(draft, request))
 
@@ -220,6 +221,49 @@ class SelfChecker:
                     SelfCheckIssue(
                         type=IssueType.DUPLICATE_ATTRACTION,
                         location=f"景点 '{name}'",
+                        actual_value=f"出现于第{', '.join(str(d) for d in days_list)}天",
+                        expected="不重复",
+                        severity="blocking",
+                    )
+                )
+
+        return issues
+
+    # ============================================================
+    # 检查 3b: 餐厅重复检查 (blocking)
+    # ============================================================
+
+    def _check_restaurant_duplication(
+        self, draft: TravelPlanDraft, request: StructuredRequest
+    ) -> List[SelfCheckIssue]:
+        """同一餐厅不出现超过 1 天。
+
+        收集全部天次的 meal.restaurant_name，
+        发现跨天重复即产生 blocking 级违规。
+        餐厅名称为空时跳过。
+        """
+        issues: List[SelfCheckIssue] = []
+        # restaurant_name → list of day numbers
+        name_to_days: Dict[str, List[int]] = {}
+
+        for day in draft.daily_itinerary:
+            for meal in day.meals.values():
+                if meal is None:
+                    continue
+                name = getattr(meal, "restaurant_name", "")
+                if not name or not name.strip():
+                    continue
+                name = name.strip()
+                if name not in name_to_days:
+                    name_to_days[name] = []
+                name_to_days[name].append(day.day)
+
+        for name, days_list in name_to_days.items():
+            if len(days_list) > 1:
+                issues.append(
+                    SelfCheckIssue(
+                        type=IssueType.DUPLICATE_RESTAURANT,
+                        location=f"餐厅 '{name}'",
                         actual_value=f"出现于第{', '.join(str(d) for d in days_list)}天",
                         expected="不重复",
                         severity="blocking",
