@@ -1,0 +1,123 @@
+import json
+from llm_client import ask_llm
+
+AGENTS = {
+    "planner":    "行程规划 — 根据需求生成旅行方案",
+    "executor":   "可行性验证 — 检查价格/时间/地理逻辑",
+    "evaluator":  "质量评估 — 对方案评分(0-100)并给出改进建议",
+}
+
+def call_agent(agent_name: str, input_text: str) -> str:
+    """模拟调用业务 Agent，返回结构化的假数据"""
+    if agent_name == "user":
+        return json.dumps({
+            "destination": "上海",
+            "duration": "2天",
+            "budget": 3000,
+            "preferences": ["历史文化", "美食"]
+        }, ensure_ascii=False)
+
+    elif agent_name == "planner":
+        return json.dumps({
+            "plan": {
+                "day1": [
+                    {"time": "08:00", "activity": "高铁出发", "cost": 553},
+                    {"time": "12:00", "activity": "到达上海，入住酒店", "cost": 300},
+                    {"time": "14:00", "activity": "外滩游览", "cost": 0},
+                    {"time": "18:00", "activity": "南京路晚餐", "cost": 100}
+                ],
+                "day2": [
+                    {"time": "09:00", "activity": "上海博物馆", "cost": 0},
+                    {"time": "13:00", "activity": "豫园+午餐", "cost": 80},
+                    {"time": "16:00", "activity": "高铁返回", "cost": 553}
+                ]
+            },
+            "total_cost": 1586
+        }, ensure_ascii=False)
+
+    elif agent_name == "executor":
+        return json.dumps({
+            "feasible": True,
+            "issues": [],
+            "notes": "时间安排合理，预算在范围内，地理路线连贯"
+        }, ensure_ascii=False)
+
+    elif agent_name == "evaluator":
+        return json.dumps({
+            "score": 85,
+            "strengths": ["行程紧凑但不紧张", "预算控制良好"],
+            "suggestions": ["可以增加一个上海本地特色小吃推荐"]
+        }, ensure_ascii=False)
+
+    else:
+        return json.dumps({"error": f"未知 agent: {agent_name}"})
+
+def run(user_input):
+    ctx = f"用户需求: {user_input}"
+    agents_desc = "\n".join(f"- {k}: {v}" for k, v in AGENTS.items())
+
+    for step in range(1, 6):
+        print(f"\n{'='*50}")
+        print(f"[STEP {step}]")
+        print(f"{'='*50}")
+
+        prompt = (
+            f"""你是一个行程规划的主控 Agent，正在为一位真实用户规划行程。
+
+            ## 用户原始需求（这是唯一的需求来源，禁止猜测或假设其他需求）
+            {ctx}
+            
+            ## 当前已完成的步骤
+            {json.dumps(ctx, ensure_ascii=False, indent=2)}
+            
+            ## 你的任务
+            根据用户原始需求，决定下一步动作。严格按以下 JSON 格式输出，不要输出任何其他文字：
+            {{
+                "action": "call_agent" | "ask_user" | "finish",
+                "agent": "planner"/"executor"/"evaluator",   // 只能从这 3 个中选择
+                "input": "传给该 agent 的详细指令，必须基于用户原始需求",
+                "message": "给用户的说明（仅在 ask_user 或 finish 时需要）"
+            }}
+            
+            ## 完成标准
+            当你确认已经完成 planner → executor → evaluator 的调用，且 evaluator 评分 ≥70 分时，才能输出 action=finish。
+            禁止跳过任何一步。即使你凭经验认为方案可行，也必须让 executor 和 evaluator 验证。
+            **finish 的 message 必须包含 planner 生成的完整每日行程详情，格式为：**
+            Day1: 活动1, 活动2...
+            Day2: 活动1, 活动2...
+            然后才是评价和总结。
+            如果评分 <70，则再次调用 planner 修改方案。
+            
+            ## 铁律（违反将导致解析失败）
+            - 你必须只输出一行纯 JSON，不要包含任何其他文字、解释、markdown 标记、代码块符号。
+            - 如果你的思考过程需要表达，请直接融入 JSON 的字段中（如 message 字段），不要写在 JSON 之外。
+            """
+        )
+
+        raw = ask_llm(prompt)
+        print(f"[DECISION] {raw}")
+        try:
+            d = json.loads(raw)
+        except json.JSONDecodeError:
+            print(f"[ERROR] JSON 解析失败")
+            break
+
+        action = d.get("action", "")
+        if action == "call_agent":
+            a, inp = d["agent"], d["input"]
+            print(f"[CALL] agent={a} input={inp}")
+            res = call_agent(a, inp)
+            print(f"[RESULT] {res}")
+            ctx += f"\n{a}返回: {res}"
+        elif action == "ask_user":
+            print(f"[ASK] {d['message']}")
+            ctx += f"\n已问用户: {d['message']}\n用户回答: (确认)"
+        elif action == "finish":
+            print(f"[FINISH] {d.get('message', '完成')}")
+            return d.get("message", "完成")
+        else:
+            print(f"[ERROR] 未知 action: {action}")
+            break
+
+    print(f"\n[FINISH] 达到最大步数({step}/5)")
+    return "达到最大步数"
