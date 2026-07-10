@@ -47,6 +47,11 @@ from core.orchestration_engine import (
     TaskDAG,
     TaskStatus,
 )
+from core.task_decomposer import (
+    TaskDecomposer,
+    _check_cycles,
+    _check_orphans,
+)
 from core.llm_client import (
     DEFAULT_MODEL,
     ENV_API_KEY,
@@ -82,6 +87,7 @@ __all__ = [
     "RetryManager",
     "ResultAssembler",
     "GateRunner",
+    "TaskDecomposer",
     # Gate 相关
     "BlockingIssue",
     "GateResult",
@@ -112,4 +118,7 @@ __all__ = [
     "ENV_API_KEY",
     # LLM 客户端
     "LLMClient",
+    # 校验函数
+    "_check_cycles",
+    "_check_orphans",
 ]

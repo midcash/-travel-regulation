@@ -43,6 +43,7 @@ from core.orchestration_engine import (
     TaskStatus,
 )
 from core.llm_client import LLMClient
+from core.task_decomposer import TaskDecomposer
 from models.request import (
     Budget,
     DateRange,
@@ -154,6 +155,11 @@ class Orchestrator(BaseAgent):
         self._execution_agent = None   # 懒加载
         self._evaluation_agent = None  # 懒加载
         self._agents_initialized = False
+
+        # v1.3.0: LLM 驱动的动态编排
+        self._task_decomposer = TaskDecomposer(self._llm_client)
+        self._dynamic_orchestration = True  # 启用 LLM 动态决策模式
+        self._previous_quality_score: Optional[float] = None  # Gate 2 趋势追踪
 
     # -- BaseAgent 抽象属性/方法 --
     @property
@@ -395,7 +401,7 @@ class Orchestrator(BaseAgent):
 
         # Step 3: 分解任务
         self._context.set_status(ContextStatus.DECOMPOSING)
-        task_dag = self.decompose_task(request)
+        task_dag = await self.decompose_task(request)
         self._context.set_task_queue({"tasks": [t.task_id for t in task_dag.get_all_tasks()]})
         self._log("INFO", f"任务分解完成: {task_dag.task_count} 个任务")
 
@@ -445,16 +451,12 @@ class Orchestrator(BaseAgent):
             request_id=str(uuid4()),
         )
 
-    def decompose_task(self, request: StructuredRequest) -> TaskDAG:
+    async def decompose_task(self, request: StructuredRequest) -> TaskDAG:
         """分解用户需求为原子任务 DAG。
 
-        标准 4 任务分解:
-        T1: 交通方案 (无依赖)
-        T2: 住宿方案 (无依赖)
-        T3: 每日行程 (依赖 T1, T2)
-        T4: 预算分配 (依赖 T1, T2, T3)
+        v1.3.0: LLM 动态分解 (含 fallback 到硬编码 T1-T4)。
         """
-        return self._assembler.build_task_queue(request.to_dict())
+        return await self._task_decomposer.decompose(request.to_dict())
 
     def route_task(self, task: Task) -> Optional[str]:
         """为任务解析目标 Agent。
@@ -510,8 +512,39 @@ class Orchestrator(BaseAgent):
                     "blocking_issues", [])],
             )
 
+    # -- LLM 动态编排 prompt --
+    _DECIDE_NEXT_PROMPT = """你是一个旅行规划多Agent编排器。你的任务是每一步选择最合适的操作，驱动3个专业Agent协作完成旅行方案。
+
+## 当前运行时状态
+{context_summary}
+
+## 可用操作
+- CALL_PLANNING: 调用 Planning Agent 生成或修订行程草稿
+- CALL_EXECUTION: 调用 Execution Agent 验证行程可行性 (价格/时间/地理/约束)
+- CALL_EVALUATION: 调用 Evaluation Agent 评估方案质量 (0-100分)
+- CALL_REVISION: 根据评估反馈让 Planning Agent 修订行程
+- RUN_GATE_2: 执行质量门判定 (需要 quality_report 存在)
+- ASSEMBLE: 所有检查通过，整合最终方案输出
+- STOP: 因错误或不可修复缺陷终止流程
+
+## 编排规则
+1. 首次必须 CALL_PLANNING (如果 planning_done=false)
+2. Planning 后通常应 CALL_EXECUTION 验证可行性
+3. Execution 后通常应 CALL_EVALUATION 评估质量
+4. Evaluation 后应 RUN_GATE_2 判定
+5. Gate 2 未通过且未达最大迭代 → CALL_REVISION
+6. Gate 2 通过 → ASSEMBLE
+7. 最多3轮 Evaluation → Revision 循环
+8. 遇到不可恢复错误时 STOP
+
+## 输出格式
+严格输出 JSON: {{"action": "<操作名>", "reason": "<一句话理由>"}}
+"""
+
     def handle_revision(self, quality_report: Dict[str, Any]) -> str:
         """决定修订策略。
+
+        v1.3.0: LLM 可用时委托给 _decide_next_step 做 nuanced 判断。
 
         Returns:
             "APPROVE" | "REVISE" | "DEGRADE"
@@ -519,12 +552,74 @@ class Orchestrator(BaseAgent):
         composite = quality_report.get("composite_score", 0)
         iteration = self._context.get_iteration_count() + 1
 
+        # 硬安全网
+        if composite < 60:
+            return "DEGRADE"
+        if iteration >= 3:
+            return "DEGRADE"
         if composite >= 80:
             return "APPROVE"
-        elif iteration >= 3:
-            return "DEGRADE"
-        else:
-            return "REVISE"
+
+        # 60-79 区间: 偏向 REVISE
+        return "REVISE"
+
+    async def _decide_next_step(self, context_summary: str) -> Dict[str, str]:
+        """LLM 驱动的动态决策 — 决定编排流程的下一步操作。
+
+        LLM 不可用时返回默认下一步。
+
+        Args:
+            context_summary: 当前 SharedContext 的文本摘要。
+
+        Returns:
+            {{"action": "CALL_PLANNING", "reason": "..."}}
+        """
+        if not self._dynamic_orchestration or not self._llm_client.available:
+            return {"action": "CONTINUE_FIXED", "reason": "LLM 不可用，走固定流程"}
+
+        try:
+            result = await self._llm_client.generate(
+                system_prompt=self._DECIDE_NEXT_PROMPT.format(
+                    context_summary=context_summary,
+                ),
+                user_prompt="请根据当前状态决定下一步操作并输出 JSON。",
+            )
+            return {
+                "action": result.get("action", "CONTINUE_FIXED"),
+                "reason": result.get("reason", "LLM 未提供理由"),
+            }
+        except Exception:
+            return {"action": "CONTINUE_FIXED", "reason": "LLM 决策失败，走固定流程"}
+
+    def _build_context_summary(self) -> str:
+        """构建当前 SharedContext 的文本摘要，供 LLM 决策使用。"""
+        status = self._context.get_status()
+        iteration = self._context.get_iteration_count()
+        draft = self._context.get_current_draft()
+        validation = self._context.get_validation_report()
+        quality = self._context.get_quality_report()
+
+        lines = [
+            f"流水线状态: {status.value}",
+            f"当前迭代: {iteration}/3",
+        ]
+
+        if draft:
+            dest = draft.get("destination", "未知")
+            days = draft.get("duration_days", 0)
+            lines.append(f"行程草稿: 目的地={dest}, {days}天")
+
+        if validation:
+            v_status = validation.get("overall_status", "unknown")
+            blocking = validation.get("summary", {}).get("blocking_count", 0)
+            lines.append(f"可行性验证: {v_status}, {blocking} 个阻断问题")
+
+        if quality:
+            score = quality.get("composite_score", 0)
+            verdict = quality.get("verdict", "unknown")
+            lines.append(f"质量评估: {score}/100, {verdict}")
+
+        return "\n".join(lines)
 
     # ============================================================
     # 内部辅助方法 — 解析
@@ -645,9 +740,176 @@ class Orchestrator(BaseAgent):
     async def _run_planning_cycle(
         self, request: StructuredRequest, task_dag: TaskDAG
     ) -> Dict[str, Any]:
-        """执行 Planning → Execution → Evaluation 的完整循环。
+        """执行编排循环。
 
-        最多 3 轮迭代，包含 Gate 1-3 检查。
+        v1.3.0: LLM 可用时走动态决策循环 (_run_dynamic_loop)，
+        LLM 不可用时走固定序列 (_run_fixed_sequence)。
+        """
+        if self._dynamic_orchestration and self._llm_client.available:
+            try:
+                result = await self._run_dynamic_loop(request, task_dag)
+                if result is not None:
+                    return result
+                self._log("WARNING", "LLM 动态循环未产出结果，fallback 到固定序列")
+            except Exception as exc:
+                self._log("ERROR", f"LLM 动态循环异常: {exc}，fallback 到固定序列")
+
+        return await self._run_fixed_sequence(request, task_dag)
+
+    # ----------------------------------------------------------
+    # 动态循环: LLM 驱动
+    # ----------------------------------------------------------
+
+    async def _run_dynamic_loop(
+        self, request: StructuredRequest, task_dag: TaskDAG
+    ) -> Optional[Dict[str, Any]]:
+        """LLM 驱动的动态执行循环。
+
+        每个循环迭代调用 _decide_next_step()，LLM 根据上下文决定:
+        - CALL_PLANNING / CALL_EXECUTION / CALL_EVALUATION: 调用对应 Agent
+        - RUN_GATE_2 / RUN_GATE_3: 执行质量门
+        - CALL_REVISION: 修订行程
+        - ASSEMBLE: 整合输出
+        - STOP: 终止 (出错或完成)
+
+        约束 (prompt 中注入):
+        - Planning → Execution → Evaluation 为推荐顺序
+        - Gate 2 失败最多 3 轮修订
+        - 首次必须从 Planning 开始
+        """
+        max_iterations = 3
+        current_draft: Optional[Dict[str, Any]] = None
+        current_validation: Optional[Dict[str, Any]] = None
+        current_quality: Optional[Dict[str, Any]] = None
+        iteration = 0
+        state: Dict[str, Any] = {
+            "phase": "init",
+            "planning_done": False,
+            "execution_done": False,
+            "evaluation_done": False,
+            "gate_2_passed": False,
+            "gate_3_passed": False,
+            "degraded": False,
+            "degraded_reason": None,
+        }
+
+        self._context.set_status(ContextStatus.DISPATCHING)
+
+        # 主循环 — LLM 决定每一步
+        while not self._is_terminal_state(state):
+            summary = self._build_runtime_summary(state, iteration, max_iterations)
+            decision = await self._decide_next_step(summary)
+
+            action = decision.get("action", "CONTINUE_FIXED")
+            if action == "CONTINUE_FIXED":
+                self._log("INFO", "LLM 返回 CONTINUE_FIXED，交还固定序列")
+                return None  # 触发 fallback
+
+            self._log("INFO", f"[LLM决策] {action}: {decision.get('reason', '')}")
+
+            if action == "CALL_PLANNING":
+                self._context.set_status(ContextStatus.WAITING_PLANNER)
+                current_draft = await self._call_planning_agent(request, task_dag)
+                self._context.set_current_draft(current_draft)
+                state["planning_done"] = True
+                state["phase"] = "planned"
+
+            elif action == "CALL_EXECUTION":
+                if current_draft is None:
+                    self._log("WARNING", "LLM 在无 draft 时尝试 CALL_EXECUTION，强制先 Planning")
+                    current_draft = await self._call_planning_agent(request, task_dag)
+                    self._context.set_current_draft(current_draft)
+                    state["planning_done"] = True
+                self._context.set_status(ContextStatus.WAITING_EXECUTOR)
+                current_validation = await self._call_execution_agent(current_draft, request)
+                self._context.set_validation_report(current_validation)
+                state["execution_done"] = True
+                state["phase"] = "executed"
+
+            elif action == "CALL_EVALUATION":
+                if current_draft is None or current_validation is None:
+                    self._log("WARNING", "LLM 在数据不全时尝试 CALL_EVALUATION，跳过")
+                    continue
+                self._context.set_status(ContextStatus.WAITING_EVALUATOR)
+                current_quality = await self._call_evaluation_agent(current_draft, current_validation)
+                self._context.set_quality_report(current_quality)
+                iteration += 1
+                self._context.increment_iteration()
+                state["evaluation_done"] = True
+                state["phase"] = "evaluated"
+
+            elif action == "RUN_GATE_2":
+                if current_quality is None:
+                    self._log("WARNING", "LLM 在无 quality 时尝试 RUN_GATE_2，跳过")
+                    continue
+                self._context.set_status(ContextStatus.DECIDING)
+                gate2 = await self._gate_runner.run_gate_2_llm(
+                    current_quality, iteration, self._llm_client,
+                    previous_score=self._previous_quality_score,
+                )
+                self._previous_quality_score = current_quality.get("composite_score")
+
+                if gate2.passed and not gate2.degraded:
+                    state["gate_2_passed"] = True
+                    state["phase"] = "gate2_passed"
+                elif gate2.degraded:
+                    state["gate_2_passed"] = True
+                    state["degraded"] = True
+                    state["degraded_reason"] = (
+                        f"第{iteration}轮评估未达标"
+                        f"({current_quality.get('composite_score', 0)}分)，降级输出"
+                    )
+                    state["phase"] = "degraded"
+                elif gate2.rejected:
+                    state["degraded"] = True
+                    state["degraded_reason"] = (
+                        f"第{iteration}轮评估被拒绝"
+                        f"(得分{current_quality.get('composite_score', 0)} < 60)"
+                    )
+                    state["phase"] = "rejected"
+
+            elif action == "CALL_REVISION":
+                if iteration >= max_iterations:
+                    state["degraded"] = True
+                    state["degraded_reason"] = f"已达最大迭代次数({max_iterations})，降级输出"
+                    state["phase"] = "degraded"
+                    continue
+                self._context.set_status(ContextStatus.REVISING)
+                current_draft = await self._call_revision(
+                    current_draft or {}, current_validation or {}, current_quality or {}
+                )
+                self._context.set_current_draft(current_draft)
+                # 修订后需重新 Execution + Evaluation
+                state["execution_done"] = False
+                state["evaluation_done"] = False
+                state["phase"] = "revised"
+
+            elif action == "ASSEMBLE":
+                state["phase"] = "assembling"
+                break  # 退出循环，进入组装阶段
+
+            elif action == "STOP":
+                state["degraded"] = True
+                state["degraded_reason"] = decision.get("reason", "LLM 决定终止")
+                state["phase"] = "stopped"
+                break
+
+        # -- 组装输出 --
+        return await self._assemble_and_gate3(
+            current_draft, current_validation, current_quality,
+            iteration, state["degraded"], state["degraded_reason"],
+        )
+
+    # ----------------------------------------------------------
+    # 固定序列: 原有硬编码流程 (fallback)
+    # ----------------------------------------------------------
+
+    async def _run_fixed_sequence(
+        self, request: StructuredRequest, task_dag: TaskDAG
+    ) -> Dict[str, Any]:
+        """原有固定序列 Planning → Execution → Evaluation (保留作为 fallback)。
+
+        入口时重置 context 状态以确保状态机不会冲突。
         """
         max_iterations = 3
         current_draft: Optional[Dict[str, Any]] = None
@@ -656,7 +918,9 @@ class Orchestrator(BaseAgent):
         degraded = False
         degraded_reason: Optional[str] = None
 
-        # 分发任务到 Planning Agent
+        # 重置流程状态以消解动态模式可能遗留的状态，同时保留业务数据
+        self._context._iteration_count = 0
+        self._context._status = ContextStatus.DECOMPOSING
         self._context.set_status(ContextStatus.DISPATCHING)
 
         # Phase 1: Planning
@@ -684,17 +948,18 @@ class Orchestrator(BaseAgent):
 
             # Gate 2
             self._context.set_status(ContextStatus.DECIDING)
-            gate2 = self.manage_quality_gate(2, current_quality)
+            gate2 = await self._gate_runner.run_gate_2_llm(
+                current_quality, iteration, self._llm_client,
+                previous_score=self._previous_quality_score,
+            ) if self._dynamic_orchestration else self.manage_quality_gate(2, current_quality)
+            self._previous_quality_score = current_quality.get("composite_score")
             self._context.increment_iteration()
 
             if gate2.passed and not gate2.degraded:
                 if not gate1_passed and iteration == 1:
-                    # Gate 1 有阻断问题但 Gate 2 评分通过 → 强制修订一次
                     self._log("INFO", f"Gate 2 通过 (第{iteration}轮)，但 Gate 1 有 {len(gate1.blocking_issues)} 个阻断问题，强制修订")
                     self._context.set_status(ContextStatus.REVISING)
-                    current_draft = await self._call_revision(
-                        current_draft, current_validation, current_quality
-                    )
+                    current_draft = await self._call_revision(current_draft, current_validation, current_quality)
                     self._context.set_current_draft(current_draft)
                     self._context.set_status(ContextStatus.WAITING_PLANNER)
                     current_validation = await self._call_execution_agent(current_draft, request)
@@ -703,58 +968,62 @@ class Orchestrator(BaseAgent):
                     self._context.set_status(ContextStatus.GATE_1)
                     gate1 = self.manage_quality_gate(1, current_validation)
                     gate1_passed = gate1.passed
-                    if not gate1_passed:
-                        self._log("WARNING", f"修订后 Gate 1 仍不通过: {len(gate1.blocking_issues)} 个阻断问题")
                     continue
                 self._log("INFO", f"Gate 2 通过 (第{iteration}轮)")
                 break
             elif gate2.degraded:
-                self._log("WARNING", f"Gate 2 降级通过 (第{iteration}轮)")
                 degraded = True
                 degraded_reason = f"第{iteration}轮评估未达标({current_quality.get('composite_score', 0)}分)，降级输出"
                 break
             elif gate2.rejected:
-                self._log("ERROR", f"Gate 2 拒绝 (第{iteration}轮): score < 60")
                 degraded = True
                 degraded_reason = f"第{iteration}轮评估被拒绝(得分{current_quality.get('composite_score', 0)} < 60)"
                 break
             else:
-                # 需要修订
                 if iteration < max_iterations:
                     self._log("INFO", f"Gate 2 需修订 (第{iteration}轮)")
                     self._context.set_status(ContextStatus.REVISING)
-                    current_draft = await self._call_revision(
-                        current_draft, current_validation, current_quality
-                    )
+                    current_draft = await self._call_revision(current_draft, current_validation, current_quality)
                     self._context.set_current_draft(current_draft)
-                    # 重新执行校验 (REVISING → WAITING_PLANNER → WAITING_EXECUTOR → GATE_1)
                     self._context.set_status(ContextStatus.WAITING_PLANNER)
                     current_validation = await self._call_execution_agent(current_draft, request)
                     self._context.set_validation_report(current_validation)
                     self._context.set_status(ContextStatus.WAITING_EXECUTOR)
                     self._context.set_status(ContextStatus.GATE_1)
                 else:
-                    self._log("WARNING", f"已达最大迭代次数({max_iterations})，降级输出")
                     degraded = True
                     degraded_reason = f"已达最大迭代次数({max_iterations})，部分质量指标未达标"
                     break
 
-        # Phase 4: 组装输出
+        return await self._assemble_and_gate3(
+            current_draft, current_validation, current_quality,
+            self._context.get_iteration_count(), degraded, degraded_reason,
+        )
+
+    # ----------------------------------------------------------
+    # 组装 + Gate 3 (两种模式共用)
+    # ----------------------------------------------------------
+
+    async def _assemble_and_gate3(
+        self,
+        draft: Optional[Dict[str, Any]],
+        validation: Optional[Dict[str, Any]],
+        quality: Optional[Dict[str, Any]],
+        iteration_count: int,
+        degraded: bool,
+        degraded_reason: Optional[str],
+    ) -> Dict[str, Any]:
+        """整合 Agent 产出 → Gate 3 → 最终方案。"""
         self._context.set_status(ContextStatus.ASSEMBLING)
         final_plan = self.assemble_plan(
-            draft=current_draft,
-            validation=current_validation,
-            quality=current_quality,
-            iteration_count=self._context.get_iteration_count(),
-            degraded=degraded,
+            draft=draft, validation=validation, quality=quality,
+            iteration_count=iteration_count, degraded=degraded,
             degraded_reason=degraded_reason,
         )
 
-        # Gate 3
         self._context.set_status(ContextStatus.GATE_3)
         gate3 = self.manage_quality_gate(3, final_plan)
         if not gate3.passed:
-            # 自动补全尝试
             final_plan = self._auto_fix_gate3(final_plan, gate3)
             gate3 = self.manage_quality_gate(3, final_plan)
             if not gate3.passed:
@@ -770,6 +1039,48 @@ class Orchestrator(BaseAgent):
             self._context.set_status(ContextStatus.COMPLETED)
 
         return final_plan
+
+    # ----------------------------------------------------------
+    # 动态循环辅助方法
+    # ----------------------------------------------------------
+
+    @staticmethod
+    def _is_terminal_state(state: Dict[str, Any]) -> bool:
+        """判断编排是否已到达终态。"""
+        return state.get("phase") in ("assembling", "degraded", "rejected", "stopped")
+
+    def _build_runtime_summary(
+        self, state: Dict[str, Any], iteration: int, max_iterations: int
+    ) -> str:
+        """构建运行时状态摘要，供 LLM 决策使用。"""
+        draft = self._context.get_current_draft()
+        validation = self._context.get_validation_report()
+        quality = self._context.get_quality_report()
+
+        lines = [
+            f"## 阶段: {state.get('phase', 'unknown')}",
+            f"Planning完成: {state.get('planning_done', False)}",
+            f"Execution完成: {state.get('execution_done', False)}",
+            f"Evaluation完成: {state.get('evaluation_done', False)}",
+            f"Gate2通过: {state.get('gate_2_passed', False)}",
+            f"当前迭代: {iteration}/{max_iterations}",
+        ]
+
+        if draft:
+            dest = draft.get("destination", "未知")
+            days = draft.get("duration_days", 0)
+            lines.append(f"行程草稿: 目的地={dest}, {days}天")
+
+        if validation:
+            lines.append(
+                f"可行性验证: {validation.get('overall_status', 'unknown')}, "
+                f"阻断={validation.get('summary', {}).get('blocking_count', 0)}"
+            )
+
+        if quality:
+            lines.append(f"质量评分: {quality.get('composite_score', 0)}/100")
+
+        return "\n".join(lines)
 
     # ============================================================
     # 子 Agent 调用 (stub/mock 实现)

@@ -160,7 +160,7 @@ class TestDecomposeTask:
             dates=DateRange(arrival="2026-12-20", departure="2026-12-25", duration_days=5),
             budget=Budget(total=15000),
         )
-        dag = orch.decompose_task(request)
+        dag = asyncio.run(orch.decompose_task(request))
         assert dag.task_count == 4
 
     def test_task_ids(self, orch):
@@ -169,7 +169,7 @@ class TestDecomposeTask:
             dates=DateRange(duration_days=5),
             budget=Budget(total=15000),
         )
-        dag = orch.decompose_task(request)
+        dag = asyncio.run(orch.decompose_task(request))
         task_ids = {t.task_id for t in dag.get_all_tasks()}
         assert "T1" in task_ids
         assert "T2" in task_ids
@@ -182,7 +182,7 @@ class TestDecomposeTask:
             dates=DateRange(duration_days=5),
             budget=Budget(total=15000),
         )
-        dag = orch.decompose_task(request)
+        dag = asyncio.run(orch.decompose_task(request))
         t1 = dag.get_task("T1")
         t2 = dag.get_task("T2")
         t3 = dag.get_task("T3")
@@ -198,7 +198,7 @@ class TestDecomposeTask:
             dates=DateRange(duration_days=5),
             budget=Budget(total=15000),
         )
-        dag = orch.decompose_task(request)
+        dag = asyncio.run(orch.decompose_task(request))
         order = dag.topological_order()
         assert len(order) == 4
 
@@ -208,7 +208,7 @@ class TestDecomposeTask:
             dates=DateRange(duration_days=5),
             budget=Budget(total=15000),
         )
-        dag = orch.decompose_task(request)
+        dag = asyncio.run(orch.decompose_task(request))
         for t in dag.get_all_tasks():
             assert t.task_type == TaskType.TASK_CREATE_ITINERARY
 

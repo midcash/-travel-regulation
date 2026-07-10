@@ -10,11 +10,14 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .context import ContextStatus, SharedContext
+
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # Gate 0 日期校验常量
@@ -115,6 +118,23 @@ class GateRunner:
     # -- Gate 2 评分阈值 --
     COMPOSITE_PASS = 80            # ≥ 80 通过
     COMPOSITE_REJECT = 60          # < 60 拒绝
+
+    # -- Gate 2 LLM prompt --
+    _GATE2_LLM_SYSTEM = """你是一个旅行方案质量评审专家。根据质量报告的详细内容，判断方案是否通过、需要修订还是被拒绝。
+
+## 判定规则
+1. 综合分 < 60 → 一律 REJECT (严重缺陷，修订无意义)
+2. 综合分 ≥ 80 且无结构性缺陷 → APPROVE
+3. 综合分 ≥ 80 但有维度 < 3 分 → 判断缺陷是否可通过修订修复
+4. 综合分 60-79 → 判断:
+   - 问题具体可修复 + 有改进趋势 → REVISE
+   - 问题是根本性的 (如虚假信息、结构性矛盾) → DEGRADE
+   - 已达最大迭代次数 → DEGRADE
+
+## 输出格式
+严格输出:
+{{"decision": "APPROVE|REVISE|DEGRADE|REJECT", "reason": "详细判定理由"}}
+"""
 
     def __init__(self, context: Optional[SharedContext] = None):
         self.context = context
@@ -450,6 +470,147 @@ class GateRunner:
             )],
             warnings=dim_warnings,
             revision_feedback=revision_text or f"综合得分 {composite_score} 未达标",
+        )
+        self.gate_log.append(result)
+        return result
+
+    # ============================================================
+    # Gate 2 LLM 模式 — LLM 驱动的 nuanced 质量判定
+    # ============================================================
+
+    async def run_gate_2_llm(
+        self,
+        quality_report: Dict[str, Any],
+        iteration: int,
+        llm_client: Any,
+        previous_score: Optional[float] = None,
+    ) -> GateResult:
+        """LLM 驱动的 Gate 2 质量评审。
+
+        在硬编码阈值基础上，让 LLM 根据质量报告的语义内容做出更细致的判定。
+        硬编码阈值仍作为安全网: score < 60 必定 REJECT。
+
+        Args:
+            quality_report: PlanQualityReport 字典。
+            iteration: 当前迭代轮次 (1-based)。
+            llm_client: LLM 客户端 (需有 generate() 方法)。
+            previous_score: 上一轮评分 (用于判断趋势)，None 表示首轮。
+
+        Returns:
+            GateResult — 含 passed/degraded/rejected 三态判定。
+        """
+        composite_score = quality_report.get("composite_score", 0)
+
+        # === 硬安全网: score < 60 必定 REJECT ===
+        if composite_score < self.COMPOSITE_REJECT:
+            result = GateResult(
+                gate_id=2,
+                passed=False,
+                rejected=True,
+                blocking_issues=[BlockingIssue(
+                    description=f"综合得分 {composite_score} < 60 (硬安全网)，严重缺陷",
+                )],
+            )
+            self.gate_log.append(result)
+            return result
+
+        # === 尝试 LLM 判定 ===
+        llm_ok = llm_client is not None and getattr(llm_client, "available", False)
+        if llm_ok:
+            try:
+                return await self._llm_gate2_decide(
+                    quality_report, iteration, llm_client, previous_score
+                )
+            except Exception:
+                logger.warning("Gate 2 LLM 判定失败，fallback 到硬编码阈值")
+
+        # === Fallback: 硬编码阈值判定 ===
+        return self.run_gate_2(quality_report, iteration)
+
+    async def _llm_gate2_decide(
+        self,
+        quality_report: Dict[str, Any],
+        iteration: int,
+        llm_client: Any,
+        previous_score: Optional[float],
+    ) -> GateResult:
+        """通过 LLM 做出 Gate 2  nuanced 判定。"""
+        composite_score = quality_report.get("composite_score", 0)
+        dimensions = quality_report.get("dimensions", {})
+
+        dim_lines = []
+        dim_warnings: List[Warning_] = []
+        for name in ("completeness", "feasibility", "constraint_satisfaction",
+                      "experience_quality", "information_accuracy"):
+            score = dimensions.get(name, 0)
+            dim_lines.append(f"- {name}: {score}/5")
+            if score < self.DIMENSION_THRESHOLD:
+                dim_warnings.append(Warning_(
+                    description=f"维度 {name} 得分 {score} < {self.DIMENSION_THRESHOLD}",
+                    constraint=f"dimension.{name}.threshold",
+                ))
+
+        trend_text = ""
+        if previous_score is not None:
+            delta = composite_score - previous_score
+            trend_text = f"上一轮评分: {previous_score}, 变化: {'+' if delta >= 0 else ''}{delta:.1f}\n"
+
+        user_prompt = (
+            f"## 质量报告\n"
+            f"综合评分: {composite_score}/100\n"
+            f"当前迭代: 第 {iteration} 轮\n"
+            f"{trend_text}"
+            f"## 维度得分\n"
+            + "\n".join(dim_lines) + "\n\n"
+            f"## 修订反馈\n"
+            f"{quality_report.get('revision_feedback', '无')}\n\n"
+            f"请根据判定规则输出 JSON。"
+        )
+
+        llm_output = await llm_client.generate(
+            system_prompt=self._GATE2_LLM_SYSTEM,
+            user_prompt=user_prompt,
+        )
+
+        decision = llm_output.get("decision", "DEGRADE").upper()
+        reason = llm_output.get("reason", "LLM 未提供理由")
+
+        if decision == "APPROVE":
+            result = GateResult(
+                gate_id=2, passed=True,
+                warnings=dim_warnings,
+                revision_feedback=f"[LLM] APPROVE: {reason}",
+            )
+        elif decision == "REVISE":
+            result = GateResult(
+                gate_id=2, passed=False,
+                blocking_issues=[BlockingIssue(
+                    description=f"[LLM] 需修订: {reason}",
+                    fix_suggestion="参见评估报告的具体反馈",
+                )],
+                warnings=dim_warnings,
+                revision_feedback=reason,
+            )
+        elif decision == "REJECT":
+            result = GateResult(
+                gate_id=2, passed=False, rejected=True,
+                blocking_issues=[BlockingIssue(
+                    description=f"[LLM] 拒绝: {reason}",
+                )],
+                warnings=dim_warnings,
+            )
+        else:  # DEGRADE
+            all_warnings = dim_warnings + [
+                Warning_(description=f"[LLM] 降级: {reason}")
+            ]
+            result = GateResult(
+                gate_id=2, passed=True, degraded=True,
+                warnings=all_warnings,
+            )
+
+        logger.info(
+            "Gate 2 LLM 判定: decision=%s score=%s iter=%d",
+            decision, composite_score, iteration,
         )
         self.gate_log.append(result)
         return result

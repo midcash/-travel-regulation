@@ -238,6 +238,10 @@ class RouteRule:
 class AgentRouter:
     """Agent 路由器 — 根据任务类型将任务路由到目标 Agent。
 
+    支持两种模式:
+    - 静态路由 (DEFAULT_ROUTES): TaskType → Agent 映射表，始终可用
+    - 动态路由 (resolve_dynamic): LLM 根据任务描述 + Agent 能力决定路由
+
     路由规则来源: spec/orchestrator_spec.md §2.3
     """
 
@@ -251,9 +255,25 @@ class AgentRouter:
         RouteRule(TaskType.TASK_EVALUATE_CONTRIBUTION, "evaluation_agent", priority=10),
     ]
 
-    def __init__(self, registry: Optional[AgentRegistry] = None):
+    # LLM 动态路由 prompt
+    _ROUTER_SYSTEM_PROMPT = """你是一个多 Agent 系统路由器。根据任务描述和可用 Agent 的能力，选择最合适的 Agent 来处理该任务。
+
+## 可用 Agent
+{agent_capabilities}
+
+## 输出格式
+严格输出以下 JSON:
+{{"agent": "<agent_name>", "reason": "<一句话解释为何选择该 Agent>"}}
+"""
+
+    def __init__(
+        self,
+        registry: Optional[AgentRegistry] = None,
+        llm_client: Any = None,
+    ):
         self._routes: List[RouteRule] = list(self.DEFAULT_ROUTES)
         self._registry = registry
+        self._llm_client = llm_client
 
     def add_route(self, rule: RouteRule) -> None:
         """添加自定义路由规则。"""
@@ -292,6 +312,79 @@ class AgentRouter:
         if agent:
             task.assigned_agent = agent
         return agent
+
+    async def resolve_dynamic(self, task: Task) -> str:
+        """LLM 驱动的动态路由 — 根据任务描述和 Agent 能力选择 Agent。
+
+        LLM 不可用时 fallback 到静态路由表。
+
+        Args:
+            task: 待路由的任务。
+
+        Returns:
+            Agent 名称。
+
+        Raises:
+            ValueError: 无法确定路由目标。
+        """
+        # 尝试 LLM 路由
+        if self._llm_client is not None and getattr(self._llm_client, "available", False):
+            try:
+                agent = await self._resolve_via_llm(task)
+                if agent:
+                    task.assigned_agent = agent
+                    return agent
+            except Exception:
+                logger.warning(
+                    "LLM 动态路由失败，fallback 到静态路由: task=%s", task.task_id
+                )
+
+        # Fallback 到静态路由
+        agent = self.resolve(task.task_type)
+        if agent is None:
+            raise ValueError(
+                f"无法为任务 {task.task_id} (type={task.task_type.value}) 确定路由目标"
+            )
+        task.assigned_agent = agent
+        return agent
+
+    async def _resolve_via_llm(self, task: Task) -> Optional[str]:
+        """通过 LLM 解析路由目标。"""
+        capabilities_text = self._get_agent_capabilities_text()
+        user_prompt = (
+            f"## 任务描述\n"
+            f"ID: {task.task_id}\n"
+            f"标题: {task.title}\n"
+            f"类型: {task.task_type.value}\n"
+            f"载荷: {task.payload.get('aspect', 'general')}\n\n"
+            f"请选择最合适的 Agent 并输出 JSON。"
+        )
+
+        result = await self._llm_client.generate(
+            system_prompt=self._ROUTER_SYSTEM_PROMPT.format(
+                agent_capabilities=capabilities_text,
+            ),
+            user_prompt=user_prompt,
+        )
+
+        agent_name = result.get("agent", "")
+        if not agent_name:
+            return None
+        return agent_name
+
+    def _get_agent_capabilities_text(self) -> str:
+        """从 Registry 获取 Agent 能力描述文本。"""
+        if self._registry is None:
+            return (
+                "- planning_agent: 行程规划、目的地研究、预算分配、方案修订\n"
+                "- execution_agent: 可行性验证、价格检查、时间校验、地理校验、约束检查\n"
+                "- evaluation_agent: 质量评估、代码评估、贡献度评估\n"
+            )
+
+        lines: List[str] = []
+        for name in ("planning_agent", "execution_agent", "evaluation_agent"):
+            lines.append(f"- {name}: 已注册 (详情见 AgentRegistry)")
+        return "\n".join(lines) if lines else "无可用 Agent"
 
 
 # ============================================================
