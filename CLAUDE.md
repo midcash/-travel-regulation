@@ -77,9 +77,11 @@ User Request → Orchestrator (主Agent)
 ```
 Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(Mode A)
   (记忆层)       (编排层)      (执行层)      (测试层)        (反馈层)
-     │               │             │             │              │
-     └─ 上下文摘要 ─→ └─ 实现方案 ─→ └─ 代码产出 ─→ └─ 测试代码 ─→ └─ 质量评估
-                                                                      │
+     │               ▲             │             │              │
+     └─ 上下文摘要 ─→│─ 实现方案 ─→│─ 代码产出 ─→│─ 测试代码 ─→│─ 代码质量裁决
+                    │             │             │              │
+                    │  ┌─ score < 阈值: 退回Plan Agent        │
+                    └──┘              (最多3轮迭代)            │
                                                            ┌─ PASS → 交付
                                                            └─ FAIL → 退回Code/Test Agent
 ```
@@ -102,16 +104,35 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 - 代码交付给 Evaluation Agent (Mode A) 独立评估
 
 ### R4: Test (测试层·Test Agent)
-- Test Agent 对照 `test_scenarios.md` 编写测试
-- 覆盖单元测试 + 集成测试 + 质量门测试
+- Test Agent 执行三层测试:
+  - **L1 单元测试**: 单个函数/方法的输入输出验证
+  - **L2 集成测试**: 多模块协作流程验证
+  - **L3 e2e 测试**: 全链路真实场景验证
+- 测试编写前先判断现有测试文件是否满足要求，不能满足再新增
 - 保证代码覆盖率 ≥ 70%
 - 发现的 bug 记录上报但不自行修复
+- **L3 完成后执行 Rubric 业务评估**:
+  - 用 `evaluation/` 下对应模块的 Layer 2 rubric 对 L3 测试产出打分
+  - rubric 按数据依赖分类:
+    | Rubric 类型 | 依赖数据 | 执行时机 |
+    |------------|---------|---------|
+    | plan_quality_rubric | L3 e2e 产出的 TravelPlanDraft | L3 之后 |
+    | reasoning_quality_rubric | L3 e2e 产出的 CoTResult.trace | L3 之后 |
+    | protocol_quality_rubric | L3 e2e 产出的消息链路 | L3 之后 |
+    | tool_quality_rubric | L3 e2e 产出的 API 调用记录 | L3 之后 |
+    | code_quality_rubric | 静态代码分析 | R5 (Evaluation Agent) |
+  - rubric 综合得分 ≥ 阈值 → 交付给 R5
+  - rubric 综合得分 < 阈值 → 输出结构化问题清单 → **退回 R2 Plan Agent 重新设计**（最多 3 轮迭代）
 
 ### R5: Verify (反馈层·Evaluation Agent)
-- Evaluation Agent (Mode A) 评估代码质量 (code_quality_rubric)
-- 检查测试覆盖率、场景覆盖度、mutation testing
+- Evaluation Agent 负责**代码级**最终裁定和**独立质量判决**:
+  - **Mode A (代码质量评估)**: 按 `evaluation/code_quality_rubric.md` 对代码做静态分析（5维度: 结构/复杂度/文档/安全/健壮）
+  - **Mode C (消融实验)**: LOO/AIS 方法评估各 Agent 贡献度
+  - 检查测试覆盖率、场景覆盖度、mutation testing
+  - 独立于 Code/Test Agent，不共享评分预期
 - 未通过质量门 → 退回对应 Agent → 最多 3 轮迭代
 - 通过后代码进入业务 Agent 的集成测试
+- **与 R4 的分工**: R4 执行业务 rubric（运行时数据 → 退回 Plan），R5 执行代码 rubric（静态分析 → 退回 Code/Test）
 
 ### R5.5: Lessons (跨轮次知识传递)
 - Code Agent 和 Test Agent 在 R5 评估通过后，将本轮遇到的问题写入 `progress/lessons.md`，commit 列填 `待提交`
@@ -169,6 +190,7 @@ Context Agent → Plan Agent → Code Agent → Test Agent → Evaluation Agent(
 7. **差异阻塞**: Context Agent 发现 blocking 级别的 spec-代码差异 → 阻塞下游直到差异解决
 8. **碎片隔离**: 每个分支只修改自己负责的 `progress/<module>.md`，不修改其他模块的碎片
 9. **经验回写**: Code/Test Agent 在 R5 通过后写入 `progress/lessons.md`（commit 列填 `待提交`），主 Agent 在 git commit 后回填实际 commit hash；Context Agent 在 R1 启动时必须读取
+10. **Rubric 驱动迭代**: R4 Test Agent 在 L3 完成后必须用 Layer 2 rubric 对测试产出打分。score < 阈值 → 结构化问题清单 → 退回 R2 Plan Agent。R5 Evaluation Agent 在 R4 rubric 通过后执行 Mode A 代码级独立裁定。两者分工: R4 = 门卫（运行时数据，可退回 Plan），R5 = 法官（静态分析，独立判决）
 
 ## Document-Code Synchronization Rules
 
