@@ -1,5 +1,6 @@
 import json
 from llm_client import ask_llm
+from planner_agent import run as planner_run
 
 AGENTS = {
     "planner":    "行程规划 — 根据需求生成旅行方案",
@@ -9,31 +10,25 @@ AGENTS = {
 
 def call_agent(agent_name: str, input_text: str) -> str:
     """模拟调用业务 Agent，返回结构化的假数据"""
-    if agent_name == "user":
-        return json.dumps({
-            "destination": "上海",
-            "duration": "2天",
-            "budget": 3000,
-            "preferences": ["历史文化", "美食"]
-        }, ensure_ascii=False)
 
-    elif agent_name == "planner":
-        return json.dumps({
-            "plan": {
-                "day1": [
-                    {"time": "08:00", "activity": "高铁出发", "cost": 553},
-                    {"time": "12:00", "activity": "到达上海，入住酒店", "cost": 300},
-                    {"time": "14:00", "activity": "外滩游览", "cost": 0},
-                    {"time": "18:00", "activity": "南京路晚餐", "cost": 100}
-                ],
-                "day2": [
-                    {"time": "09:00", "activity": "上海博物馆", "cost": 0},
-                    {"time": "13:00", "activity": "豫园+午餐", "cost": 80},
-                    {"time": "16:00", "activity": "高铁返回", "cost": 553}
-                ]
-            },
-            "total_cost": 1586
-        }, ensure_ascii=False)
+    if agent_name == "planner":
+        return planner_run(input_text)
+        # return json.dumps({
+        #     "plan": {
+        #         "day1": [
+        #             {"time": "08:00", "activity": "高铁出发", "cost": 553},
+        #             {"time": "12:00", "activity": "到达上海，入住酒店", "cost": 300},
+        #             {"time": "14:00", "activity": "外滩游览", "cost": 0},
+        #             {"time": "18:00", "activity": "南京路晚餐", "cost": 100}
+        #         ],
+        #         "day2": [
+        #             {"time": "09:00", "activity": "上海博物馆", "cost": 0},
+        #             {"time": "13:00", "activity": "豫园+午餐", "cost": 80},
+        #             {"time": "16:00", "activity": "高铁返回", "cost": 553}
+        #         ]
+        #     },
+        #     "total_cost": 1586
+        # }, ensure_ascii=False)
 
     elif agent_name == "knowledge":
         return json.dumps({
@@ -80,7 +75,7 @@ def run(user_input):
             }}
             
             ## 完成标准
-            当你确认已经完成 Orchestrator（解析需求+决策分发），KnowledgeAgent PlannerAgent，ReviewerAgent 都调用至少一遍且保证内容真实性，而且 reviewer 评分 ≥70 分时，才能输出 action=finish。
+            当你确认已经完成 Orchestrator（解析需求+决策分发），KnowledgeAgent,PlannerAgent，ReviewerAgent 都至少调用一遍，PlannerAgent调用之前要先调用KnowledgeAgent，而且 reviewer 评分 ≥70 分时，才能输出 action=finish。
             禁止跳过任何一步。即使你凭经验认为方案可行，也必须让 knowledge 和 reviewer 验证。
             **finish 的 message 必须包含 planner 生成的完整每日行程详情，格式为：**
             Day1: 活动1, 活动2...

@@ -15,7 +15,7 @@ def ask_llm(prompt):
     client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
     resp = client.chat.completions.create(
         model=MODEL,
-        max_tokens=512,
+        max_tokens=2000,
         messages=[{"role": "user", "content": prompt}],
     )
     return resp.choices[0].message.content or "{}"
