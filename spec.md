@@ -6,8 +6,6 @@
 
 Orchestrator：接收用户输入，自主决定调用哪些 Agent、何时结束。
 
-UserAgent：解析/补充用户需求。
-
 PlannerAgent：生成行程草案。
 
 ReviewerAgent：审查并打分/建议。

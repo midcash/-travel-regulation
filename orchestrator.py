@@ -3,8 +3,8 @@ from llm_client import ask_llm
 
 AGENTS = {
     "planner":    "行程规划 — 根据需求生成旅行方案",
-    "executor":   "可行性验证 — 检查价格/时间/地理逻辑",
-    "evaluator":  "质量评估 — 对方案评分(0-100)并给出改进建议",
+    "knowledge":   "可行性验证 — 检查价格/时间/地理逻辑",
+    "reviewer":  "质量评估 — 对方案评分(0-100)并给出改进建议",
 }
 
 def call_agent(agent_name: str, input_text: str) -> str:
@@ -35,14 +35,14 @@ def call_agent(agent_name: str, input_text: str) -> str:
             "total_cost": 1586
         }, ensure_ascii=False)
 
-    elif agent_name == "executor":
+    elif agent_name == "knowledge":
         return json.dumps({
             "feasible": True,
             "issues": [],
             "notes": "时间安排合理，预算在范围内，地理路线连贯"
         }, ensure_ascii=False)
 
-    elif agent_name == "evaluator":
+    elif agent_name == "reviewer":
         return json.dumps({
             "score": 85,
             "strengths": ["行程紧凑但不紧张", "预算控制良好"],
@@ -74,14 +74,14 @@ def run(user_input):
             根据用户原始需求，决定下一步动作。严格按以下 JSON 格式输出，不要输出任何其他文字：
             {{
                 "action": "call_agent" | "ask_user" | "finish",
-                "agent": "planner"/"executor"/"evaluator",   // 只能从这 3 个中选择
+                "agent": "planner"/"knowledge"/"reviewer",   // 只能从这 3 个中选择
                 "input": "传给该 agent 的详细指令，必须基于用户原始需求",
                 "message": "给用户的说明（仅在 ask_user 或 finish 时需要）"
             }}
             
             ## 完成标准
-            当你确认已经完成 planner → executor → evaluator 的调用，且 evaluator 评分 ≥70 分时，才能输出 action=finish。
-            禁止跳过任何一步。即使你凭经验认为方案可行，也必须让 executor 和 evaluator 验证。
+            当你确认已经完成 Orchestrator（解析需求+决策分发），KnowledgeAgent PlannerAgent，ReviewerAgent 都调用至少一遍且保证内容真实性，而且 reviewer 评分 ≥70 分时，才能输出 action=finish。
+            禁止跳过任何一步。即使你凭经验认为方案可行，也必须让 knowledge 和 reviewer 验证。
             **finish 的 message 必须包含 planner 生成的完整每日行程详情，格式为：**
             Day1: 活动1, 活动2...
             Day2: 活动1, 活动2...
