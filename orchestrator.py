@@ -1,6 +1,7 @@
 import json
 from llm_client import ask_llm
 from planner_agent import run as planner_run
+from knowledge_agent import run as knowledge_run
 
 AGENTS = {
     "planner":    "行程规划 — 根据需求生成旅行方案",
@@ -31,11 +32,12 @@ def call_agent(agent_name: str, input_text: str) -> str:
         # }, ensure_ascii=False)
 
     elif agent_name == "knowledge":
-        return json.dumps({
-            "feasible": True,
-            "issues": [],
-            "notes": "时间安排合理，预算在范围内，地理路线连贯"
-        }, ensure_ascii=False)
+        return knowledge_run(input_text)
+        # return json.dumps({
+        #     "feasible": True,
+        #     "issues": [],
+        #     "notes": "时间安排合理，预算在范围内，地理路线连贯"
+        # }, ensure_ascii=False)
 
     elif agent_name == "reviewer":
         return json.dumps({
