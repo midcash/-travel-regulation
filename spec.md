@@ -61,21 +61,25 @@
               │            ├─ 可行性失败 ──→ Knowledge
               │            ├─ 体验失败   ──→ Planner Refinement
               │            └─ 完整性失败 ──→ Planner
+              │            │
+              │            ▼
+              │         Retry Exhausted ──→ Human Review  or  Safe Output
               └─────────────────────────────┘
                         │
                         ▼
                 Evaluation Record
 
 
-┌──────────────────────────────────────────────────────┐
-│              基础设施层（所有 Agent 共享）             │
-│                                                      │
-│   State Store     Tool Registry    Memory Center     │
-│   (全局状态)       (工具注册/发现)   (Session/User)    │
-│                                                      │
-│   Config Center                                     │
-│   (模型/Prompt/Workflow/Tool 全局配置)                │
-└──────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│              基础设施层（所有 Agent 共享）                               │
+│                                                                      │
+│   State Store                     Tool Registry    Memory Center     │
+│   (只能被Workflow Engine修改)       (工具注册/发现)   (Session/User)     │
+│                                                                      │
+│   Config Center                                                      │
+│   (模型/Prompt/Workflow/Tool 全局配置)                                 │
+└──────────────────────────────────────────────────────────────────────┘
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━ Observability Trace ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -98,7 +102,7 @@
 
 ### 3.3 State Store 是全局基础设施
 - 所有 Agent 通过 State Store 读写状态，不通过参数传递
-- Agent 统一接口：`run() → None`，内部从 State Store 读、向 State Store 写
+- Agent 统一接口：`run(context: AgentContext) → AgentResult`，内部从 State Store 读、向 State Store 写
 - 支持 Checkpoint（状态快照），便于断点恢复和回溯
 
 ### 3.4 Observability 全流程贯穿
@@ -135,57 +139,3 @@
 
 ---
 
-## 五、State Store 设计要点
-
-```text
-State Store
-├── session_id       → 会话标识
-├── user_input       → 用户原始需求
-├── analyzed_req     → Requirement Analyzer 输出（意图 + 信息缺口）
-├── plan             → Planner 生成的行程草案
-├── knowledge_data   → Knowledge Agent 查询的真实数据
-├── refined_plan     → Planner Refinement 修正后的方案
-├── review_result    → Reviewer 评分和问题列表
-├── retry_count      → 当前重试次数（max 3）
-├── retry_history    → 每次重试的原因和路由目标
-└── checkpoints[]    → 关键节点的状态快照
-```
-
----
-
-## 六、Retry Router 失败分类与路由表
-
-| 失败类型 | 判断依据 | 路由目标 | 说明 |
-|----------|---------|---------|------|
-| 可行性失败 | 价格偏差 >20% / 时间冲突 / 地理不合理 | Knowledge Agent | 需要重新查询真实数据 |
-| 体验失败 | 活动类型 <3 种 / 节奏不合理 / 个性化不足 | Planner Refinement | 需调整行程结构但不需重查数据 |
-| 完整性失败 | 字段缺失 / 格式错误 / JSON 解析失败 | Planner Agent | 需重新生成行程 |
-| 综合失败 | 多项不达标 | Planner Agent | 从头重来 |
-
----
-
-## 七、迭代路线图
-
-### Phase 1: State Store + Workflow Engine（当前）
-- 实现 State Store（dataclass + 字典存储）
-- 实现确定性 Workflow Engine（替代 LLM 路由决策）
-- Agent 迁移到新接口
-
-### Phase 2: Tool Registry + Retry Router
-- 抽离 Tool Registry，Knowledge Agent 变为 Tool Router
-- 实现差异化重试路由
-
-### Phase 3: Requirement Analyzer + Clarification + Observability
-- 增加需求分析节点
-- 信息不完整时触发追问
-- 结构化 Trace 记录
-
-### Phase 4: Output Formatter + Evaluation
-- Formatter 多格式输出
-- 持久化评审记录
-- eval_stats 统计分析
-
-### Phase 5: Memory + Configuration + Gateway
-- Session Memory 实现
-- 全局配置中心
-- FastAPI Gateway 包装
