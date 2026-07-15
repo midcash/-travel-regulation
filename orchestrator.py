@@ -2,6 +2,7 @@ import json
 from llm_client import ask_llm
 from planner_agent import run as planner_run
 from knowledge_agent import run as knowledge_run
+from reviewer_agent import run as reviewer_run
 
 AGENTS = {
     "planner":    "行程规划 — 根据需求生成旅行方案",
@@ -10,44 +11,19 @@ AGENTS = {
 }
 
 def call_agent(agent_name: str, input_text: str) -> str:
-    """模拟调用业务 Agent，返回结构化的假数据"""
+    """调用业务 Agent，返回结构化结果。"""
 
     if agent_name == "planner":
         return planner_run(input_text)
-        # return json.dumps({
-        #     "plan": {
-        #         "day1": [
-        #             {"time": "08:00", "activity": "高铁出发", "cost": 553},
-        #             {"time": "12:00", "activity": "到达上海，入住酒店", "cost": 300},
-        #             {"time": "14:00", "activity": "外滩游览", "cost": 0},
-        #             {"time": "18:00", "activity": "南京路晚餐", "cost": 100}
-        #         ],
-        #         "day2": [
-        #             {"time": "09:00", "activity": "上海博物馆", "cost": 0},
-        #             {"time": "13:00", "activity": "豫园+午餐", "cost": 80},
-        #             {"time": "16:00", "activity": "高铁返回", "cost": 553}
-        #         ]
-        #     },
-        #     "total_cost": 1586
-        # }, ensure_ascii=False)
 
     elif agent_name == "knowledge":
         return knowledge_run(input_text)
-        # return json.dumps({
-        #     "feasible": True,
-        #     "issues": [],
-        #     "notes": "时间安排合理，预算在范围内，地理路线连贯"
-        # }, ensure_ascii=False)
 
     elif agent_name == "reviewer":
-        return json.dumps({
-            "score": 85,
-            "strengths": ["行程紧凑但不紧张", "预算控制良好"],
-            "suggestions": ["可以增加一个上海本地特色小吃推荐"]
-        }, ensure_ascii=False)
+        return reviewer_run(input_text)
 
     else:
-        return json.dumps({"error": f"未知 agent: {agent_name}"})
+        return json.dumps({"error": f"未知 agent: {agent_name}"}, ensure_ascii=False)
 
 def run(user_input):
     ctx = f"用户需求: {user_input}"
@@ -75,7 +51,11 @@ def run(user_input):
                 "input": "传给该 agent 的详细指令，必须基于用户原始需求",
                 "message": "给用户的说明（仅在 ask_user 或 finish 时需要）"
             }}
-            
+
+            ## 调用 reviewer 的铁律
+            - input 必须**原样粘贴** planner 和 knowledge 返回的原始 JSON，禁止转述为自然语言
+            - 示例: "评审以下方案。\\n用户需求：xxx\\nplanner输出：{{\\"plan\\":...}}\\nknowledge输出：{{\\"destination\\":...}}"
+
             ## 完成标准
             当你确认已经完成 Orchestrator（解析需求+决策分发），KnowledgeAgent,PlannerAgent，ReviewerAgent 都至少调用一遍，PlannerAgent调用之前要先调用KnowledgeAgent，而且 reviewer 评分 ≥70 分时，才能输出 action=finish。
             禁止跳过任何一步。即使你凭经验认为方案可行，也必须让 knowledge 和 reviewer 验证。
@@ -100,6 +80,7 @@ def run(user_input):
             break
 
         action = d.get("action", "")
+        print(ctx)
         if action == "call_agent":
             a, inp = d["agent"], d["input"]
             print(f"[CALL] agent={a} input={inp}")
