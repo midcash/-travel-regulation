@@ -1,6 +1,7 @@
 import json
 import re
 from llm_client import ask_llm
+from state import AgentContext, AgentResult
 
 SYSTEM_PROMPT = """你是一个专业旅行规划师。你必须严格按以下 JSON schema 输出，不得包含任何其他文字。
 
@@ -54,19 +55,34 @@ def _sanitize_json(raw: str) -> str:
     return raw
 
 
-def run(input_text: str) -> str:
-    """接收 Orchestrator 传来的需求描述，返回行程 JSON 字符串。"""
-    prompt = SYSTEM_PROMPT.format(user_input=input_text)
-    raw = ask_llm(prompt)
+def run(context: AgentContext) -> AgentResult:
+    """根据 AgentContext 生成行程草案，返回 AgentResult。"""
+
+    # 构建 prompt：用户需求 + reviewer 反馈（重试时）
+    prompt_parts = [SYSTEM_PROMPT.format(user_input=context.user_input)]
+    if context.retry_context:
+        prompt_parts.append(
+            f"\n\n## 上次评审反馈（必须修正以下问题）\n{json.dumps(context.retry_context, ensure_ascii=False, indent=2)}"
+        )
+
+    raw = ask_llm("\n".join(prompt_parts))
 
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
         print("===== RAW LLM OUTPUT =====")
-        print(repr(raw))          # 用 repr 可以看到隐藏字符
+        print(repr(raw))
         print("===== SANITIZED =====")
-        sanitized = _sanitize_json(raw) # 把 LLM 返回的“不干净的”JSON 字符串，清洗成一个可以被 json.loads() 直接解析的标准 JSON 字符串。
+        sanitized = _sanitize_json(raw)
         print(repr(sanitized))
-        parsed = json.loads(sanitized)
+        try:
+            parsed = json.loads(sanitized)
+        except json.JSONDecodeError:
+            return AgentResult(
+                agent="planner",
+                data={},
+                success=False,
+                error=f"JSON 解析失败: {raw[:200]}",
+            )
 
-    return json.dumps(parsed, ensure_ascii=False)
+    return AgentResult(agent="planner", data=parsed)
