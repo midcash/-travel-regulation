@@ -17,6 +17,7 @@ Phase 2 (LLM层): 5维度质量评分 + 问题诊断
 import json
 import re
 from llm_client import ask_llm
+from state import AgentContext, AgentResult
 
 # ============================================================
 # Phase 1: 代码硬规则校验
@@ -494,17 +495,16 @@ def _llm_review(plan: dict, user_req: str, knowledge_data: dict, hard_checks: di
 # 主入口
 # ============================================================
 
-def run(input_text: str) -> str:
-    """
-    接收 Orchestrator 传来的输入，返回结构化评审结果 JSON。
+def run(context: AgentContext) -> AgentResult:
+    """接收 AgentContext（upstream_data = {plan, knowledge_data, user_req}），返回评审结果。
 
-    input_text 由 orchestrator LLM 生成，ctx 中的完整上下文通过 LLM prompt
-    自然流入 input_text，因此无需额外 context 参数。
-
-    返回:
-        JSON 字符串: {hard_checks, quality_scores, issues, strengths}
+    返回 AgentResult.data 包含: {hard_checks, quality_scores, issues, strengths}
     """
-    plan, user_req, knowledge_data = _parse_input(input_text)
+    # 从 context.upstream_data 提取结构化数据（替代旧的 _parse_input 文本解析）
+    upstream = context.upstream_data
+    plan = upstream.get("plan", {})
+    user_req = upstream.get("user_req", context.user_input)
+    knowledge_data = upstream.get("knowledge_data", {})
 
     # Phase 1: 代码硬规则
     hard_checks = _run_hard_checks(plan, user_req)
@@ -515,4 +515,4 @@ def run(input_text: str) -> str:
     # 合并结果
     final = {**hard_checks, **llm_result}
 
-    return json.dumps(final, ensure_ascii=False)
+    return AgentResult(agent="reviewer", data=final)
