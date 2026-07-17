@@ -10,6 +10,8 @@ import urllib.request
 import urllib.parse
 from openai import OpenAI
 
+from state import AgentContext, AgentResult
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -323,14 +325,22 @@ def _sanitize_json(raw: str) -> str:
     return raw
 
 
-def run(input_text: str) -> str:
-    """接收 Orchestrator 传来的需求，返回结构化知识数据 JSON。
+def run(context: AgentContext) -> AgentResult:
+    """接收 AgentContext（upstream_data = planner 输出的 plan），返回结构化知识数据。
 
     使用 DeepSeek function calling 自主编排高德 + 途牛 API 调用，
     最大 3 轮 tool-calling，超限强制输出当前结果。
     """
     if not DEEPSEEK_KEY:
-        return json.dumps({"error": "DEEPSEEK_API_KEY 未配置"}, ensure_ascii=False)
+        return AgentResult(
+            agent="knowledge",
+            data={},
+            success=False,
+            error="DEEPSEEK_API_KEY 未配置",
+        )
+
+    # 从 context 构造 LLM 输入：用户需求 + planner 行程
+    input_text = f"用户需求: {context.user_input}\n\nPlanner 行程方案:\n{json.dumps(context.upstream_data, ensure_ascii=False, indent=2)}"
 
     client = OpenAI(api_key=DEEPSEEK_KEY, base_url="https://api.deepseek.com")
     messages = [
@@ -413,7 +423,12 @@ def run(input_text: str) -> str:
         # LLM 返回了文本（最终输出）
         content = msg.content or ""
         if not content.strip():
-            return json.dumps({"error": "LLM 未返回任何内容"}, ensure_ascii=False)
+            return AgentResult(
+                agent="knowledge",
+                data={},
+                success=False,
+                error="LLM 未返回任何内容",
+            )
 
         try:
             parsed = json.loads(content)
@@ -422,12 +437,18 @@ def run(input_text: str) -> str:
             try:
                 parsed = json.loads(sanitized)
             except json.JSONDecodeError:
-                return json.dumps({
-                    "error": "最终输出 JSON 解析失败",
-                    "raw": content[:500],
-                }, ensure_ascii=False)
+                return AgentResult(
+                    agent="knowledge",
+                    data={},
+                    success=False,
+                    error=f"最终输出 JSON 解析失败: {content[:200]}",
+                )
 
-        return json.dumps(parsed, ensure_ascii=False)
+        return AgentResult(agent="knowledge", data=parsed)
 
-    # 理论上不会到这里（最后一轮 tool_choice="none" 强制文本输出）
-    return json.dumps({"error": "超过最大轮数未获得有效输出"}, ensure_ascii=False)
+    return AgentResult(
+        agent="knowledge",
+        data={},
+        success=False,
+        error="超过最大轮数未获得有效输出",
+    )
