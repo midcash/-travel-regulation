@@ -120,18 +120,28 @@ def _check_budget(plan: dict) -> list:
     return violations
 
 
-def _check_daily_activities(plan: dict) -> list:
-    """检查每日活动的数量和时长。"""
+def _check_daily_activities(plan: dict, phase1_output: dict | None = None) -> list:
+    """检查每日活动的数量和时长。
+
+    混合意图（如出差+个人休闲）时，允许部分天数无活动（出差日），
+    不触发 insufficient_activities / empty_plan。
+    """
+    is_mixed = (
+        phase1_output is not None
+        and phase1_output.get("intent_type") == "mixed"
+    )
+
     violations = []
     plan_days = plan.get("plan", {})
 
     if not plan_days:
-        violations.append({
-            "rule": "empty_plan",
-            "severity": "blocking",
-            "detail": "plan 中没有找到任何天次的活动安排",
-            "evidence": "plan={}"
-        })
+        if not is_mixed:
+            violations.append({
+                "rule": "empty_plan",
+                "severity": "blocking",
+                "detail": "plan 中没有找到任何天次的活动安排",
+                "evidence": "plan={}"
+            })
         return violations
 
     for day_key in sorted(plan_days.keys()):
@@ -145,8 +155,8 @@ def _check_daily_activities(plan: dict) -> list:
             })
             continue
 
-        # 检查活动数量
-        if len(activities) < 2:
+        # 检查活动数量（mixed intent 时跳过此检查——出差日允许 0 活动）
+        if not is_mixed and len(activities) < 2:
             violations.append({
                 "rule": "insufficient_activities",
                 "severity": "blocking",
@@ -242,14 +252,25 @@ def _check_time_conflicts(plan: dict) -> list:
     return violations
 
 
-def _check_transportation_coverage(plan: dict) -> list:
-    """检查是否有基本的交通覆盖（首日出发 + 末日返回）。"""
+def _check_transportation_coverage(plan: dict, phase1_output: dict | None = None) -> list:
+    """检查是否有基本的交通覆盖（首日出发 + 末日返回）。
+
+    混合意图时跳过此检查——用户的出差行程已覆盖往返交通。
+    """
+    is_mixed = (
+        phase1_output is not None
+        and phase1_output.get("intent_type") == "mixed"
+    )
+
     violations = []
     plan_days = plan.get("plan", {})
     day_keys = sorted(plan_days.keys())
 
     if not day_keys:
         return violations
+
+    if is_mixed:
+        return violations  # 混合意图：不检查首末交通
 
     # 首日检查是否有出发交通
     first_day_activities = plan_days[day_keys[0]]
@@ -284,13 +305,19 @@ def _check_transportation_coverage(plan: dict) -> list:
     return violations
 
 
-def _run_hard_checks(plan: dict, user_req: str = "") -> dict:
-    """运行所有代码层硬约束校验。"""
+def _run_hard_checks(plan: dict, user_req: str = "", phase1_output: dict | None = None) -> dict:
+    """运行所有代码层硬约束校验。
+
+    Args:
+        plan: Planner 产出的行程 dict。
+        user_req: 用户原始需求（用于日志）。
+        phase1_output: Phase 1.1 产出。mixed intent 时放宽部分校验。
+    """
     all_violations = []
     all_violations.extend(_check_budget(plan))
-    all_violations.extend(_check_daily_activities(plan))
+    all_violations.extend(_check_daily_activities(plan, phase1_output))
     all_violations.extend(_check_time_conflicts(plan))
-    all_violations.extend(_check_transportation_coverage(plan))
+    all_violations.extend(_check_transportation_coverage(plan, phase1_output))
 
     blocking_count = sum(1 for v in all_violations if v["severity"] == "blocking")
     warning_count = sum(1 for v in all_violations if v["severity"] == "warning")
@@ -505,9 +532,10 @@ def run(context: AgentContext) -> AgentResult:
     plan = upstream.get("plan", {})
     user_req = upstream.get("user_req", context.user_input)
     knowledge_data = upstream.get("knowledge_data", {})
+    phase1_output = upstream.get("phase1_output")  # 🔀 Phase 1.1 mixed intent 适配
 
     # Phase 1: 代码硬规则
-    hard_checks = _run_hard_checks(plan, user_req)
+    hard_checks = _run_hard_checks(plan, user_req, phase1_output)
 
     # Phase 2: LLM 评审
     llm_result = _llm_review(plan, user_req, knowledge_data, hard_checks)

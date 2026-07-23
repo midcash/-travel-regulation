@@ -34,6 +34,7 @@ class Phase1RawOutput(BaseModel):
     trip_purpose: TripPurpose = TripPurpose.UNKNOWN
     confidence: float = Field(default=0, ge=0, le=1)
     missing_dimensions: list[str] = Field(default_factory=list)
+    free_time_slots: list[str] = Field(default_factory=list)  # 🔀 混合意图中用户可支配时间段
     raw_response: str = ""                            # LLM 原始输出（调试用）
 
 
@@ -57,6 +58,7 @@ class Phase1Output(BaseModel):
     trip_purpose: TripPurpose = TripPurpose.UNKNOWN
     negation_constraints: list[str] = Field(default_factory=list)  # 🛡️ Negation Guard 注入
     pace_mode: PaceMode = PaceMode.NORMAL            # 修正规格: 使用枚举而非裸 str
+    free_time_slots: list[str] = Field(default_factory=list)  # 🔀 混合意图中用户可支配时间段
 
     # 门禁字段
     confidence: float = Field(default=0, ge=0, le=1)

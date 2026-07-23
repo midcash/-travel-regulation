@@ -28,6 +28,7 @@ class WorkflowState(BaseModel):
     retry_history: list[dict] = []
     checkpoints: list[dict] = []  # 状态快照（model_dump），保留最近 3 个
     negation_constraints: list[str] = []  # 🛡️ Phase 1 Negation Guard 提取的硬约束
+    phase1_output: dict | None = None  # 🔀 Phase 1.1 CoT 意图解析的结构化输出
 
 
 # ============================================================
@@ -43,6 +44,7 @@ class AgentContext:
     upstream_data: dict     # 上一个 Agent 的输出
     retry_context: dict | None = None  # reviewer 的反馈（重试时）
     negation_constraints: list[str] | None = None  # 🛡️ Phase 1 Negation Guard
+    phase1_output: dict | None = None  # 🔀 Phase 1.1 CoT 意图解析
 
     def __post_init__(self):
         if self.negation_constraints is None:

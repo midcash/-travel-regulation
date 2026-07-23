@@ -35,6 +35,7 @@ class WorkflowEngine:
             upstream_data=upstream_data,
             retry_context=retry_context,
             negation_constraints=self.state.negation_constraints,  # 🛡️ Phase 1
+            phase1_output=self.state.phase1_output,  # 🔀 Phase 1.1
         )
         print(f"[ENGINE] → {agent_name}")
         return self.agents[agent_name](ctx)
@@ -209,6 +210,7 @@ class WorkflowEngine:
                     "plan": self.state.refined_plan,
                     "knowledge_data": self.state.knowledge_data,
                     "user_req": self.state.user_input,
+                    "phase1_output": self.state.phase1_output,  # 🔀 mixed intent 适配
                 },
             )
             if not result.success:
