@@ -55,11 +55,24 @@ def _sanitize_json(raw: str) -> str:
     return raw
 
 
+def _build_guard_block(constraints: list[str]) -> str:
+    """将否定约束列表构建为 prompt 硬性排除指令块。"""
+    if not constraints:
+        return ""
+    items = "\n".join(f"❌ {c}" for c in constraints)
+    return f"""
+## 🛡️ 硬性排除约束（必须遵守）
+以下内容已被用户明确排除，绝对不得出现在行程中：
+{items}
+"""
+
+
 def run(context: AgentContext) -> AgentResult:
     """根据 AgentContext 生成行程草案，返回 AgentResult。"""
 
-    # 构建 prompt：用户需求 + reviewer 反馈（重试时）
-    prompt_parts = [SYSTEM_PROMPT.format(user_input=context.user_input)]
+    # 构建 prompt：系统 prompt + 硬性排除约束 + 用户需求 + reviewer 反馈（重试时）
+    guard_block = _build_guard_block(context.negation_constraints)
+    prompt_parts = [SYSTEM_PROMPT.format(user_input=context.user_input) + guard_block]
     if context.retry_context:
         prompt_parts.append(
             f"\n\n## 上次评审反馈（必须修正以下问题）\n{json.dumps(context.retry_context, ensure_ascii=False, indent=2)}"

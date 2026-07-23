@@ -27,6 +27,7 @@ class WorkflowState(BaseModel):
     retry_count: int = 0
     retry_history: list[dict] = []
     checkpoints: list[dict] = []  # 状态快照（model_dump），保留最近 3 个
+    negation_constraints: list[str] = []  # 🛡️ Phase 1 Negation Guard 提取的硬约束
 
 
 # ============================================================
@@ -41,6 +42,11 @@ class AgentContext:
     user_input: str
     upstream_data: dict     # 上一个 Agent 的输出
     retry_context: dict | None = None  # reviewer 的反馈（重试时）
+    negation_constraints: list[str] | None = None  # 🛡️ Phase 1 Negation Guard
+
+    def __post_init__(self):
+        if self.negation_constraints is None:
+            self.negation_constraints = []
 
 
 # ============================================================

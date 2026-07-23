@@ -34,6 +34,7 @@ class WorkflowEngine:
             user_input=self.state.user_input,
             upstream_data=upstream_data,
             retry_context=retry_context,
+            negation_constraints=self.state.negation_constraints,  # 🛡️ Phase 1
         )
         print(f"[ENGINE] → {agent_name}")
         return self.agents[agent_name](ctx)

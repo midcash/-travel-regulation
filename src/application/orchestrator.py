@@ -1,16 +1,27 @@
-"""Orchestrator — 入口层，组装 WorkflowEngine 并执行。"""
+"""Orchestrator — 入口层，Phase 1 意图解析 + WorkflowEngine 调度。"""
 from src.domain.agent_state import WorkflowState
 from src.application.workflow_engine import WorkflowEngine
 from src.domain.planner import run as planner_run
 from src.domain.knowledge_agent import run as knowledge_run
 from src.domain.reviewer import run as reviewer_run
+from src.application.guards.negation_guard import extract_negation_constraints
 
 
 def run(user_input: str) -> WorkflowState:
-    """使用确定性 Workflow Engine 执行旅游规划流程。"""
+    """使用确定性 Workflow Engine 执行旅游规划流程。
+
+    Phase 1: Negation Guard 提取硬约束。
+    Phase 2-5: WorkflowEngine 调度 Planner → Knowledge → Planner → Reviewer。
+    """
+    # ---- Phase 1: Negation Guard ----
+    negation_constraints = extract_negation_constraints(user_input)
+    if negation_constraints:
+        print(f"[NEGATION_GUARD] 命中: {negation_constraints}")
+
     state = WorkflowState(
         session_id="default",
         user_input=user_input,
+        negation_constraints=negation_constraints,
     )
     agents = {
         "planner": planner_run,
