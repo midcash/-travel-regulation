@@ -1,9 +1,9 @@
 """Orchestrator — 入口层，组装 WorkflowEngine 并执行。"""
-from state import WorkflowState
-from workflow_engine import WorkflowEngine
-from planner_agent import run as planner_run
-from knowledge_agent import run as knowledge_run
-from reviewer_agent import run as reviewer_run
+from src.domain.agent_state import WorkflowState
+from src.application.workflow_engine import WorkflowEngine
+from src.domain.planner import run as planner_run
+from src.domain.knowledge_agent import run as knowledge_run
+from src.domain.reviewer import run as reviewer_run
 
 
 def run(user_input: str) -> WorkflowState:

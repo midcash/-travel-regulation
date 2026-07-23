@@ -1,6 +1,6 @@
 """Agent Workflow Platform — 入口（Travel Workflow 示例）。"""
 import json
-from orchestrator import run
+from src.application.orchestrator import run
 
 if __name__ == "__main__":
     # user_input = "周末北京去上海两天，预算3000"

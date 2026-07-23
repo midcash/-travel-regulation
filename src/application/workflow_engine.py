@@ -9,7 +9,7 @@ Workflow Engine — 确定性状态机，替代 LLM 路由决策。
 """
 from __future__ import annotations
 
-from state import WorkflowState, AgentContext, AgentResult
+from src.domain.agent_state import WorkflowState, AgentContext, AgentResult
 
 MAX_RETRIES = 3
 

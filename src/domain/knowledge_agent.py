@@ -10,7 +10,7 @@ import urllib.request
 import urllib.parse
 from openai import OpenAI
 
-from state import AgentContext, AgentResult
+from src.domain.agent_state import AgentContext, AgentResult
 
 try:
     from dotenv import load_dotenv

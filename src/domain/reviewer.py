@@ -16,8 +16,8 @@ Phase 2 (LLM层): 5维度质量评分 + 问题诊断
 """
 import json
 import re
-from llm_client import ask_llm
-from state import AgentContext, AgentResult
+from src.infrastructure.deepseek_gateway import ask_llm
+from src.domain.agent_state import AgentContext, AgentResult
 
 # ============================================================
 # Phase 1: 代码硬规则校验

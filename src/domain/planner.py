@@ -1,7 +1,7 @@
 import json
 import re
-from llm_client import ask_llm
-from state import AgentContext, AgentResult
+from src.infrastructure.deepseek_gateway import ask_llm
+from src.domain.agent_state import AgentContext, AgentResult
 
 SYSTEM_PROMPT = """你是一个专业旅行规划师。你必须严格按以下 JSON schema 输出，不得包含任何其他文字。
 
