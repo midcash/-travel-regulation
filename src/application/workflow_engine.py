@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from src.domain.agent_state import WorkflowState, AgentContext, AgentResult
 
-MAX_RETRIES = 3
+MAX_RETRIES = 1
 
 
 class WorkflowEngine:
