@@ -3,8 +3,9 @@ Workflow Engine — 确定性状态机，替代 LLM 路由决策。
 
 流程: Planner → Knowledge → Planner Refinement → Reviewer
        ┌──────────────────────────────────────────────┘
-       │ score < 70 → RetryRouter → max 3 次 → EXHAUSTED
-       │ score ≥ 70 → FINISH
+       │ 多信号决策（hard_checks + verdict + score）
+       │ 需重试 → RetryRouter → max 3 次 → EXHAUSTED
+       │ 通过 → FINISH
 """
 from __future__ import annotations
 
@@ -63,10 +64,61 @@ class WorkflowEngine:
             self.state.refined_plan = None
             self.state.review_result = None
 
+    def _should_retry(self, review: dict) -> bool:
+        """综合 hard_checks + verdict + score 判断是否需要重试。"""
+        hard = review.get("hard_checks", {})
+        verdict = review.get("quality_scores", {}).get("verdict", "")
+        score = review.get("quality_scores", {}).get("composite_score", 0)
+
+        # 硬约束未通过 → 必须重试
+        if not hard.get("passed", True):
+            return True
+
+        # LLM 判定不合格 → 重试
+        if verdict == "REJECT":
+            return True
+
+        # LLM 判定需修改且分数不够高 → 重试
+        if verdict == "REVISE" and score < 80:
+            return True
+
+        return False
+
+    # 硬规则 rule → 重试目标 映射表（确定性路由）
+    RULE_TO_TARGET = {
+        "budget_overflow":          "knowledge",
+        "budget_buffer_low":        "knowledge",
+        "empty_plan":               "planner",
+        "insufficient_activities":  "planner",
+        "invalid_day_structure":    "planner",
+        "missing_departure":        "planner",
+        "missing_return_transport": "planner",
+        "daily_duration_overflow":  "planner_refinement",
+        "daily_duration_high":      "planner_refinement",
+        "missing_activity_fields":  "planner_refinement",
+        "time_conflict":            "planner_refinement",
+    }
+
     def _classify_failure(self, review: dict) -> str:
-        """根据 Reviewer 返回的 issues 判断失败类型，决定重试目标。"""
+        """根据 Reviewer 返回的 issues 判断失败类型，决定重试目标。
+
+        优先使用 hard_checks.violations[].rule 做结构化路由，
+        LLM issues 关键词匹配作为 fallback。
+        """
+        # ---- 第一层：硬规则结构化路由 ----
+        violations = review.get("hard_checks", {}).get("violations", [])
+        if violations:
+            # blocking 优先，取第一条可匹配的 rule
+            sorted_v = sorted(violations, key=lambda v: (0 if v.get("severity") == "blocking" else 1))
+            for v in sorted_v:
+                rule = v.get("rule", "")
+                target = self.RULE_TO_TARGET.get(rule)
+                if target:
+                    print(f"[ENGINE] structured route: {rule} → {target}")
+                    return target
+
+        # ---- 第二层：LLM issues 关键词 fallback ----
         issues = review.get("issues", [])
-        # 合并所有 issue 文本用于关键词匹配
         text = " ".join(
             i.get("category", "") + " " + i.get("evidence", "") + " " + i.get("fix_suggestion", "")
             for i in issues
@@ -107,12 +159,11 @@ class WorkflowEngine:
     def run(self) -> WorkflowState:
         """执行完整 Workflow，返回最终 State。"""
 
+        retry_feedback = None  # 在 rollback 前保存，避免被清空
+
         while self.state.retry_count <= MAX_RETRIES:
             # ---- Step 1: Planner ----
-            is_retry = self.state.retry_count > 0
-            retry_ctx = (
-                self.state.review_result if is_retry else None
-            )
+            retry_ctx = retry_feedback
             result = self._call_agent(
                 "planner",
                 upstream_data={"user_input": self.state.user_input},
@@ -165,13 +216,13 @@ class WorkflowEngine:
             self.state.review_result = result.data
             self._checkpoint()
 
-            # ---- 评分判断 ----
-            score = (
-                result.data.get("quality_scores", {}).get("composite_score", 0)
-            )
-            print(f"[ENGINE] reviewer score = {score}")
+            # ---- 多信号决策 ----
+            verdict = result.data.get("quality_scores", {}).get("verdict", "?")
+            score = result.data.get("quality_scores", {}).get("composite_score", 0)
+            hard_ok = result.data.get("hard_checks", {}).get("passed", True)
+            print(f"[ENGINE] score={score} verdict={verdict} hard_checks_passed={hard_ok}")
 
-            if score >= 70:
+            if not self._should_retry(result.data):
                 print("[ENGINE] PASS → FINISH")
                 break
 
@@ -192,6 +243,32 @@ class WorkflowEngine:
                     for i in result.data.get("issues", [])[:3]
                 ],
             })
+            # 只提取 Planner 需要的结构化反馈，避免将完整 Reviewer 输出
+            # （含 hard_checks/quality_scores/strengths 等元数据）传给 Planner，
+            # 防止信息过载 + 旧 plan 引用失效导致 LLM 输出不稳定。
+            review_data = result.data
+            retry_feedback = {
+                "retry_target": target,
+                "weak_dimensions": [
+                    {"dim": k, "score": v.get("score"), "reasoning": v.get("reasoning")}
+                    for k, v in review_data.get("quality_scores", {}).items()
+                    if isinstance(v, dict) and v.get("score", 5) < 4
+                ],
+                "blocking_violations": [
+                    {"rule": v.get("rule"), "detail": v.get("detail")}
+                    for v in review_data.get("hard_checks", {}).get("violations", [])
+                    if v.get("severity") == "blocking"
+                ],
+                "issues": [
+                    {
+                        "severity": i.get("severity"),
+                        "category": i.get("category"),
+                        "evidence": i.get("evidence"),
+                        "fix_suggestion": i.get("fix_suggestion"),
+                    }
+                    for i in review_data.get("issues", [])
+                ],
+            }
             self._rollback(target)
 
         return self.state

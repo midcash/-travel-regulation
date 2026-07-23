@@ -19,7 +19,7 @@ SYSTEM_PROMPT = """你是一个专业旅行规划师。你必须严格按以下 
           "锚点确定": "",
           "day1思路": "",
           "day2思路": "",
-          "约束校验": "总费用≤ ✓，每天活动个 ✓，偏好全覆盖 ✓"
+          "约束校验": "总费用≤ OK，每天活动个 OK，偏好全覆盖 OK"
         }},
         "plan": {{
             "day1": [
@@ -70,11 +70,13 @@ def run(context: AgentContext) -> AgentResult:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
+        # 安全打印（避免 Windows GBK 编码崩溃）
+        safe = raw.encode("ascii", errors="replace").decode("ascii")
         print("===== RAW LLM OUTPUT =====")
-        print(repr(raw))
+        print(safe[:500])
         print("===== SANITIZED =====")
         sanitized = _sanitize_json(raw)
-        print(repr(sanitized))
+        print(sanitized.encode("ascii", errors="replace").decode("ascii")[:500])
         try:
             parsed = json.loads(sanitized)
         except json.JSONDecodeError:
@@ -82,7 +84,7 @@ def run(context: AgentContext) -> AgentResult:
                 agent="planner",
                 data={},
                 success=False,
-                error=f"JSON 解析失败: {raw[:200]}",
+                error=f"JSON 解析失败: {safe[:200]}",
             )
 
     return AgentResult(agent="planner", data=parsed)

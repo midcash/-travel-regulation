@@ -372,7 +372,6 @@ def run(context: AgentContext) -> AgentResult:
 
         # LLM 返回了 tool_calls → 执行工具并进入下一轮
         if msg.tool_calls and not is_final_round:
-            print(round_num)
             # 将 LLM 的 tool_call 消息加入对话
             messages.append({
                 "role": "assistant",
@@ -391,7 +390,6 @@ def run(context: AgentContext) -> AgentResult:
             })
 
             for tc in msg.tool_calls:
-                print(tc)
                 tool_name = tc.function.name
 
                 # --- 工具白名单校验 ---
@@ -417,7 +415,6 @@ def run(context: AgentContext) -> AgentResult:
                     "tool_call_id": tc.id,
                     "content": json.dumps(tool_result, ensure_ascii=False),
                 })
-                # print(tool_result)
             continue  # 进入下一轮
 
         # LLM 返回了文本（最终输出）

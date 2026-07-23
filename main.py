@@ -18,7 +18,7 @@ if __name__ == "__main__":
     for day in sorted(plan_days.keys()):
         print(f"\n{day}:")
         for a in plan_days[day]:
-            print(f"  {a.get('time','')}  {a.get('activity','')}  ¥{a.get('cost',0)}  ({a.get('duration_min',0)}min)")
+            print(f"  {a.get('time','')}  {a.get('activity','')}  ￥{a.get('cost',0)}  ({a.get('duration_min',0)}min)")
 
     # ---- 输出评审 ----
     review = state.review_result or {}
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     print(f"综合: {qs.get('composite_score', '?')}  ({qs.get('verdict', '?')})")
     print(f"完整性: {qs.get('completeness', {}).get('score', '?')}  可行性: {qs.get('feasibility', {}).get('score', '?')}  约束: {qs.get('constraint_sat', {}).get('score', '?')}  体验: {qs.get('experience', {}).get('score', '?')}  准确: {qs.get('accuracy', {}).get('score', '?')}")
     print(f"重试: {state.retry_count}次")
-    print(f"Budget: ¥{refined.get('total_cost', '?')} / 剩余 ¥{refined.get('budget_remaining', '?')}")
+    print(f"Budget: ￥{refined.get('total_cost', '?')} / 剩余 ￥{refined.get('budget_remaining', '?')}")
 
     # ---- 输出问题 ----
     issues = review.get("issues", [])
