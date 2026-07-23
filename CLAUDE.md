@@ -46,10 +46,10 @@ venv/Scripts/python -m pytest -m "not slow and not integration"
 | LLM 网关 | DeepSeek API (OpenAI SDK) | 行程生成、知识查询、语义评审 |
 | 状态管理 | Pydantic v2 | WorkflowState, DTO |
 | 外部 API | 高德地图 Geocode, 途牛 MCP | 地理编码、酒店/航班/门票 |
-| Web 框架 | FastAPI + Uvicorn (P3) | API 服务化 |
-| 向量存储 | Chroma (P3) | 用户偏好语义检索 |
-| 本地存储 | SQLite + JSONL (P3) | 工作记忆 + 情节画像 |
-| 可观测性 | structlog + prometheus_client (P1) | 结构化日志 + Metrics |
+| Web 框架 | FastAPI + Uvicorn (远期) | API 服务化 |
+| 向量存储 | Chroma (远期) | 用户偏好语义检索 |
+| 本地存储 | SQLite + JSONL (远期) | 工作记忆 + 情节画像 |
+| 可观测性 | structlog + prometheus_client (第 3 层) | 结构化日志 + Metrics |
 | 测试 | pytest + pytest-cov + httpx | 单元/集成/e2e |
 | 包管理 | pip + requirements.txt | 零 Docker 依赖 |
 
@@ -83,7 +83,7 @@ skill/
 │   │
 │   ├── adapters/                      # 外部适配器（待实现）
 │   ├── phase1/ ~ phase8/              # 阶段实现（待实现）
-│   ├── api/                           # FastAPI 路由（P3）
+│   ├── api/                           # FastAPI 路由（远期）
 │   └── utils/                         # 工具（待实现）
 │
 ├── evaluation/                        # 评审标准文档
@@ -327,8 +327,8 @@ pytest --cov=. --cov-report=html  # 覆盖率报告
 |:---|:---|:---:|
 | `DEEPSEEK_API_KEY` | DeepSeek LLM API | ✅ |
 | `DEEPSEEK_MODEL` | 模型选择（默认 `deepseek-chat`） | ❌ |
-| `DEEPSEEK_FLASH_MODEL` | Flash 模型名（P1 双模型路由） | ❌ |
-| `DEEPSEEK_PRO_MODEL` | Pro 模型名（P1 双模型路由） | ❌ |
+| `DEEPSEEK_FLASH_MODEL` | Flash 模型名（第 4 层 双模型路由） | ❌ |
+| `DEEPSEEK_PRO_MODEL` | Pro 模型名（第 4 层 双模型路由） | ❌ |
 | `AMAP_API_KEY` | 高德地图地理编码 API | ❌ |
 | `TUNIU_API_KEY` | 途牛 MCP 酒店/航班/门票 API | ❌ |
 
@@ -345,6 +345,7 @@ pytest --cov=. --cov-report=html  # 覆盖率报告
 | `security-rules.md` | 安全规则（Prompt Injection 防护、API Key 管理、审计） |
 | `git-conventions.md` | Git 规范（Commit 格式、分支策略、PR 流程） |
 | `tooling-recommendations.md` | ★ 推荐工具链（Plugins + MCP Servers + Skills 安装指南） |
-| `architecture-v9.2-adoption.md` | V9.2 架构升级路线图（差距分析 + P0-P3 计划） |
+| `upgrade-roadmap.md` | ★ 升级路线图（分模块步骤 + 进度追踪 + 每个模块的验证方式） |
+| `architecture-v9.2-adoption.md` | V9.2 目标架构（完整目录结构 + 分层规范 + 不变原则） |
 | `data-interfaces.md` | ★ 数据接口规范（枚举、8阶段DTO、ContextMapper、AgentState完整定义） |
 | `architecture-validation-25-inputs.md` | 25 条用户输入逻辑推演（架构有效性验证） |

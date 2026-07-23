@@ -26,6 +26,8 @@ DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL")
 AMAP_KEY = os.environ.get("AMAP_API_KEY")
 TUNIU_KEY = os.environ.get("TUNIU_API_KEY")
 
+# max_tokens 读取（与 deepseek_gateway 保持一致，默认不限制）
+_MAX_TOKENS = int(os.environ["DEEPSEEK_MAX_TOKENS"]) if "DEEPSEEK_MAX_TOKENS" in os.environ else None
 MAX_ROUNDS = 5
 TIMEOUT = 15
 
@@ -351,22 +353,18 @@ def run(context: AgentContext) -> AgentResult:
     for round_num in range(1, MAX_ROUNDS + 1):
         is_final_round = (round_num == MAX_ROUNDS)
 
+        kwargs: dict = {"model": DEEPSEEK_MODEL, "messages": messages}
+        if _MAX_TOKENS is not None:
+            kwargs["max_tokens"] = _MAX_TOKENS
+
         if is_final_round:
             # 最后一轮：禁止再调用工具，强制输出最终 JSON
-            resp = client.chat.completions.create(
-                model=DEEPSEEK_MODEL,
-                max_tokens=4096,
-                messages=messages,
-                tool_choice="none",
-            )
+            kwargs["tool_choice"] = "none"
         else:
-            resp = client.chat.completions.create(
-                model=DEEPSEEK_MODEL,
-                max_tokens=4096,
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
-            )
+            kwargs["tools"] = TOOLS
+            kwargs["tool_choice"] = "auto"
+
+        resp = client.chat.completions.create(**kwargs)
 
         msg = resp.choices[0].message
 
