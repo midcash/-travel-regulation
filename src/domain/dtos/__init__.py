@@ -21,6 +21,7 @@ from src.domain.dtos.retry_context import (
 from src.domain.dtos.phase1_dto import (
     Phase1RawOutput,
     Phase1Output,
+    build_intent_summary,
 )
 from src.domain.dtos.phase5_dto import (
     Phase5Input,
@@ -42,7 +43,7 @@ __all__ = [
     # retry_context
     "RetryContext", "WeakDimension", "BlockingViolation", "RetryIssue",
     # phase1
-    "Phase1RawOutput", "Phase1Output",
+    "Phase1RawOutput", "Phase1Output", "build_intent_summary",
     # phase5
     "Phase5Input", "Phase5Output",
     "HardChecksResult", "Violation",
