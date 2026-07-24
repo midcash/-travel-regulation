@@ -63,3 +63,5 @@ class AgentResult:
     data: dict              # Agent 产出的结构化数据
     success: bool = True
     error: str | None = None
+    tokens_used: int = 0    # Token 消耗统计（由 deepseek_gateway 累积）
+    model_used: str = ""    # 使用的模型名

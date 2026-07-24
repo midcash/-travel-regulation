@@ -11,7 +11,7 @@ Phase 1 DTO — 意图解析阶段的输入输出契约。
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.domain.dtos.enums import IntentType, TripPurpose, PaceMode
 
@@ -20,6 +20,7 @@ class Phase1RawOutput(BaseModel):
     """Step 1: LLM CoT 解析原始输出。
 
     由 Phase 1 LLM prompt 直接产出，未经 Negation Guard 处理。
+    LLM 可能对数值字段返回 null，field_validator 自动将 None → 默认值。
     """
     intent_type: IntentType = IntentType.TRAVEL
     destination: str | None = None
@@ -36,6 +37,30 @@ class Phase1RawOutput(BaseModel):
     missing_dimensions: list[str] = Field(default_factory=list)
     free_time_slots: list[str] = Field(default_factory=list)  # 🔀 混合意图中用户可支配时间段
     raw_response: str = ""                            # LLM 原始输出（调试用）
+
+    @field_validator("days", mode="before")
+    @classmethod
+    def _coerce_days(cls, v: int | None) -> int:
+        """LLM 可能返回 null，None → 0。"""
+        return 0 if v is None else v
+
+    @field_validator("budget", mode="before")
+    @classmethod
+    def _coerce_budget(cls, v: float | None) -> float:
+        """LLM 可能返回 null，None → 0。"""
+        return 0.0 if v is None else v
+
+    @field_validator("travelers", mode="before")
+    @classmethod
+    def _coerce_travelers(cls, v: int | None) -> int:
+        """LLM 可能返回 null，None → 1。"""
+        return 1 if v is None else v
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _coerce_confidence(cls, v: float | None) -> float:
+        """LLM 可能返回 null，None → 0。"""
+        return 0.0 if v is None else v
 
 
 class Phase1Output(BaseModel):

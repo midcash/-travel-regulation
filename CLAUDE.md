@@ -68,7 +68,7 @@ skill/
 │   │   └── deepseek_gateway.py        #   ← llm_client.py（DeepSeek API 封装）
 │   │
 │   ├── domain/                        # 领域层
-│   │   ├── dtos/                      #   阶段契约 DTO（待实现）
+│   │   ├── dtos/                      #   阶段契约 DTO（enums/phase1/phase5/retry_context）
 │   │   ├── agent_state.py             #   ← state.py（WorkflowState/AgentContext/AgentResult）
 │   │   ├── planner.py                 #   ← planner_agent.py（行程生成 Agent）
 │   │   ├── knowledge_agent.py         #   ← knowledge_agent.py（知识查询 Agent）
@@ -78,13 +78,14 @@ skill/
 │   │   ├── orchestrator.py            #   ← orchestrator.py（组装层）
 │   │   ├── workflow_engine.py         #   ← workflow_engine.py（状态机）
 │   │   ├── mappers/                   #   DTO 映射器（待实现）
-│   │   ├── guards/                    #   代码守卫（待实现）
+│   │   ├── guards/                    #   代码守卫（negation_guard）
 │   │   └── routers/                   #   路由（待实现）
 │   │
 │   ├── adapters/                      # 外部适配器（待实现）
-│   ├── phase1/ ~ phase8/              # 阶段实现（待实现）
+│   ├── phase1/                        # Phase 1 意图解析（prompts/pipeline）
+│   ├── phase2/ ~ phase8/              # 远期阶段（待实现）
 │   ├── api/                           # FastAPI 路由（远期）
-│   └── utils/                         # 工具（待实现）
+│   └── utils/                         # 工具（json_utils）
 │
 ├── evaluation/                        # 评审标准文档
 ├── tests/
