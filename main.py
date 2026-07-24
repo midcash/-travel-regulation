@@ -1,6 +1,8 @@
 """Agent Workflow Platform — 入口（Travel Workflow 示例）。"""
-import json
 from src.application.orchestrator import run
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 if __name__ == "__main__":
     # user_input = "周末北京去上海两天，预算3000"
@@ -12,27 +14,52 @@ if __name__ == "__main__":
     state = run(user_input)
 
     # ---- 输出行程 ----
-    print("\n===== 行程方案 =====")
     refined = state.refined_plan or state.plan or {}
     plan_days = refined.get("plan", {})
+    plan_summary: list[dict] = []
     for day in sorted(plan_days.keys()):
-        print(f"\n{day}:")
-        for a in plan_days[day]:
-            print(f"  {a.get('time','')}  {a.get('activity','')}  ￥{a.get('cost',0)}  ({a.get('duration_min',0)}min)")
+        activities = [
+            {
+                "time": a.get("time", ""),
+                "activity": a.get("activity", ""),
+                "cost": a.get("cost", 0),
+                "duration_min": a.get("duration_min", 0),
+            }
+            for a in plan_days[day]
+        ]
+        plan_summary.append({"day": day, "activities": activities})
+
+    logger.info("final_plan", plan=plan_summary)
 
     # ---- 输出评审 ----
     review = state.review_result or {}
     qs = review.get("quality_scores", {})
-    print(f"\n===== 质量评分 =====")
-    print(f"综合: {qs.get('composite_score', '?')}  ({qs.get('verdict', '?')})")
-    print(f"完整性: {qs.get('completeness', {}).get('score', '?')}  可行性: {qs.get('feasibility', {}).get('score', '?')}  约束: {qs.get('constraint_sat', {}).get('score', '?')}  体验: {qs.get('experience', {}).get('score', '?')}  准确: {qs.get('accuracy', {}).get('score', '?')}")
-    print(f"重试: {state.retry_count}次")
-    print(f"Budget: ￥{refined.get('total_cost', '?')} / 剩余 ￥{refined.get('budget_remaining', '?')}")
+    logger.info(
+        "quality_scores",
+        composite=qs.get("composite_score", "?"),
+        verdict=qs.get("verdict", "?"),
+        completeness=qs.get("completeness", {}).get("score", "?"),
+        feasibility=qs.get("feasibility", {}).get("score", "?"),
+        constraint_sat=qs.get("constraint_sat", {}).get("score", "?"),
+        experience=qs.get("experience", {}).get("score", "?"),
+        accuracy=qs.get("accuracy", {}).get("score", "?"),
+    )
+    logger.info(
+        "budget_summary",
+        total_cost=refined.get("total_cost", "?"),
+        budget_remaining=refined.get("budget_remaining", "?"),
+        retry_count=state.retry_count,
+    )
 
     # ---- 输出问题 ----
     issues = review.get("issues", [])
     if issues:
-        print(f"\n===== 问题 ({len(issues)}) =====")
-        for i in issues[:5]:
-            print(f"  [{i.get('severity','?')}] {i.get('category','')}: {i.get('evidence','')[:80]}")
-
+        issues_summary = [
+            {
+                "severity": i.get("severity", "?"),
+                "category": i.get("category", ""),
+                "evidence": i.get("evidence", "")[:80],
+            }
+            for i in issues[:5]
+        ]
+        logger.info("issues_found", count=len(issues), issues=issues_summary)

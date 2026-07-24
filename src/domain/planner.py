@@ -4,6 +4,9 @@ from src.infrastructure.deepseek_gateway import ask_llm
 from src.domain.agent_state import AgentContext, AgentResult
 from src.domain.dtos.phase1_dto import build_intent_summary
 from src.utils.json_utils import sanitize_json
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 SYSTEM_PROMPT = """你是一个专业旅行规划师。你必须严格按以下 JSON schema 输出，不得包含任何其他文字。
 
@@ -85,13 +88,13 @@ def run(context: AgentContext) -> AgentResult:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        # 安全打印（避免 Windows GBK 编码崩溃）
         safe = raw.encode("ascii", errors="replace").decode("ascii")
-        print("===== RAW LLM OUTPUT =====")
-        print(safe[:500])
-        print("===== SANITIZED =====")
         sanitized = sanitize_json(raw)
-        print(sanitized.encode("ascii", errors="replace").decode("ascii")[:500])
+        logger.error(
+            "planner_json_parse_failed",
+            raw_preview=safe[:500],
+            sanitized_preview=sanitized.encode("ascii", errors="replace").decode("ascii")[:500],
+        )
         try:
             parsed = json.loads(sanitized)
         except json.JSONDecodeError:

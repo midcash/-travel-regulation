@@ -9,9 +9,21 @@ Workflow Engine — 确定性状态机，替代 LLM 路由决策。
 """
 from __future__ import annotations
 
-from src.domain.agent_state import WorkflowState, AgentContext, AgentResult
+import time
 
-MAX_RETRIES = 1
+from src.domain.agent_state import WorkflowState, AgentContext, AgentResult
+from src.utils.logger import get_logger
+from src.utils.tracing import trace_phase, trace_agent
+from src.utils.metrics import (
+    AGENT_CALLS_TOTAL,
+    AGENT_DURATION_SECONDS,
+    PHASE_DURATION_SECONDS,
+    RETRY_COUNT_TOTAL,
+)
+
+logger = get_logger(__name__)
+
+MAX_RETRIES = 0
 
 
 class WorkflowEngine:
@@ -28,7 +40,7 @@ class WorkflowEngine:
     def _call_agent(
         self, agent_name: str, upstream_data: dict, retry_context: dict | None = None
     ) -> AgentResult:
-        """构建 AgentContext 并调用 Agent。"""
+        """构建 AgentContext 并调用 Agent，记录 tracing 和 metrics。"""
         ctx = AgentContext(
             session_id=self.state.session_id,
             user_input=self.state.user_input,
@@ -37,8 +49,35 @@ class WorkflowEngine:
             negation_constraints=self.state.negation_constraints,  # 🛡️ Phase 1
             phase1_output=self.state.phase1_output,  # 🔀 Phase 1.1
         )
-        print(f"[ENGINE] → {agent_name}")
-        return self.agents[agent_name](ctx)
+
+        t_start = time.perf_counter()
+        logger.info("agent_started", agent=agent_name)
+        with trace_agent(agent_name, self.state.session_id):
+            result = self.agents[agent_name](ctx)
+
+        elapsed_ms = int((time.perf_counter() - t_start) * 1000)
+        status = "success" if result.success else "failure"
+        AGENT_CALLS_TOTAL.labels(agent=agent_name, status=status).inc()
+        AGENT_DURATION_SECONDS.labels(agent=agent_name).observe(elapsed_ms / 1000)
+
+        if result.success:
+            logger.info(
+                "agent_finished",
+                agent=agent_name,
+                success=True,
+                duration_ms=elapsed_ms,
+                tokens_used=result.tokens_used,
+                model_used=result.model_used or "",
+            )
+        else:
+            logger.error(
+                "agent_failed",
+                agent=agent_name,
+                error=result.error,
+                duration_ms=elapsed_ms,
+            )
+
+        return result
 
     def _checkpoint(self):
         """保存当前状态快照（保留最近 3 个）。"""
@@ -116,7 +155,7 @@ class WorkflowEngine:
                 rule = v.get("rule", "")
                 target = self.RULE_TO_TARGET.get(rule)
                 if target:
-                    print(f"[ENGINE] structured route: {rule} → {target}")
+                    logger.info("retry_route_determined", rule=rule, target=target)
                     return target
 
         # ---- 第二层：LLM issues 关键词 fallback ----
@@ -164,79 +203,110 @@ class WorkflowEngine:
         retry_feedback = None  # 在 rollback 前保存，避免被清空
 
         while self.state.retry_count <= MAX_RETRIES:
-            # ---- Step 1: Planner ----
-            retry_ctx = retry_feedback
-            result = self._call_agent(
-                "planner",
-                upstream_data={"user_input": self.state.user_input},
-                retry_context=retry_ctx,
-            )
-            if not result.success:
-                print(f"[ENGINE] planner 失败: {result.error}")
-                break
-            self.state.plan = result.data
-            self._checkpoint()
+            # ================================================
+            # Phase 4: 规划生成（Planner → Knowledge → Refinement）
+            # ================================================
+            t_phase4_start = time.perf_counter()
+            with trace_phase(4, self.state.session_id):
+                # ---- Step 1: Planner ----
+                retry_ctx = retry_feedback
+                result = self._call_agent(
+                    "planner",
+                    upstream_data={"user_input": self.state.user_input},
+                    retry_context=retry_ctx,
+                )
+                if not result.success:
+                    break
+                self.state.plan = result.data
+                self._checkpoint()
 
-            # ---- Step 2: Knowledge ----
-            result = self._call_agent(
-                "knowledge",
-                upstream_data=self.state.plan,
-            )
-            if not result.success:
-                print(f"[ENGINE] knowledge 失败: {result.error}")
-                break
-            self.state.knowledge_data = result.data
-            self._checkpoint()
+                # ---- Step 2: Knowledge ----
+                result = self._call_agent(
+                    "knowledge",
+                    upstream_data=self.state.plan,
+                )
+                if not result.success:
+                    break
+                self.state.knowledge_data = result.data
+                self._checkpoint()
 
-            # ---- Step 3: Planner Refinement ----
-            result = self._call_agent(
-                "planner",
-                upstream_data={
-                    "plan": self.state.plan,
-                    "knowledge_data": self.state.knowledge_data,
-                    "user_input": self.state.user_input,
-                },
-            )
-            if not result.success:
-                print(f"[ENGINE] planner_refinement 失败: {result.error}")
-                break
-            self.state.refined_plan = result.data
-            self._checkpoint()
+                # ---- Step 3: Planner Refinement ----
+                result = self._call_agent(
+                    "planner",
+                    upstream_data={
+                        "plan": self.state.plan,
+                        "knowledge_data": self.state.knowledge_data,
+                        "user_input": self.state.user_input,
+                    },
+                )
+                if not result.success:
+                    break
+                self.state.refined_plan = result.data
+                self._checkpoint()
 
-            # ---- Step 4: Reviewer ----
-            result = self._call_agent(
-                "reviewer",
-                upstream_data={
-                    "plan": self.state.refined_plan,
-                    "knowledge_data": self.state.knowledge_data,
-                    "user_req": self.state.user_input,
-                    "phase1_output": self.state.phase1_output,  # 🔀 mixed intent 适配
-                },
+            PHASE_DURATION_SECONDS.labels(phase="4").observe(
+                (time.perf_counter() - t_phase4_start)
             )
-            if not result.success:
-                print(f"[ENGINE] reviewer 失败: {result.error}")
-                break
-            self.state.review_result = result.data
-            self._checkpoint()
+
+            # ================================================
+            # Phase 5: 评审（Reviewer）
+            # ================================================
+            t_phase5_start = time.perf_counter()
+            with trace_phase(5, self.state.session_id):
+                # ---- Step 4: Reviewer ----
+                result = self._call_agent(
+                    "reviewer",
+                    upstream_data={
+                        "plan": self.state.refined_plan,
+                        "knowledge_data": self.state.knowledge_data,
+                        "user_req": self.state.user_input,
+                        "phase1_output": self.state.phase1_output,  # 🔀 mixed intent 适配
+                    },
+                )
+                if not result.success:
+                    break
+                self.state.review_result = result.data
+                self._checkpoint()
+
+            PHASE_DURATION_SECONDS.labels(phase="5").observe(
+                (time.perf_counter() - t_phase5_start)
+            )
 
             # ---- 多信号决策 ----
             verdict = result.data.get("quality_scores", {}).get("verdict", "?")
             score = result.data.get("quality_scores", {}).get("composite_score", 0)
             hard_ok = result.data.get("hard_checks", {}).get("passed", True)
-            print(f"[ENGINE] score={score} verdict={verdict} hard_checks_passed={hard_ok}")
+            logger.info(
+                "review_complete",
+                score=score,
+                verdict=verdict,
+                hard_checks_passed=hard_ok,
+            )
 
             if not self._should_retry(result.data):
-                print("[ENGINE] PASS → FINISH")
+                logger.info("workflow_pass_finish")
                 break
 
             # ---- 重试 ----
             self.state.retry_count += 1
             if self.state.retry_count > MAX_RETRIES:
-                print(f"[ENGINE] retry exhausted ({MAX_RETRIES} max)")
+                logger.warning(
+                    "retry_exhausted",
+                    max_retries=MAX_RETRIES,
+                    retry_count=self.state.retry_count,
+                )
                 break
 
             target = self._classify_failure(result.data)
-            print(f"[ENGINE] retry #{self.state.retry_count} → {target}")
+            RETRY_COUNT_TOTAL.labels(
+                agent=target, reason=verdict
+            ).inc()
+            logger.info(
+                "workflow_retry",
+                attempt=self.state.retry_count,
+                target=target,
+                max_retries=MAX_RETRIES,
+            )
             self.state.retry_history.append({
                 "attempt": self.state.retry_count,
                 "score": score,

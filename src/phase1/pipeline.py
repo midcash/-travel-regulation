@@ -17,6 +17,9 @@ from src.infrastructure.deepseek_gateway import ask_llm
 from src.phase1.prompts import PHASE1_COT_PROMPT
 from src.domain.dtos.phase1_dto import Phase1RawOutput, Phase1Output
 from src.utils.json_utils import sanitize_json
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def run_phase1(user_input: str) -> Phase1Output:
@@ -38,7 +41,11 @@ def run_phase1(user_input: str) -> Phase1Output:
     # ---- Phase 1.0: Negation Guard ----
     negation_constraints = extract_negation_constraints(user_input)
     if negation_constraints:
-        print(f"[NEGATION_GUARD] 命中: {negation_constraints}")
+        logger.info(
+            "negation_guard_hit",
+            constraints=negation_constraints,
+            count=len(negation_constraints),
+        )
 
     # ---- Phase 1.1: CoT 意图解析 ----
     cot_prompt = PHASE1_COT_PROMPT.format(user_input=user_input)
@@ -50,16 +57,27 @@ def run_phase1(user_input: str) -> Phase1Output:
         try:
             cot_parsed = json.loads(sanitized)
         except json.JSONDecodeError as e:
+            logger.error(
+                "phase1_cot_json_parse_failed",
+                error=str(e),
+                raw_preview=cot_raw[:500],
+            )
             raise RuntimeError(
                 f"Phase 1 CoT 意图解析失败: JSON 解析错误: {e}\n"
                 f"原始输出(前500字符): {cot_raw[:500]}"
             ) from e
 
     raw_output = Phase1RawOutput(**cot_parsed)
-    print(f"[PHASE1] intent={raw_output.intent_type.value} "
-          f"dest={raw_output.destination} days={raw_output.days} "
-          f"budget={raw_output.budget} confidence={raw_output.confidence} "
-          f"free_slots={raw_output.free_time_slots} missing={raw_output.missing_dimensions}")
+    logger.info(
+        "phase1_cot_parsed",
+        intent=raw_output.intent_type.value,
+        destination=raw_output.destination,
+        days=raw_output.days,
+        budget=raw_output.budget,
+        confidence=raw_output.confidence,
+        free_time_slots=raw_output.free_time_slots,
+        missing_dimensions=raw_output.missing_dimensions,
+    )
 
     # ---- 合并: CoT + Negation Guard → Phase1Output ----
     # 从 preferences 中移除与 negation_constraints 子串匹配的项
@@ -86,7 +104,10 @@ def run_phase1(user_input: str) -> Phase1Output:
     )
 
     if phase1_output.needs_clarification:
-        print(f"[PHASE1] ⚠️ 需要澄清: missing={phase1_output.missing_dimensions} "
-              f"confidence={phase1_output.confidence}（继续执行，由 Planner 自行处理）")
+        logger.warning(
+            "phase1_needs_clarification",
+            missing_dimensions=phase1_output.missing_dimensions,
+            confidence=phase1_output.confidence,
+        )
 
     return phase1_output
