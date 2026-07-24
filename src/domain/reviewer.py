@@ -18,6 +18,7 @@ import json
 import re
 from src.infrastructure.deepseek_gateway import ask_llm
 from src.domain.agent_state import AgentContext, AgentResult
+from src.utils.json_utils import sanitize_json
 
 # ============================================================
 # Phase 1: 代码硬规则校验
@@ -455,17 +456,6 @@ def _build_llm_prompt(plan: dict, user_req: str, knowledge_data: dict, hard_chec
     return prompt
 
 
-def _sanitize_json(raw: str) -> str:
-    """从 LLM 输出中提取纯 JSON。"""
-    raw = raw.strip()
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        raw = raw[start:end + 1]
-    return raw
-
 
 def _llm_review(plan: dict, user_req: str, knowledge_data: dict, hard_checks: dict) -> dict:
     """LLM 质量评分。"""
@@ -495,7 +485,7 @@ def _llm_review(plan: dict, user_req: str, knowledge_data: dict, hard_checks: di
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        sanitized = _sanitize_json(raw)
+        sanitized = sanitize_json(raw)
         try:
             parsed = json.loads(sanitized)
         except json.JSONDecodeError:

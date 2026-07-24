@@ -3,6 +3,7 @@ import re
 from src.infrastructure.deepseek_gateway import ask_llm
 from src.domain.agent_state import AgentContext, AgentResult
 from src.domain.dtos.phase1_dto import build_intent_summary
+from src.utils.json_utils import sanitize_json
 
 SYSTEM_PROMPT = """你是一个专业旅行规划师。你必须严格按以下 JSON schema 输出，不得包含任何其他文字。
 
@@ -42,18 +43,6 @@ SYSTEM_PROMPT = """你是一个专业旅行规划师。你必须严格按以下 
     
     ## 用户需求
     {user_input} """
-
-
-def _sanitize_json(raw: str) -> str:
-    """从 LLM 原始输出中提取纯 JSON 字符串。"""
-    raw = raw.strip()
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        raw = raw[start:end + 1]
-    return raw
 
 
 def _build_guard_block(constraints: list[str]) -> str:
@@ -101,7 +90,7 @@ def run(context: AgentContext) -> AgentResult:
         print("===== RAW LLM OUTPUT =====")
         print(safe[:500])
         print("===== SANITIZED =====")
-        sanitized = _sanitize_json(raw)
+        sanitized = sanitize_json(raw)
         print(sanitized.encode("ascii", errors="replace").decode("ascii")[:500])
         try:
             parsed = json.loads(sanitized)

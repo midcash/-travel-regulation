@@ -11,6 +11,7 @@ import urllib.parse
 from openai import OpenAI
 
 from src.domain.agent_state import AgentContext, AgentResult
+from src.utils.json_utils import sanitize_json
 
 try:
     from dotenv import load_dotenv
@@ -314,19 +315,6 @@ TOOL_EXECUTORS = {
 # 主入口
 # ============================================================
 
-def _sanitize_json(raw: str) -> str:
-    """从 LLM 输出中提取纯 JSON。"""
-    raw = raw.strip()
-    import re
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        raw = raw[start:end + 1]
-    return raw
-
-
 def run(context: AgentContext) -> AgentResult:
     """接收 AgentContext（upstream_data = planner 输出的 plan），返回结构化知识数据。
 
@@ -428,7 +416,7 @@ def run(context: AgentContext) -> AgentResult:
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError:
-            sanitized = _sanitize_json(content)
+            sanitized = sanitize_json(content)
             try:
                 parsed = json.loads(sanitized)
             except json.JSONDecodeError:
