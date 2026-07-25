@@ -1,14 +1,15 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+本文件规定 Codex 在本仓库中的开发方式。目标架构的唯一设计依据是 `.codex/rules/架构.md`；历史 V9.2、Phase 0～8 等文档只能作为背景材料，不得覆盖当前目标架构。
 
 ---
 
 ## 环境
 
-- Python: `venv/Scripts/python` (Windows) / `venv/bin/python` (Linux/Mac)
-- 包管理: `venv/Scripts/pip`
-- Shell: Git Bash（非 cmd/PowerShell），路径用 `/` 分隔
+- Python：`venv/Scripts/python`（Windows）/ `venv/bin/python`（Linux/Mac）
+- 包管理：`venv/Scripts/pip`
+- Shell：优先 Git Bash，路径使用 `/`
+- Python 版本：3.11+
 
 ## 常用命令
 
@@ -19,306 +20,345 @@ venv/Scripts/pip install -r requirements.txt
 # 运行主流程
 venv/Scripts/python main.py
 
-# 运行所有测试（默认跳过 slow）
+# 运行默认测试（跳过 slow）
 venv/Scripts/python -m pytest
 
-# 运行全部测试（含真实 API 调用的 e2e）
-venv/Scripts/python -m pytest -m slow
+# 仅快速单元测试
+venv/Scripts/python -m pytest -m "not slow and not integration"
 
 # 运行单个测试文件
-venv/Scripts/python -m pytest tests/unit/test_planner.py
+venv/Scripts/python -m pytest tests/unit/test_negation_guard.py
 
-# 运行单个测试函数
-venv/Scripts/python -m pytest tests/unit/test_planner.py -k "test_negation_guard"
+# 运行全部测试（包含真实 API 的 slow 测试）
+venv/Scripts/python -m pytest -m slow
 
-# 代码覆盖率
+# 覆盖率
 venv/Scripts/python -m pytest --cov=. --cov-report=term-missing
-
-# 仅快速单元测试（跳过集成测试和 slow）
-venv/Scripts/python -m pytest -m "not slow and not integration"
 ```
+
+---
 
 ## 技术栈
 
 | 分类 | 选型 | 用途 |
 |:---|:---|:---|
-| 语言 | Python 3.11+ | — |
-| LLM 网关 | DeepSeek API (OpenAI SDK) | 行程生成、知识查询、语义评审 |
-| 状态管理 | Pydantic v2 | WorkflowState, DTO |
-| 外部 API | 高德地图 Geocode, 途牛 MCP | 地理编码、酒店/航班/门票 |
-| Web 框架 | FastAPI + Uvicorn (远期) | API 服务化 |
-| 向量存储 | Chroma (远期) | 用户偏好语义检索 |
-| 本地存储 | SQLite + JSONL (远期) | 工作记忆 + 情节画像 |
-| 可观测性 | structlog + prometheus_client (第 3 层) | 结构化日志 + Metrics |
-| 测试 | pytest + pytest-cov + httpx | 单元/集成/e2e |
-| 包管理 | pip + requirements.txt | 零 Docker 依赖 |
-
-## 项目结构
-
-已从扁平结构迁移到 `src/` 包结构（V9.2 架构）。
-
-```
-skill/
-├── main.py                            # CLI 入口
-│
-├── src/
-│   ├── interfaces/                    # 抽象接口（待实现）
-│   │
-│   ├── infrastructure/                # 基础设施
-│   │   └── deepseek_gateway.py        #   ← llm_client.py（DeepSeek API 封装）
-│   │
-│   ├── domain/                        # 领域层
-│   │   ├── dtos/                      #   阶段契约 DTO（enums/phase1/phase5/retry_context）
-│   │   ├── agent_state.py             #   ← state.py（WorkflowState/AgentContext/AgentResult）
-│   │   ├── planner.py                 #   ← planner_agent.py（行程生成 Agent）
-│   │   ├── knowledge_agent.py         #   ← knowledge_agent.py（知识查询 Agent）
-│   │   └── reviewer.py               #   ← reviewer_agent.py（评审 Agent）
-│   │
-│   ├── application/                   # 应用层
-│   │   ├── orchestrator.py            #   ← orchestrator.py（组装层）
-│   │   ├── workflow_engine.py         #   ← workflow_engine.py（状态机）
-│   │   ├── mappers/                   #   DTO 映射器（待实现）
-│   │   ├── guards/                    #   代码守卫（negation_guard）
-│   │   └── routers/                   #   路由（待实现）
-│   │
-│   ├── adapters/                      # 外部适配器（待实现）
-│   ├── phase1/                        # Phase 1 意图解析（prompts/pipeline）
-│   ├── phase2/ ~ phase8/              # 远期阶段（待实现）
-│   ├── api/                           # FastAPI 路由（远期）
-│   └── utils/                         # 工具（json_utils）
-│
-├── evaluation/                        # 评审标准文档
-├── tests/
-│   ├── unit/                          # 单元测试
-│   ├── integration/                   # 集成测试
-│   └── e2e/                           # E2E 测试
-├── data/                              # 运行时数据
-│   ├── profiles/                      # L2 情节画像
-│   └── exports/                       # 渲染输出
-├── .Codex/
-│   ├── settings.json
-│   ├── hooks/
-│   └── rules/                         # ★ 架构与规范文档
-├── .env.example
-├── requirements.txt
-├── pytest.ini
-├── VERSION
-└── AGENTS.md
-```
+| 语言 | Python 3.11+ | 领域逻辑、Agent 与工具编排 |
+| LLM 网关 | DeepSeek API（OpenAI SDK） | 约束理解、方案生成、语义 Critic |
+| 数据模型 | Pydantic v2 | 请求、约束、证据、候选、方案、验证问题 |
+| 外部 API | 高德地图、途牛 MCP | 地理、酒店、航班、门票 |
+| API 服务 | FastAPI + Uvicorn（后期） | 对外服务化 |
+| 状态存储 | SQLite / JSONL（演进目标） | 会话、计划版本、Checkpoint、反馈 |
+| 可观测性 | structlog + OpenTelemetry + prometheus_client | 日志、Trace、Metrics |
+| 测试 | pytest + pytest-cov + httpx | 单元、集成、E2E |
+| 包管理 | pip + 锁定版本的 requirements.txt | 可复现构建 |
 
 ---
 
-## 架构概述
+## 当前代码基线
 
-### 分层架构
+当前仓库是最小可运行内核，不等于目标架构：
 
+```text
+skill/
+├── main.py
+├── src/
+│   ├── engine/
+│   │   ├── loop.py                 # LLM-A → L1 → LLM-B → 有界修订
+│   │   └── prompts.py
+│   ├── gateway/
+│   │   ├── deepseek.py             # LLM Gateway
+│   │   └── json_utils.py
+│   ├── guard/
+│   │   └── negation.py
+│   ├── tool/
+│   │   └── knowledge.py            # 高德/途牛 Tool Calling
+│   ├── review/
+│   │   ├── l1.py
+│   │   └── l2.py
+│   └── obs/
+│       ├── log.py
+│       ├── trace.py
+│       └── metric.py
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+├── evaluation/
+├── data/
+├── .codex/rules/架构.md             # 目标架构唯一依据
+└── AGENTS.md
 ```
-API 层 (routes/schemas)     →  不包含业务逻辑
-应用层 (orchestrator/router) →  纯编排，不执行业务计算
-领域层 (planner/validator)   →  纯 Python/LLM，不依赖具体基础设施
-接口层 (interfaces/)         →  所有外部依赖必须通过接口访问
-基础设施层 (infrastructure/) →  可插拔的具体实现
-适配器层 (adapters/)         →  隔离上游 API 变化
+
+不要将尚不存在的目录或能力描述为“已实现”。每次架构升级都要区分当前状态、目标状态和本次增量。
+
+---
+
+## 目标架构概述
+
+旅行规划是**交互式约束满足 + 多目标优化 + 动态重规划**，不是风险二分类，也不是一次性自由文本生成。
+
+主链路：
+
+```text
+Request Gateway
+  → Session & Trip State
+  → Intent & Constraint Interpreter
+  → Interaction Router
+      ├─ ANSWER：有依据的简单问答
+      ├─ CLARIFY：最少必要追问
+      ├─ PLAN：新建规划
+      ├─ REFINE：局部修改
+      ├─ COMPARE：同指标候选比较
+      ├─ REPLAN：事件影响分析与重规划
+      ├─ ACTION：预订/付款/取消确认边界
+      └─ UNSUPPORTED：边界说明或人工接管
+  → Orchestrator / Dynamic Task Graph
+  → Research Agents + Tool Adapters
+  → Evidence Registry
+  → Candidate Pool
+  → Hybrid Planner / Optimizer
+  → Deterministic Validators
+  → Independent Critic
+  → Targeted Repair（有界）
+  → Delivery / FAILED
 ```
 
-### 核心接口契约
+### 三个平面
 
-所有 Agent 必须遵守：
+- **控制平面**：Gateway、Router、Orchestrator、状态机、预算、质量门；
+- **数据平面**：Tool Adapter、Evidence Registry、Candidate Pool、版本化知识；
+- **智能平面**：约束解释、Research Agent、方案生成、Critic 和交付表达。
+
+控制平面决定是否继续和下一步动作。Agent 不得绕过控制平面修改状态或执行外部写操作。
+
+### 核心设计决策
+
+1. 先冻结 `ConstraintSnapshot`，再检索和规划；
+2. 硬约束失败不能被综合评分抵消；
+3. 动态事实必须携带来源、`observed_at`、`valid_until` 和置信度；
+4. Research Agent 按当前任务动态选择，不要求每次全部运行；
+5. 独立任务可以并行，存在依赖的规划与验证必须有序执行；
+6. 生成使用 LLM，算术、时空可行性、Schema、权限和幂等使用确定性代码；
+7. 修复基于结构化 `ValidationIssue`，优先局部补证和局部修改；
+8. 计划与交易分离；预订、付款、取消、改签必须重新验证并获得用户最终确认；
+9. 所有循环都有调用数、轮次、时长和成本上限；
+10. 开发期严格 fail-fast，不实现或启用降级机制。
+
+---
+
+## 核心领域契约
+
+优先稳定以下 Pydantic 模型：
+
+- `TripRequest`：出发地、目的地、日期、人数、预算、偏好和工作模式；
+- `Constraint` / `ConstraintSnapshot`：hard、soft、assumption、unknown 及其来源和优先级；
+- `EvidenceItem` / `EvidenceSnapshot`：事实、来源、时间、TTL、状态和原始引用；
+- `Candidate`：可参与规划的标准化交通、住宿、地点或活动；
+- `ItineraryPlan`：版本化日程、预算、备选、假设、警告和证据引用；
+- `ValidationIssue`：Gate、严重级别、影响范围、证据、修复策略；
+- `AgentContext` / `AgentResult`：Agent 的统一输入输出；
+- `WorkflowError`：失败阶段、错误类型、上游引用和 `trace_id`。
+
+跨模块不得裸传任意 `dict`，不得使用自由文本作为系统判断的唯一输入。自由文本用于用户展示，判断基于类型化字段。
+
+### Agent 契约
 
 ```python
 def run(context: AgentContext) -> AgentResult:
-    """Agent 统一入口。
-    Args:
-        context: 只读上下文（session_id, user_input, upstream_data, retry_context）
-    Returns:
-        AgentResult: agent 名称 + 产出数据 + 成功标志 + 错误信息
-    """
+    """执行单个、边界清晰的 Agent 任务。"""
 ```
 
-**铁律**：
-- Agent **互不调用**，全部由 WorkflowEngine 调度
-- Agent **不直接写** WorkflowState，Engine 读取 AgentResult.data 后写入
-- 数据通过 **DTO** 在阶段间传递，不裸传 dict
-- 所有外部依赖通过 **接口抽象层** 调用，不直接依赖具体实现
+所有 Agent 必须遵守：
 
-### 状态机流程（V9.2 升级后）
+- Agent 不直接调用其他 Agent，由 Orchestrator 调度 Task Graph；
+- Agent 不直接写全局 Trip State，只返回 `AgentResult`；
+- 实时事实引用 `evidence_id`，不得把模型记忆当作事实；
+- 失败明确分类为 `retryable`、`needs_user`、`unsupported` 或 `fatal`；
+- 不把完整供应商响应塞入模型上下文；
+- 不记录凭证、完整行程或不必要的 PII。
 
+### Agent 与确定性服务边界
+
+适合 Agent：意图与约束理解、跨来源研究判断、方案骨架生成、体验 Critic。
+
+适合确定性服务：日期/时区、路程矩阵、预算、币种、营业区间、换乘缓冲、Schema、去重、TTL、权限、幂等和审计。
+
+---
+
+## 质量门
+
+| Gate | 检查内容 | 失败行为 |
+|:---|:---|:---|
+| G0 安全与输入 | 权限、注入、PII、Schema、危险动作 | 显式失败或安全边界说明 |
+| G1 规划就绪 | 关键字段、歧义、约束冲突 | 进入澄清，不继续规划 |
+| G2 证据就绪 | 覆盖率、来源、TTL、冲突、关键缺失 | 补证失败后进入 `FAILED` |
+| G3 确定性可行 | 日期、时区、路程、营业时间、预算、硬约束 | 结构化局部修复，仍失败则 `FAILED` |
+| G4 语义与体验 | 节奏、偏好、特殊人群、解释 | Critic 返回结构化问题 |
+| G5 交付完整 | Schema、证据、假设、警告、备选、版本 | 结构化错误；禁止自动补全 |
+| G6 动作前验证 | 最新价格、库存、条款、身份与最终确认 | 不执行外部写操作 |
+
+Critic 必须引用 `constraint_id`、`plan_item_id` 或 `evidence_id`，不能在无证据时断言实时事实，也不能直接重写方案。
+
+---
+
+## 开发期 Fail-fast 铁律
+
+在 M1～M6 核心链路稳定前，**禁止实现或启用降级机制**：
+
+- 禁止备用供应商自动接管；
+- 禁止缓存回退；
+- 禁止用估算或合成数据替代查询失败；
+- 禁止占位符自动补全；
+- 禁止返回部分方案并标记为正常成功；
+- 禁止 Gate 强制通过；
+- 禁止达到循环上限后视为成功；
+- 禁止 Critic 或验证器异常时跳过；
+- 禁止 Mock 提供未显式配置的默认成功响应。
+
+工具失败、超时、解析失败、证据缺失/过期/冲突、验证异常和预算耗尽必须使任务或工作流进入 `FAILED`。失败至少包含：
+
+- `trace_id`；
+- 失败阶段；
+- 错误类型；
+- 受影响任务/证据；
+- 可重试性；
+- 原始异常的安全摘要。
+
+单元测试和集成测试默认：
+
+```text
+strict_mode = true
+retry_count = 0
+cache_reads = false
+fallbacks = false
+partial_success = false
 ```
-Phase 0: 会话初始化（画像加载）
-  ↓
-Phase 1: 意图解析（LLM CoT + 🛡️Negation Guard）
-  ↓ 门禁: confidence≥0.8 & missing≤2
-  ↓
-Phase 2: 环境上下文（天气/会展/汇率）
-  ↓
-Phase 3: 资源候选池（API 拉取 + 空池退避重试）
-  ↓
-Phase 4: 规划生成（复杂度评分 → Flash/Pro 自适应路由）
-  ↓
-Phase 5: 两级裁决
-  L1 确定性校验器（纯代码，毫秒级）
-  L2 语义校验器（LLM 3步：体力/过滤/场景适配）
-  L3 用户交互环（补丁/重启/查询 三档路由）
-  ↓
-Phase 6: 输出交付（行程 + 评分 + Flex_Buffer）
-```
 
-### 关键设计决策
+只有某个机制自身的专项测试可以显式改变对应配置。
 
-- Agent **串行执行**，不并行（依赖明确、可追溯）
-- 差异化重试路由（可行性→Knowledge, 体验→Planner Refinement, 完整性→Planner）
-- State Store 支持 Checkpoint（保留最近 3 个快照）
-- 先手写状态机，后评估是否引入 LangGraph
-- 架构升级原则：**增量演进，每步可验证，向后兼容**
+生产重试、备用供应商、缓存等韧性能力属于后期 M7，必须由默认关闭的 Feature Flag 隔离，并单独进行正常路径、故障注入和回归测试。不得引入自动估算替代、无标识部分成功或强制通过。
 
 ---
 
 ## 编码规范
 
-> 详细规范见 `.Codex/rules/coding-standards.md`
+- 所有 Python 文件顶部使用 `from __future__ import annotations`；
+- 所有函数签名必须完整标注参数和返回类型；
+- 使用 Python 3.11+ 现代类型语法，如 `str | None`；
+- DTO、状态和领域模型使用 Pydantic v2；简单只读载体可使用 `dataclass`；
+- 中文注释和 docstring，关键术语保留英文；
+- import 顺序：标准库、第三方、项目内，每组空一行；
+- 生产代码使用 logger，禁止 `print()`；
+- 禁止裸 `except:`；异常必须转换、记录或继续抛出；
+- 不允许在领域层直接依赖具体供应商 SDK；
+- 外部依赖必须通过接口和 Adapter；
+- 结构化结果必须通过 Schema 校验后才能进入下游。
 
-### 必须遵守
-
-- **Python 3.11+**，使用现代语法（`str | None` 而非 `Optional[str]`）
-- **强制类型标注**：所有函数签名必须标注参数和返回值类型
-- **Pydantic v2** 用于数据模型（DTO、AgentState），`dataclass` 仅用于简单载体（AgentResult）
-- **中文注释和 docstring**——当前项目中文为主，关键术语保留英文（AgentContext, WorkflowState）
-- `from __future__ import annotations` 在每个文件顶部
-- `import` 顺序：标准库 → 第三方 → 项目内，每组空一行
-
-### Docstring 格式
+Docstring：
 
 ```python
 def run(context: AgentContext) -> AgentResult:
-    """简短描述（一行）。
+    """简短描述。
 
     Args:
-        context: 参数说明
+        context: 参数说明。
 
     Returns:
-        AgentResult: 返回值说明
+        AgentResult: 返回值说明。
 
     Raises:
-        ValueError: 异常条件
+        WorkflowError: 失败条件。
     """
 ```
 
-### 命名约定
+命名：
 
 | 类型 | 约定 | 示例 |
 |:---|:---|:---|
-| 模块文件 | `snake_case` | `planner_agent.py` |
-| 类 | `PascalCase` | `WorkflowEngine`, `Phase1Output` |
-| 函数/方法 | `snake_case` | `extract_negation_constraints()` |
-| 常量 | `UPPER_SNAKE` | `MAX_RETRIES`, `DEFAULT_MODEL` |
-| 私有函数 | `_prefix` | `_check_budget()`, `_sanitize_json()` |
-| Pydantic Model | `PascalCase` + 描述性后缀 | `PlannerOutput`, `ReviewerInput` |
+| 模块 | `snake_case` | `evidence_registry.py` |
+| 类 | `PascalCase` | `ConstraintSnapshot` |
+| 函数 | `snake_case` | `validate_evidence()` |
+| 常量 | `UPPER_SNAKE` | `MAX_TOOL_CALLS` |
+| 私有函数 | `_prefix` | `_normalize_price()` |
+| Pydantic Model | 描述性 `PascalCase` | `ValidationIssue` |
 
 ---
 
 ## 测试规范
 
-> 详细规范见 `.Codex/rules/testing-rules.md`
+- 新功能必须包含测试，Bug 修复必须添加回归测试；
+- 单元测试覆盖率目标 ≥ 80%；
+- 外部 LLM/API 在单元和普通集成测试中必须 Mock；
+- 真实 API 测试标记 `pytest.mark.slow`；
+- 测试目录与源码职责对应；
+- 测试函数命名：`test_<被测行为>_<场景>_<期望结果>()`。
 
-### 测试金字塔
+每个新组件至少测试：
 
-```
-        ┌──────┐
-        │ E2E  │  ← 全流程 + 真实 API (slow)
-       ┌┴──────┴┐
-       │ 集成测试 │ ← 多模块协作 + Mock API
-      ┌┴────────┴┐
-      │  单元测试  │ ← 纯逻辑、纯函数、无 IO
-      └──────────┘
-```
+1. 正常成功；
+2. 输入 Schema 失败；
+3. 上游工具失败；
+4. 超时；
+5. 空结果；
+6. 响应解析失败；
+7. 证据过期或冲突；
+8. 硬约束失败；
+9. 调用预算耗尽；
+10. 不会触发缓存、估算、部分成功或强制通过。
 
-### 必须遵守
-
-- 新功能必须包含测试，修复 bug 必须添加回归测试
-- 单元测试覆盖率目标 ≥ 80%
-- 使用 `pytest.mark.slow` 标记需要真实 API 的测试
-- 外部依赖（LLM、API）必须在测试中 Mock
-- 测试函数命名：`test_<被测函数>_<场景>_<期望结果>()`
-- 测试目录结构与源码一一对应
-
-### 运行策略
-
-```bash
-pytest -m "not slow"              # CI/快速检查（默认）
-pytest -m slow                    # 发布前完整验证
-pytest --cov=. --cov-report=html  # 覆盖率报告
-```
+测试断言必须验证精确错误类型和失败阶段，不能只断言“返回了内容”或“没有抛异常”。
 
 ---
 
 ## 安全规则
 
-> 详细规范见 `.Codex/rules/security-rules.md`
-
-### 必须遵守
-
-1. **API Key 绝不硬编码**：全部走环境变量（`.env`），`.env` 已在 `.gitignore`
-2. **`.env.example` 占位符安全**：使用 `sk-xxxxxxxxxxxxxxxx` 或 `xxxxxxxx`，不包含真实凭证
-3. **输入校验**：所有用户输入在进入 LLM prompt 前必须经过脱敏（移除疑似注入指令）
-4. **Prompt 注入防护**：用户输入作为 `{user_input}` 占位符注入 prompt，禁止直接拼接
-5. **日志安全**：禁止打印 API Key、用户个人信息到日志
-6. **依赖审计**：定期 `pip list --outdated`，关注安全公告
-
-### 禁止事项（全项目）
-
-| 禁止 | 原因 |
-|:---|:---|
-| ❌ 在代码中硬编码任何 Key/Token/Password | 泄露风险 |
-| ❌ 将 `.env` 或任何含凭证的文件提交 Git | `.gitignore` 已配置 |
-| ❌ 直接拼接用户输入到 prompt 指令位置 | Prompt Injection |
-| ❌ 在日志/错误消息中打印用户完整行程 | 隐私 |
-| ❌ 使用 `eval()` / `exec()` / `pickle` | 代码注入风险 |
-| ❌ Agent 直接调用另一个 Agent | 破坏状态机调度，引发级联故障 |
-| ❌ Agent 直接写 WorkflowState | 绕过 Engine，状态污染 |
-| ❌ 在生产代码中使用 `print()` 而非 logger | 无结构化、不可追踪 |
-| ❌ 裸 `except:` 吞掉异常 | 隐藏 bug |
-| ❌ LLM 输出直接当作可执行代码执行 | 幻觉/注入风险 |
-| ❌ `requirements.txt` 使用 `>=` 不锁定版本 | 构建不可复现 |
-| ❌ 提交包含 `__pycache__` / `.pyc` / `.pytest_cache` | `.gitignore` 已配置 |
+1. API Key、Token、Password 只来自环境变量或密钥系统；
+2. `.env` 不得提交，`.env.example` 只使用安全占位符；
+3. 用户输入以数据字段注入 Prompt，不拼接到系统指令；
+4. 工具名和参数使用 allowlist 与 Schema 校验；
+5. 外部 API/网页文本视为不可信输入，防止间接 Prompt Injection；
+6. 日志禁止记录完整行程、证件、联系方式和凭证；
+7. 预订、付款、取消、改签使用最小权限、幂等、审计和用户最终确认；
+8. 禁止 `eval()`、`exec()`、`pickle` 和执行 LLM 生成代码；
+9. `requirements.txt` 必须锁定版本，禁止使用无上限的 `>=`；
+10. 禁止提交 `__pycache__`、`.pyc`、`.pytest_cache` 和凭证文件。
 
 ---
 
 ## Git 规范
 
-> 详细规范见 `.Codex/rules/git-conventions.md`
+Commit Message：
 
-### Commit Message 格式
-
-```
+```text
 [module] type: 简短描述（≤72字符）
-
-正文（可选，每行≤72字符，空一行接标题后）
-关联 spec/issue 在正文中注明
 ```
 
-### Module 标签（V9.2）
+模块标签：
 
-| 标签 | 对应范围 |
+| 标签 | 范围 |
 |:---|:---|
-| `core` | 框架内核（state, engine, interfaces） |
-| `guard` | 代码守卫（negation_guard 等） |
-| `mapper` | DTO 映射器（context_mapper） |
-| `agent` | Agent（planner, knowledge, reviewer, semantic_checker） |
-| `router` | 路由（model_router, composite_intent_splitter） |
-| `infra` | 基础设施（gateway, store, mcp_client） |
-| `phaseN` | 阶段 N 实现（phase1~phase8） |
+| `core` | 状态、契约、Orchestrator、Task Graph |
+| `router` | Intent、Constraint、Interaction Router |
+| `evidence` | Evidence Registry、来源与 TTL |
+| `candidate` | 候选标准化、去重和剪枝 |
+| `agent` | Research Agent、Composer、Critic |
+| `planner` | 排程、多目标优化和局部修复 |
+| `validator` | G0～G6 与确定性验证 |
+| `tool` | Tool 接口和供应商 Adapter |
+| `action` | 预订/付款/取消确认边界 |
+| `obs` | 日志、Trace、Metrics |
 | `api` | FastAPI 接口层 |
-| `eval` | 评审/评估相关 |
+| `eval` | 评估与回归集 |
 | `test` | 测试 |
-| `docs` | 文档/规格/rules |
-| `meta` | 元信息（AGENTS.md, VERSION, .gitignore） |
+| `docs` | 文档和规则 |
+| `meta` | AGENTS.md、VERSION、.gitignore |
 
-### 分支命名
+分支：
 
-- `feat/<描述>` — 新功能（如 `feat/negation-guard`）
-- `fix/<描述>` — Bug 修复
-- `refactor/<描述>` — 重构
-- `docs/<描述>` — 文档更新
+- `feat/<描述>`
+- `fix/<描述>`
+- `refactor/<描述>`
+- `docs/<描述>`
 
 ---
 
@@ -326,27 +366,24 @@ pytest --cov=. --cov-report=html  # 覆盖率报告
 
 | 变量 | 用途 | 必需 |
 |:---|:---|:---:|
-| `DEEPSEEK_API_KEY` | DeepSeek LLM API | ✅ |
-| `DEEPSEEK_MODEL` | 模型选择（默认 `deepseek-chat`） | ❌ |
-| `DEEPSEEK_FLASH_MODEL` | Flash 模型名（第 4 层 双模型路由） | ❌ |
-| `DEEPSEEK_PRO_MODEL` | Pro 模型名（第 4 层 双模型路由） | ❌ |
-| `AMAP_API_KEY` | 高德地图地理编码 API | ❌ |
-| `TUNIU_API_KEY` | 途牛 MCP 酒店/航班/门票 API | ❌ |
+| `DEEPSEEK_API_KEY` | DeepSeek LLM API | 是 |
+| `DEEPSEEK_MODEL` | 默认模型 | 否 |
+| `AMAP_API_KEY` | 高德地图 API | 按功能 |
+| `TUNIU_API_KEY` | 途牛 MCP API | 按功能 |
+| `STRICT_MODE` | 开发/测试强制 fail-fast，默认应为 `true` | 开发测试必需 |
+
+不得通过环境变量在普通测试中静默开启 fallback、cache 或 partial success。
 
 ---
 
-## Rules 索引
+## 文档优先级
 
-`.Codex/rules/` 目录包含详细的规范与设计文档：
+发生冲突时按以下顺序处理：
 
-| 文件 | 内容 |
-|:---|:---|
-| `coding-standards.md` | 编码规范（类型标注、Docstring、错误处理、日志） |
-| `testing-rules.md` | 测试分层、Mock 策略、覆盖率目标、命名规范 |
-| `security-rules.md` | 安全规则（Prompt Injection 防护、API Key 管理、审计） |
-| `git-conventions.md` | Git 规范（Commit 格式、分支策略、PR 流程） |
-| `tooling-recommendations.md` | ★ 推荐工具链（Plugins + MCP Servers + Skills 安装指南） |
-| `upgrade-roadmap.md` | ★ 升级路线图（分模块步骤 + 进度追踪 + 每个模块的验证方式） |
-| `architecture-v9.2-adoption.md` | V9.2 目标架构（完整目录结构 + 分层规范 + 不变原则） |
-| `data-interfaces.md` | ★ 数据接口规范（枚举、8阶段DTO、ContextMapper、AgentState完整定义） |
-| `architecture-validation-25-inputs.md` | 25 条用户输入逻辑推演（架构有效性验证） |
+1. 当前用户明确要求；
+2. `.codex/rules/架构.md`；
+3. 本 `AGENTS.md`；
+4. `evaluation/` 下的评估资料；
+5. 历史架构、路线图和实验文档。
+
+如果实现与目标架构不同，必须在变更说明中明确标注“当前实现限制”，不得修改文档来掩盖实现偏差。
