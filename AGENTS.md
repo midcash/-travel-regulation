@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ---
 
@@ -95,7 +95,7 @@ skill/
 ├── data/                              # 运行时数据
 │   ├── profiles/                      # L2 情节画像
 │   └── exports/                       # 渲染输出
-├── .claude/
+├── .Codex/
 │   ├── settings.json
 │   ├── hooks/
 │   └── rules/                         # ★ 架构与规范文档
@@ -103,7 +103,7 @@ skill/
 ├── requirements.txt
 ├── pytest.ini
 ├── VERSION
-└── CLAUDE.md
+└── AGENTS.md
 ```
 
 ---
@@ -175,7 +175,7 @@ Phase 6: 输出交付（行程 + 评分 + Flex_Buffer）
 
 ## 编码规范
 
-> 详细规范见 `.claude/rules/coding-standards.md`
+> 详细规范见 `.Codex/rules/coding-standards.md`
 
 ### 必须遵守
 
@@ -218,7 +218,7 @@ def run(context: AgentContext) -> AgentResult:
 
 ## 测试规范
 
-> 详细规范见 `.claude/rules/testing-rules.md`
+> 详细规范见 `.Codex/rules/testing-rules.md`
 
 ### 测试金字塔
 
@@ -253,7 +253,7 @@ pytest --cov=. --cov-report=html  # 覆盖率报告
 
 ## 安全规则
 
-> 详细规范见 `.claude/rules/security-rules.md`
+> 详细规范见 `.Codex/rules/security-rules.md`
 
 ### 必须遵守
 
@@ -285,7 +285,7 @@ pytest --cov=. --cov-report=html  # 覆盖率报告
 
 ## Git 规范
 
-> 详细规范见 `.claude/rules/git-conventions.md`
+> 详细规范见 `.Codex/rules/git-conventions.md`
 
 ### Commit Message 格式
 
@@ -311,7 +311,7 @@ pytest --cov=. --cov-report=html  # 覆盖率报告
 | `eval` | 评审/评估相关 |
 | `test` | 测试 |
 | `docs` | 文档/规格/rules |
-| `meta` | 元信息（CLAUDE.md, VERSION, .gitignore） |
+| `meta` | 元信息（AGENTS.md, VERSION, .gitignore） |
 
 ### 分支命名
 
@@ -337,7 +337,7 @@ pytest --cov=. --cov-report=html  # 覆盖率报告
 
 ## Rules 索引
 
-`.claude/rules/` 目录包含详细的规范与设计文档：
+`.Codex/rules/` 目录包含详细的规范与设计文档：
 
 | 文件 | 内容 |
 |:---|:---|

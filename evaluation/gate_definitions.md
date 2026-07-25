@@ -6,7 +6,7 @@
 
 质量门是镶嵌在 Agent 工作流中的自动化质量检查关卡。每个 Gate 有明确的触发时机、输入、通过条件和失败处理策略。
 
-质量门由 `core/gate_runner.py` 中的 `GateRunner` 执行，所有 Gate 结果记录到评估日志。
+> **当前项目映射**: 当前分支 (`feat/hackathon-rewrite`) 的 Gate 逻辑**内嵌在 orchestrator LLM prompt 中**，而非独立 `GateRunner` 执行。Gate 0 对应 prompt 中的输入解析、Gate 1 对应 KnowledgeAgent 验证、Gate 2 对应 ReviewerAgent 评分（≥70 阈值）、Gate 3 暂未实现。下方 Python 伪代码引用的 `GateRunner`/`StructuredRequest`/`SharedContext` 等组件为后续状态机优化的参考设计。
 
 ---
 
@@ -75,7 +75,7 @@ def gate_0_check(request: StructuredRequest) -> GateResult:
 |------|-----|
 | Gate ID | 1 |
 | 名称 | 可行性检查 (Feasibility Check) |
-| 触发时机 | Execution Agent 完成校验后 |
+| 触发时机 | KnowledgeAgent 完成校验后 |
 | 阻断级别 | **阻断** (blocking) |
 | 负责执行 | GateRunner (读取 ValidationReport) |
 
@@ -115,7 +115,7 @@ def gate_1_check(validation: ValidationReport) -> GateResult:
 ```
 
 ### 3.4 失败处理
-- 硬约束违反 → 退回 Planning Agent 修订（连同 Execution 的 fix_suggestion）
+- 硬约束违反 → 退回 PlannerAgent 修订（连同 Execution 的 fix_suggestion）
 - 价格异常 → 不阻断，但记录到 warnings（由 Gate 2 综合评判）
 - 第一次失败 → 修订后重试
 - 连续失败 → 进入 Gate 2 降级流程
@@ -130,7 +130,7 @@ def gate_1_check(validation: ValidationReport) -> GateResult:
 |------|-----|
 | Gate ID | 2 |
 | 名称 | 质量评审 (Quality Review) |
-| 触发时机 | Evaluation Agent (Mode B) 完成评估后 |
+| 触发时机 | ReviewerAgent 完成评估后 |
 | 阻断级别 | **条件阻断** (conditional blocking) |
 | 负责执行 | GateRunner (读取 PlanQualityReport) |
 
@@ -237,7 +237,7 @@ def gate_2_check(quality_report: PlanQualityReport, iteration: int) -> GateResul
 
 ### 4.4 失败处理
 - **维度升级 (≥3 维度 < 3)**: 即使综合分 ≥ 80 也阻断，反馈中标注低分维度，退回 Planning 针对性修订
-- **第 1-2 轮不通过**: 将 revision_feedback 发送给 Planning Agent 修订
+- **第 1-2 轮不通过**: 将 revision_feedback 发送给 PlannerAgent 修订
 - **第 3 轮不通过**: 停止迭代，降级输出（`degraded: true`），标注未满足项
 - **得分 < 60**: 无论第几轮，标记为 REJECT，建议重新规划而非修订
 
@@ -328,17 +328,17 @@ User Request
 [Gate 0] ── FAIL → 追问用户 / 拒绝
     │ PASS
     ▼
-Orchestrator 分解 → Planning Agent → Execution Agent
+Orchestrator 分解 → KnowledgeAgent（可行性验证）→ PlannerAgent（生成方案）
     │
     ▼
-[Gate 1] ── FAIL → 退回 Planning 修订 (带 fix_suggestions)
+[Gate 1] ── FAIL → 退回 Planner 修订 (带 fix_suggestions)
     │ PASS
     ▼
-Evaluation Agent (Mode B)
+ReviewerAgent（质量评审）
     │
     ▼
 [Gate 2] ── FAIL (维度升级)  → 退回 Planning 针对性修订
-    │      ── FAIL (第1-2轮) → 退回 Planning 修订 (带 revision_feedback)
+    │      ── FAIL (第1-2轮) → 退回 Planner 修订 (带 revision_feedback)
     │      ── FAIL (第3轮)   → 降级输出
     │ PASS
     ▼
@@ -353,7 +353,7 @@ Final Output
 
 ---
 
-## 7. GateRunner 规格
+## 7. GateRunner 规格 [FUTURE — 当前分支未实现]
 
 ```python
 class GateRunner:

@@ -6,6 +6,8 @@
 
 本文档定义了 TravelPlan Orchestrator 的完整测试场景集。测试场景覆盖正常流程、边界情况、异常情况和消融实验，用于验证系统功能完整性和质量门有效性。
 
+> **当前项目映射**: 当前分支 Agent 为 Orchestrator → KnowledgeAgent → PlannerAgent → ReviewerAgent。Gate 逻辑内嵌在 orchestrator LLM prompt 中（无独立 GateRunner）。标注 `[FUTURE]` 的测试场景依赖尚未实现的组件（GateRunner/SharedContext/消息 Schema），留作后续参考。
+
 ---
 
 ## 2. 端到端测试场景 (Happy Path)
@@ -18,10 +20,10 @@
 
 期望输出:
   - Gate 0: PASS (所有必填项完整)
-  - Planning Agent 产出包含: 往返交通 + 5晚住宿 + 5天行程 + 每日3餐 + 预算分配
-  - Execution Agent: feasible, 0 blocking_issues
+  - PlannerAgent 产出包含: 往返交通 + 5晚住宿 + 5天行程 + 每日3餐 + 预算分配
+  - KnowledgeAgent: feasible, 0 blocking_issues
   - Gate 1: PASS
-  - Evaluation Agent: composite_score ≥ 80
+  - ReviewerAgent: composite_score ≥ 80
   - Gate 2: PASS
   - Gate 3: PASS
   - 最终方案包含完整的 travel plan JSON
@@ -85,7 +87,7 @@
   - 推荐青旅/民宿 (低端住宿)
   - 推荐免费景点
   - 餐饮推荐经济型
-  - Execution 可能标记 warnings (预算紧张)
+  - Knowledge 可能标记 warnings (预算紧张)
   - 不应标记为 infeasible (只要总价 ≤ 500)
 ```
 
@@ -205,7 +207,7 @@
 场景: Planning 产出预算超出上限 120%
 
 期望:
-  - Execution Agent: blocking_issue (硬约束违反)
+  - KnowledgeAgent: blocking_issue (硬约束违反)
   - Gate 1: FAIL
   - Orchestrator: 退回 Planning 修订
 ```
@@ -253,7 +255,9 @@
 
 ---
 
-## 6. 消融实验测试场景
+## 6. 消融实验测试场景 [FUTURE]
+
+> 以下测试依赖完整的消融实验框架（LOO/Peer-rating/协同分析），当前项目 ReviewerAgent 尚未实现，暂不可执行。
 
 ### TS-ABLATION-001: LOO 完整消融
 ```
@@ -261,9 +265,9 @@
 
 配置:
   1. Full (Orch + Plan + Exec + Eval) → S_full
-  2. w/o Planning Agent → S_no_planner
-  3. w/o Execution Agent → S_no_executor
-  4. w/o Evaluation Agent → S_no_evaluator
+  2. w/o PlannerAgent → S_no_planner
+  3. w/o KnowledgeAgent → S_no_knowledge
+  4. w/o ReviewerAgent → S_no_reviewer
 
 期望输出:
   - 各配置得分可比较
@@ -302,7 +306,9 @@
 
 ---
 
-## 7. 性能测试场景
+## 7. 性能测试场景 [FUTURE]
+
+> 以下测试依赖系统稳定运行及性能基准数据，当前阶段暂不可执行。
 
 ### TS-PERF-001: 标准耗时
 ```
@@ -335,11 +341,13 @@
 
 ---
 
-## 8. 编排器错误恢复测试场景
+## 8. 编排器错误恢复测试场景 [FUTURE]
 
-### TS-ORCH-001: Planning Agent 超时恢复
+> 以下测试依赖 GateRunner/SharedContext/control.abort 等消息 Schema 组件，当前 orchestrator 为简化 LLM 驱动循环，尚未实现。留作状态机优化时的参考。
+
+### TS-ORCH-001: PlannerAgent 超时恢复
 ```
-场景: Planning Agent 首次调用超时，第1次重试成功
+场景: PlannerAgent 首次调用超时，第1次重试成功
 
 期望:
   - 第1次调用 30s 后超时
@@ -350,18 +358,18 @@
 
 ### TS-ORCH-002: Agent 超时耗尽重试
 ```
-场景: Execution Agent 连续 3 次重试全部超时
+场景: KnowledgeAgent 连续 3 次重试全部超时
 
 期望:
   - 3 次重试均在 30s 后超时（间隔 1s→2s→4s）
-  - 重试耗尽后标记 Execution Agent 调用失败
+  - 重试耗尽后标记 KnowledgeAgent 调用失败
   - Orchestrator 降级输出: 跳过可行性验证，标注 degraded
   - 最终方案标注"可行性未验证"
 ```
 
 ### TS-ORCH-003: 评估超时跳过
 ```
-场景: Evaluation Agent (Mode B) 超时
+场景: ReviewerAgent (Mode B) 超时
 
 期望:
   - 超时后不阻塞流程
@@ -370,9 +378,9 @@
   - degraded: true
 ```
 
-### TS-ORCH-004: Planning Agent 返回错误(有部分产物)
+### TS-ORCH-004: PlannerAgent 返回错误(有部分产物)
 ```
-场景: Planning Agent 返回错误但有部分草稿
+场景: PlannerAgent 返回错误但有部分草稿
 
 期望:
   - Orchestrator 检测到错误响应 (response.error)
@@ -383,7 +391,7 @@
 
 ### TS-ORCH-005: Agent 返回空错误(无产物)
 ```
-场景: Execution Agent 返回错误且 body 为空
+场景: KnowledgeAgent 返回错误且 body 为空
 
 期望:
   - Orchestrator 检测到错误响应且无有效 payload
@@ -404,7 +412,7 @@
 
 ### TS-ORCH-007: 用户在 Planning 阶段取消
 ```
-场景: 用户在 Planning Agent 执行中发送取消指令
+场景: 用户在 PlannerAgent 执行中发送取消指令
 
 期望:
   - Orchestrator 收到 control.abort (reason: user_cancel)
@@ -415,7 +423,7 @@
 
 ### TS-ORCH-008: 用户在 Execution 阶段取消
 ```
-场景: 用户在 Execution Agent 执行中取消
+场景: 用户在 KnowledgeAgent 执行中取消
 
 期望:
   - Orchestrator 广播 abort
@@ -426,7 +434,7 @@
 
 ### TS-ORCH-009: 用户在 Evaluation 阶段取消
 ```
-场景: 用户在 Evaluation Agent 执行中取消
+场景: 用户在 ReviewerAgent 执行中取消
 
 期望:
   - Orchestrator 广播 abort
@@ -437,7 +445,9 @@
 
 ---
 
-## 9. 执行 Agent 核心检查函数测试场景
+## 9. KnowledgeAgent 核心检查函数测试场景 [FUTURE]
+
+> 以下测试针对 KnowledgeAgent 内部的细粒度检查函数（price/time/geography），当前 KnowledgeAgent 使用 LLM function-calling 自主编排而非独立检查函数，后续重构时可作为单元测试参考。
 
 ### TS-EXEC-001: check_prices 正常通过
 ```
@@ -537,21 +547,18 @@
 
 ## 10. 回归测试套件
 
-### 最小回归集 (每次提交必跑)
+### 最小回归集 (每次提交必跑) [FUTURE — 待测试框架搭建]
 - TS-E2E-001 (标准流程)
 - TS-ERR-001 (缺失目的地)
 - TS-GATE-001 (硬约束违反)
-- TS-ORCH-001 (超时恢复)
-- TS-EXEC-003 (价格检查阻断)
 
-### 完整回归集 (每次发布前必跑)
+> 注: TS-ORCH-* 和 TS-EXEC-* 场景依赖尚未实现的组件，暂不纳入当前回归集。
+
+### 完整回归集 (每次发布前必跑) [FUTURE]
 - 所有 TS-E2E-* (5个)
 - 所有 TS-EDGE-* (5个)
 - 所有 TS-ERR-* (7个)
 - 所有 TS-GATE-* (5个)
-- 所有 TS-ORCH-* (9个)
-- 所有 TS-EXEC-* (9个)
-- TS-PERF-001
 
 ### 消融回归集 (每次架构变更必跑)
 - 所有 TS-ABLATION-* (4个)
