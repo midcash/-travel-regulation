@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import pytest
-from src.application.guards.negation_guard import extract_negation_constraints
+from src.guard.negation import extract_negation_constraints
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"F:/Commercial project/skill/.claude/hooks/claude-rigor/hooks/pretool-goal.js\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"F:/Commercial project/skill/.claude/hooks/claude-rigor/hooks/stop-speculation.js\""
+          }
+        ]
+      }
+    ]
+  }
+}
