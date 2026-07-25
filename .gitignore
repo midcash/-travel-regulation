@@ -15,6 +15,7 @@ build/
 .venv/
 venv/
 .claude
+.codex
 .agents
 
 # OS
