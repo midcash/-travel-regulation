@@ -7,15 +7,28 @@ L2 对抗评审器 — LLM-B。
 from __future__ import annotations
 
 import re
+from typing import TypedDict
 
-from src.gateway.deepseek import ask_llm
+from src.config import Settings
 from src.engine.prompts import build_review_prompt
+from src.gateway.deepseek import ask_llm
 from src.obs.log import get_logger
 
 logger = get_logger(__name__)
 
+L2ReviewResult = TypedDict(
+    'L2ReviewResult',
+    {'pass': bool, 'issues': list[str]},
+)
 
-def run_l2_review(user_input: str, plan_text: str, constraints: list[str]) -> dict:
+
+def run_l2_review(
+    user_input: str,
+    plan_text: str,
+    constraints: list[str],
+    *,
+    settings: Settings,
+) -> L2ReviewResult:
     """LLM-B 对抗评审。
 
     Args:
@@ -28,7 +41,7 @@ def run_l2_review(user_input: str, plan_text: str, constraints: list[str]) -> di
         pass=True 表示方案通过评审，无需修改。
     """
     prompt = build_review_prompt(user_input, plan_text, constraints)
-    response = ask_llm(prompt)
+    response = ask_llm(prompt, settings=settings)
 
     # 判断结果
     passed = "PASS" in response.upper().split("\n")[0] or (
