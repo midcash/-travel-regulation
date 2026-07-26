@@ -119,7 +119,7 @@ def extract_negation_constraints(text: str) -> list[str]:
 
     raw_constraints: list[str] = []
 
-    for neg_start, neg_end, word in positions:
+    for _neg_start, neg_end, _word in positions:
         # 从否定词结束位置向后提取
         segment = text[neg_end:]
 

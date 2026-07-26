@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+
 from src.guard.negation import extract_negation_constraints
 
 
