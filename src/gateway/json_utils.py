@@ -1,34 +1,57 @@
-"""
-JSON 工具 — LLM 输出的 JSON 清洗。
+"""LLM JSON 文本的清洗与严格解析。"""
 
-消除 planner/reviewer/knowledge/orchestrator 中的重复 _sanitize_json 定义。
-
-依赖: 无（纯标准库）
-"""
 from __future__ import annotations
 
+import json
 import re
+from typing import TypeAlias
+
+JsonScalar: TypeAlias = str | int | float | bool | None
+JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
+
+
+class JsonResponseError(ValueError):
+    """LLM JSON 响应为空、非法或顶层类型错误。"""
 
 
 def sanitize_json(raw: str) -> str:
-    """从 LLM 原始输出中提取纯 JSON 字符串。
-
-    处理常见的 LLM 输出包装格式：
-    - ```json ... ``` 代码块
-    - ``` ... ``` 无语言标记的代码块
-    - 前后多余文本
+    """从 LLM 原始输出中提取 JSON 字符串。
 
     Args:
         raw: LLM 原始输出文本。
 
     Returns:
-        提取后的纯 JSON 字符串。
+        str: 去除 Markdown 包装和前后说明的字符串；空输入返回空字符串。
     """
-    raw = raw.strip()
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    start = raw.find("{")
-    end = raw.rfind("}")
+    cleaned = raw.strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
     if start != -1 and end != -1 and end > start:
-        raw = raw[start:end + 1]
-    return raw
+        cleaned = cleaned[start : end + 1]
+    return cleaned
+
+
+def parse_json_object(raw: str) -> dict[str, JsonValue]:
+    """严格解析顶层 JSON object。
+
+    Args:
+        raw: 可能带 Markdown 包装的模型响应。
+
+    Returns:
+        dict[str, JsonValue]: 已解析的 JSON object。
+
+    Raises:
+        JsonResponseError: 响应为空、JSON 非法或顶层不是 object。
+    """
+    cleaned = sanitize_json(raw)
+    if not cleaned:
+        raise JsonResponseError("JSON 响应为空")
+    try:
+        value: JsonValue = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise JsonResponseError("JSON 响应解析失败") from exc
+    if not isinstance(value, dict):
+        raise JsonResponseError("JSON 顶层必须是 object")
+    return value

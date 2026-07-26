@@ -1,103 +1,169 @@
-import os
+"""DeepSeek 同步 LLM 网关。"""
+
+from __future__ import annotations
+
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
-try:
-    from dotenv import load_dotenv; load_dotenv()
-except ImportError:
-    pass
+from openai import OpenAI
 
-from openai import OpenAI  # 同步客户端
-
+from src.config import Settings
 from src.obs.log import get_logger
-from src.obs.trace import trace_llm_call
 from src.obs.metric import (
     LLM_CALLS_TOTAL,
     LLM_DURATION_SECONDS,
     LLM_TOKENS_TOTAL,
 )
+from src.obs.trace import trace_llm_call
 
 logger = get_logger(__name__)
 
-API_KEY = os.environ.get("DEEPSEEK_API_KEY")
-MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
-# max_tokens 设为 None（不限制），让模型自行决定输出长度。
-# DeepSeek V4 系列支持超长上下文（128k+），无需手动截断。
-# 若需限制成本，可在 .env 中设置 DEEPSEEK_MAX_TOKENS。
-_MAX_TOKENS = int(os.environ["DEEPSEEK_MAX_TOKENS"]) if "DEEPSEEK_MAX_TOKENS" in os.environ else None
+@dataclass(frozen=True, slots=True)
+class LLMCallRecord:
+    "Summary of one LLM call without prompts, responses, or credentials."
+
+    model: str
+    status: str
+    duration_ms: int
+    input_tokens: int
+    output_tokens: int
+    failure_type: str | None = None
 
 
-def ask_llm(prompt: str) -> str:
-    """调用 DeepSeek LLM，返回响应文本。
+class LLMResponseError(RuntimeError):
+    """LLM 返回了无法作为文本使用的响应。"""
+
+
+def ask_llm(
+    prompt: str,
+    settings: Settings | None = None,
+    *,
+    observer: Callable[[LLMCallRecord], None] | None = None,
+) -> str:
+    """调用 DeepSeek LLM 并返回非空文本。
 
     Args:
-        prompt: 用户 prompt（system prompt + 用户数据）。
+        prompt: 发给模型的 Prompt。
+        settings: 由组合根创建并校验的配置。
 
     Returns:
-        LLM 响应文本。若 finish_reason 为 "length" 则 JSON 可能不完整。
+        str: 非空响应文本。
 
     Raises:
-        RuntimeError: API_KEY 未设置时抛出。
+        RuntimeError: API Key 未配置。
+        LLMResponseError: 模型响应为空或缺少 choice。
+        Exception: SDK 的超时、网络和服务端异常原样传播。
     """
-    if not API_KEY:
+    if settings is None:
+        raise RuntimeError('Settings must be provided by the composition root')
+    current = settings
+    if not current.deepseek_api_key:
         raise RuntimeError("DEEPSEEK_API_KEY 未设置")
 
-    client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
-    kwargs: dict = {
-        "model": MODEL,
+    client = OpenAI(
+        api_key=current.deepseek_api_key,
+        base_url="https://api.deepseek.com",
+        timeout=current.llm_timeout_seconds,
+        max_retries=current.retry_count,
+    )
+    kwargs: dict[str, Any] = {
+        "model": current.deepseek_model,
         "messages": [{"role": "user", "content": prompt}],
     }
-    if _MAX_TOKENS is not None:
-        kwargs["max_tokens"] = _MAX_TOKENS
+    if current.deepseek_max_tokens is not None:
+        kwargs["max_tokens"] = current.deepseek_max_tokens
 
     logger.info(
         "llm_call_started",
-        model=MODEL,
+        model=current.deepseek_model,
         prompt_chars=len(prompt),
     )
 
-    t_start = time.perf_counter()
-    with trace_llm_call(MODEL) as span:
+    started_at = time.perf_counter()
+    with trace_llm_call(current.deepseek_model) as span:
         try:
-            resp = client.chat.completions.create(**kwargs)
-        except Exception:
-            LLM_CALLS_TOTAL.labels(model=MODEL, status="failure").inc()
-            logger.error("llm_call_failed", model=MODEL)
+            response = client.chat.completions.create(**kwargs)
+            if not response.choices:
+                raise LLMResponseError("LLM 响应缺少 choices")
+            content = response.choices[0].message.content
+            if not isinstance(content, str) or not content.strip():
+                raise LLMResponseError("LLM 返回空响应")
+        except Exception as exc:
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            LLM_CALLS_TOTAL.labels(
+                model=current.deepseek_model,
+                status="failure",
+            ).inc()
+            logger.error("llm_call_failed", model=current.deepseek_model)
+            _notify(
+                observer,
+                LLMCallRecord(
+                    model=current.deepseek_model,
+                    status='failure',
+                    duration_ms=elapsed_ms,
+                    input_tokens=0,
+                    output_tokens=0,
+                    failure_type=type(exc).__name__,
+                ),
+            )
             raise
 
-        elapsed_ms = int((time.perf_counter() - t_start) * 1000)
-        finish = resp.choices[0].finish_reason
-        content = resp.choices[0].message.content or "{}"
-
-        # Token 用量统计
-        usage = resp.usage
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        finish_reason = response.choices[0].finish_reason
+        usage = response.usage
         input_tokens = usage.prompt_tokens if usage else 0
         output_tokens = usage.completion_tokens if usage else 0
 
         span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
         span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
-        span.set_attribute("gen_ai.response.finish_reasons", finish)
+        span.set_attribute("gen_ai.response.finish_reasons", finish_reason or "unknown")
 
-        LLM_CALLS_TOTAL.labels(model=MODEL, status="success").inc()
-        LLM_TOKENS_TOTAL.labels(model=MODEL, type="input").inc(input_tokens)
-        LLM_TOKENS_TOTAL.labels(model=MODEL, type="output").inc(output_tokens)
-        LLM_DURATION_SECONDS.labels(model=MODEL).observe(elapsed_ms / 1000)
+        LLM_CALLS_TOTAL.labels(model=current.deepseek_model, status="success").inc()
+        LLM_TOKENS_TOTAL.labels(model=current.deepseek_model, type="input").inc(input_tokens)
+        LLM_TOKENS_TOTAL.labels(model=current.deepseek_model, type="output").inc(output_tokens)
+        LLM_DURATION_SECONDS.labels(model=current.deepseek_model).observe(elapsed_ms / 1000)
 
         logger.info(
             "llm_call_finished",
-            model=MODEL,
+            model=current.deepseek_model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             duration_ms=elapsed_ms,
-            finish_reason=finish,
+            finish_reason=finish_reason,
         )
 
-        if finish == "length":
-            current = _MAX_TOKENS if _MAX_TOKENS else "无限制"
+        _notify(
+            observer,
+            LLMCallRecord(
+                model=current.deepseek_model,
+                status='success',
+                duration_ms=elapsed_ms,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            ),
+        )
+
+        if finish_reason == 'length':
             logger.warning(
                 "llm_output_truncated",
                 finish_reason="length",
-                max_tokens=str(current),
+                max_tokens=str(current.deepseek_max_tokens or "无限制"),
             )
 
     return content
+
+
+def _notify(
+    observer: Callable[[LLMCallRecord], None] | None,
+    record: LLMCallRecord,
+) -> None:
+    "Notify an optional observer without changing the call result."
+    if observer is None:
+        return
+    try:
+        observer(record)
+    except Exception as exc:
+        logger.warning('llm_observer_failed', error_type=type(exc).__name__)

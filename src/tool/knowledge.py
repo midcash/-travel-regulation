@@ -5,31 +5,28 @@ KnowledgeAgent — LLM Tool-Calling 编排器（方案A）
 API 失败直接返回 error 标记，不降级。
 """
 import json
-import os
-import urllib.request
 import urllib.parse
-from openai import OpenAI
+import urllib.request
+from collections.abc import Callable
+from typing import cast
 
-from src.gateway.json_utils import sanitize_json
+from src.config import Settings
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+# M0 保留旧模块的环境变量读取以维持兼容；迁移到组合根属于 M3 范围。
+# 不在导入时加载 .env，避免测试意外读取开发者本地凭证。
 
 # ============================================================
 # 配置
 # ============================================================
-DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY")
-DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL")
-AMAP_KEY = os.environ.get("AMAP_API_KEY")
-TUNIU_KEY = os.environ.get("TUNIU_API_KEY")
+
+
+
+
 
 # max_tokens 读取（与 deepseek_gateway 保持一致，默认不限制）
-_MAX_TOKENS = int(os.environ["DEEPSEEK_MAX_TOKENS"]) if "DEEPSEEK_MAX_TOKENS" in os.environ else None
+
 MAX_ROUNDS = 5
-TIMEOUT = 15
+DEFAULT_TIMEOUT = 15
 
 # 途牛 MCP 端点
 TUNIU_ENDPOINTS = {
@@ -179,13 +176,14 @@ SYSTEM_PROMPT = """你是一个旅行数据查询 Agent。你可以调用工具�
 # 工具执行器
 # ============================================================
 
-def _exec_amap_geocode(address: str) -> dict:
+def _exec_amap_geocode(address: str, settings: Settings | None = None) -> dict[str, object]:
     """高德地理编码：地址 → 经纬度。"""
-    if not AMAP_KEY:
+    current = settings or Settings()
+    if not current.amap_api_key:
         return {"error": "AMAP_API_KEY 未配置"}
 
     params = urllib.parse.urlencode({
-        "key": AMAP_KEY,
+        "key": current.amap_api_key,
         "address": address,
         "output": "JSON",
     })
@@ -193,7 +191,7 @@ def _exec_amap_geocode(address: str) -> dict:
 
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        data = json.loads(urllib.request.urlopen(req, timeout=TIMEOUT).read())
+        data = json.loads(urllib.request.urlopen(req, timeout=current.external_api_timeout_seconds).read())
     except Exception as e:
         return {"error": f"高德 API 请求失败: {e}"}
 
@@ -212,9 +210,10 @@ def _exec_amap_geocode(address: str) -> dict:
     }
 
 
-def _tuniu_mcp_call(endpoint_name: str, tool_name: str, arguments: dict) -> dict:
+def _tuniu_mcp_call(endpoint_name: str, tool_name: str, arguments: dict[str, object], settings: Settings | None = None) -> dict[str, object]:
     """途牛 MCP JSON-RPC 2.0 调用。"""
-    if not TUNIU_KEY:
+    current = settings or Settings()
+    if not current.tuniu_api_key:
         return {"error": "TUNIU_API_KEY 未配置"}
 
     endpoint = TUNIU_ENDPOINTS[endpoint_name]
@@ -232,11 +231,11 @@ def _tuniu_mcp_call(endpoint_name: str, tool_name: str, arguments: dict) -> dict
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json, text/event-stream",
-                "apiKey": TUNIU_KEY,
+                "apiKey": current.tuniu_api_key,
             },
             method="POST",
         )
-        body = urllib.request.urlopen(req, timeout=TIMEOUT).read().decode("utf-8")
+        body = urllib.request.urlopen(req, timeout=current.external_api_timeout_seconds).read().decode("utf-8")
     except Exception as e:
         return {"error": f"途牛 {endpoint_name} API 请求失败: {e}"}
 
@@ -253,7 +252,7 @@ def _tuniu_mcp_call(endpoint_name: str, tool_name: str, arguments: dict) -> dict
         try:
             data = json.loads(body)
         except json.JSONDecodeError:
-            return {"error": f"途牛响应解析失败", "raw": body[:300]}
+            return {"error": "途牛响应解析失败", "raw": body[:300]}
 
     if "error" in (data or {}):
         err = data["error"]
@@ -269,40 +268,67 @@ def _tuniu_mcp_call(endpoint_name: str, tool_name: str, arguments: dict) -> dict
             if isinstance(block, dict) and block.get("type") == "text":
                 text = block.get("text", "")
                 try:
-                    return json.loads(text) if isinstance(text, str) else text
+                    return cast(dict[str, object], json.loads(text) if isinstance(text, str) else text)
                 except (json.JSONDecodeError, TypeError):
                     pass
-    return result
+    return cast(dict[str, object], result)
 
 
-def _exec_tuniu_hotel_search(city: str, checkIn: str, checkOut: str) -> dict:
-    """途牛酒店价格查询。"""
-    return _tuniu_mcp_call("hotel", "tuniuHotelSearch", {
-        "cityName": city,
-        "checkIn": checkIn,
-        "checkOut": checkOut,
-    })
+def _exec_tuniu_hotel_search(
+    city: str,
+    checkIn: str,
+    checkOut: str,
+    settings: Settings | None = None,
+) -> dict[str, object]:
+    """Search hotel prices through the Tuniu adapter."""
+    return _tuniu_mcp_call(
+        "hotel",
+        "tuniuHotelSearch",
+        {
+            "cityName": city,
+            "checkIn": checkIn,
+            "checkOut": checkOut,
+        },
+        settings=settings,
+    )
 
 
-def _exec_tuniu_flight_search(from_city: str, to_city: str, date: str) -> dict:
-    """途牛航班价格查询。"""
-    return _tuniu_mcp_call("flight", "searchLowestPriceFlight", {
-        "departureCityName": from_city,
-        "arrivalCityName": to_city,
-        "departureDate": date,
-    })
+def _exec_tuniu_flight_search(
+    from_city: str,
+    to_city: str,
+    date: str,
+    settings: Settings | None = None,
+) -> dict[str, object]:
+    """Search flight prices through the Tuniu adapter."""
+    return _tuniu_mcp_call(
+        "flight",
+        "searchLowestPriceFlight",
+        {
+            "departureCityName": from_city,
+            "arrivalCityName": to_city,
+            "departureDate": date,
+        },
+        settings=settings,
+    )
 
 
-def _exec_tuniu_ticket_search(scenic: str, city: str) -> dict:
-    """途牛景区门票查询。"""
-    return _tuniu_mcp_call("ticket", "query_cheapest_tickets", {
-        "scenic_name": scenic,
-        "cityName": city,
-    })
+def _exec_tuniu_ticket_search(
+    scenic: str,
+    city: str,
+    settings: Settings | None = None,
+) -> dict[str, object]:
+    """Search ticket prices through the Tuniu adapter."""
+    return _tuniu_mcp_call(
+        "ticket",
+        "query_cheapest_tickets",
+        {
+            "scenic_name": scenic,
+            "cityName": city,
+        },
+        settings=settings,
+    )
 
-
-# 工具执行器注册表
-TOOL_EXECUTORS = {
+TOOL_EXECUTORS: dict[str, Callable[..., dict[str, object]]] = {
     "amap_geocode": _exec_amap_geocode,
     "tuniu_hotel_search": _exec_tuniu_hotel_search,
     "tuniu_flight_search": _exec_tuniu_flight_search,
