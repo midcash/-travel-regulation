@@ -13,19 +13,23 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import MutableMapping
+from typing import Any, cast
 
 import structlog
 
 # 强制 stdout 使用 UTF-8 编码（Windows GBK 终端导致中文乱码）
 if sys.stdout.encoding != "utf-8":
-    sys.stdout.reconfigure(encoding="utf-8")
+    reconfigure = getattr(sys.stdout, 'reconfigure', None)
+    if callable(reconfigure):
+        reconfigure(encoding='utf-8')
 
 
 def _add_otel_context(
     logger: structlog.types.BindableLogger,
     method_name: str,
-    event_dict: dict,
-) -> dict:
+    event_dict: MutableMapping[str, Any],
+) -> MutableMapping[str, Any]:
     """向每条日志注入当前 OTel span 的 trace_id 和 span_id。
 
     若 OTel 未配置（无 TracerProvider），span.is_recording() 返回 False，
@@ -65,4 +69,4 @@ def get_logger(name: str = __name__) -> structlog.stdlib.BoundLogger:
     Returns:
         配置好的 BoundLogger，所有日志以 JSON 格式输出到 stdout。
     """
-    return structlog.get_logger(name)
+    return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))

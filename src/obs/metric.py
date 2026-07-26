@@ -41,7 +41,7 @@ LLM_CALLS_TOTAL = Counter(
 LLM_TOKENS_TOTAL = Counter(
     "llm_tokens_total",
     "LLM Token 消耗总量",
-    ["model", "type"],  # type: input / output
+    ["model", "type"],  # label: input / output
 )
 
 LLM_DURATION_SECONDS = Histogram(

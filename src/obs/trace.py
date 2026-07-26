@@ -20,19 +20,19 @@ Span 层级自动嵌套（基于 OTel context propagation），无需手动传 p
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 
 # ---- 全局配置 ----
 _resource = Resource.create({"service.name": "travel-planner-agent"})
 _provider = TracerProvider(resource=_resource)
 # Span 输出到 stderr，与 stdout 的 structlog 日志分离
-_provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter(out=sys.stderr)))
+_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(out=sys.stderr)))
 trace.set_tracer_provider(_provider)
 
 _tracer = trace.get_tracer(__name__)
@@ -53,6 +53,7 @@ def trace_session(session_id: str) -> Iterator[trace.Span]:
     with _tracer.start_as_current_span(
         "session",
         attributes={"session_id": session_id},
+        record_exception=False,
     ) as span:
         yield span
 
@@ -71,6 +72,7 @@ def trace_phase(phase: int, session_id: str) -> Iterator[trace.Span]:
     with _tracer.start_as_current_span(
         f"phase_{phase}",
         attributes={"session_id": session_id, "phase": phase},
+        record_exception=False,
     ) as span:
         yield span
 
@@ -89,6 +91,7 @@ def trace_agent(agent_name: str, session_id: str) -> Iterator[trace.Span]:
     with _tracer.start_as_current_span(
         f"agent.{agent_name}",
         attributes={"agent": agent_name, "session_id": session_id},
+        record_exception=False,
     ) as span:
         yield span
 
@@ -113,5 +116,6 @@ def trace_llm_call(model: str, provider: str = "deepseek") -> Iterator[trace.Spa
             "gen_ai.operation.name": "chat",
             "gen_ai.request.model": model,
         },
+        record_exception=False,
     ) as span:
         yield span
