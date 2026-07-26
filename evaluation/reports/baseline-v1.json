@@ -1,0 +1,456 @@
+{
+  "dataset_version": "baseline-v1",
+  "case_count": 32,
+  "status_counts": {
+    "SUCCESS": 5,
+    "FAILED": 2,
+    "NOT_SUPPORTED": 25
+  },
+  "tag_counts": {
+    "action": 1,
+    "answer": 1,
+    "boundary": 3,
+    "budget": 4,
+    "child": 1,
+    "clarification": 3,
+    "closed": 1,
+    "conflict": 3,
+    "constraint": 1,
+    "cross_city": 2,
+    "date": 3,
+    "double_negation": 1,
+    "dynamic_fact": 1,
+    "empty": 2,
+    "evidence": 1,
+    "failure": 3,
+    "hard_constraint": 1,
+    "input": 2,
+    "invalid_input": 1,
+    "json": 1,
+    "missing_budget": 1,
+    "missing_date": 1,
+    "missing_destination": 1,
+    "missing_preference": 1,
+    "negation": 2,
+    "normal": 4,
+    "overload": 1,
+    "preference": 3,
+    "refine": 1,
+    "safety": 1,
+    "schedule": 2,
+    "short_trip": 1,
+    "special_diet": 1,
+    "special_group": 1,
+    "state": 1,
+    "timeout": 1,
+    "transport": 1,
+    "travelers": 2,
+    "unintelligible": 1
+  },
+  "metrics": {
+    "structured_parse_rate": 0.0,
+    "hard_constraint_pass_rate": "UNAVAILABLE",
+    "negation_constraint_recall": 0.5,
+    "l1_budget_detection_rate": 1.0,
+    "unsupported_fact_rate": "UNAVAILABLE",
+    "first_pass_success_rate": "UNAVAILABLE",
+    "repair_success_rate": "UNAVAILABLE",
+    "repair_scope_precision": "UNAVAILABLE",
+    "clarification_precision": "UNAVAILABLE",
+    "latency_ms": {
+      "average": 0.184,
+      "p50": 0.0,
+      "p95": 0.774
+    },
+    "llm_calls": 8,
+    "tool_calls": 0,
+    "token_usage": "UNAVAILABLE",
+    "api_cost": "UNAVAILABLE"
+  },
+  "execution": {
+    "offline": true,
+    "network_calls": 0,
+    "supported_case_count": 7,
+    "not_supported_count": 25
+  },
+  "failures": [
+    {
+      "case_id": "M0-021",
+      "trace_id": "f9bc4e7647e259c88986c9a094af8588",
+      "status": "FAILED",
+      "failures": [
+        "failure_type=PlanningError",
+        "failure_stage=generation"
+      ]
+    },
+    {
+      "case_id": "M0-022",
+      "trace_id": "99b94c28c6075cd1a09079f288daf85b",
+      "status": "FAILED",
+      "failures": [
+        "failure_type=PlanningError",
+        "failure_stage=generation"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "M0-001",
+      "trace_id": "13274ec1789256f5b962b693042ed51c",
+      "status": "SUCCESS",
+      "duration_ms": 2.044,
+      "llm_calls": 1,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-002",
+      "trace_id": "bd4f4d73276c5d2cb70e9486c5a6e9fd",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-003",
+      "trace_id": "a33cd9790bf457e3ad0ed95fa17ace2a",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-004",
+      "trace_id": "ef249174e59d561c97383158ec713e96",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-005",
+      "trace_id": "17c9f5d5105259ee9316c1f907d72ea5",
+      "status": "SUCCESS",
+      "duration_ms": 0.774,
+      "llm_calls": 1,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-006",
+      "trace_id": "93da1269c7c65a9aa516f86ea6e4c864",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-007",
+      "trace_id": "6d0b08e522ce50b5a67b1e060ed14d50",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-008",
+      "trace_id": "84db41eafaf15ecbb534ed35e16c1d7d",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-009",
+      "trace_id": "a06ca9c209e253af9391022e74118ad2",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-010",
+      "trace_id": "48a87ceef9965619a048713c8fc7e336",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-011",
+      "trace_id": "7eb451d5b0e45f97972662a26c8e261e",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-012",
+      "trace_id": "241ec54862a45e068a655702cada0ad6",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-013",
+      "trace_id": "f781298b40bf5c4991c3dfab8ab21961",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-014",
+      "trace_id": "b50642c3f07c5f13afd5e8aa1300b225",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-015",
+      "trace_id": "fff686e61b805a64bac63bd73783e3b1",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-016",
+      "trace_id": "5f0da17de81a5014b645a8dabab06172",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-017",
+      "trace_id": "ff27187955525c428ceb62b51b355f38",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-018",
+      "trace_id": "5a8a47295dbf5e729a3e65b4da5d746d",
+      "status": "SUCCESS",
+      "duration_ms": 0.893,
+      "llm_calls": 2,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-019",
+      "trace_id": "7b155ed31ad052a5b101c80bade9a4e5",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-020",
+      "trace_id": "fd214242c0f6532e805ea1f8fc3a4783",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-021",
+      "trace_id": "f9bc4e7647e259c88986c9a094af8588",
+      "status": "FAILED",
+      "duration_ms": 0.563,
+      "llm_calls": 1,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [
+        "failure_type=PlanningError",
+        "failure_stage=generation"
+      ],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-022",
+      "trace_id": "99b94c28c6075cd1a09079f288daf85b",
+      "status": "FAILED",
+      "duration_ms": 0.435,
+      "llm_calls": 1,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [
+        "failure_type=PlanningError",
+        "failure_stage=generation"
+      ],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-023",
+      "trace_id": "81947a79903c5f7eaca1cee58e4af9e0",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-024",
+      "trace_id": "d0c10e9069e05b9cb63a70b416542b68",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-025",
+      "trace_id": "864ecfa152ec55838e1d2a94dafd1b30",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-026",
+      "trace_id": "2b019174df8b5608bc2b91098afa7691",
+      "status": "SUCCESS",
+      "duration_ms": 0.641,
+      "llm_calls": 1,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-027",
+      "trace_id": "ce8e90bdc7e35c59ae122ee9333c1ea3",
+      "status": "SUCCESS",
+      "duration_ms": 0.545,
+      "llm_calls": 1,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-028",
+      "trace_id": "d7065a5bf9825c55a0405f6baae174cf",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-029",
+      "trace_id": "82df90a01d585b40a5f66a95f517717d",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-030",
+      "trace_id": "75db7839bde4551e8947f415ea346851",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-031",
+      "trace_id": "716edbbaef3450eea412ab38bb7646b9",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    },
+    {
+      "case_id": "M0-032",
+      "trace_id": "760cc17e1731598a84454bd365f31eae",
+      "status": "NOT_SUPPORTED",
+      "duration_ms": 0.0,
+      "llm_calls": 0,
+      "tool_calls": 0,
+      "token_usage": "UNAVAILABLE",
+      "invariant_failures": [],
+      "observed_l1_issues": []
+    }
+  ]
+}

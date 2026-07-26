@@ -1,0 +1,10 @@
+{
+  "fixture:pass": {"initial_plan": "预算 2000 元，总费用 1200 元", "reviews": [{"pass": true, "issues": []}]},
+  "fixture:negation-repair": {"initial_plan": "安排网红店和普通餐馆", "revision_plans": ["安排本地餐馆"], "reviews": [{"pass": true, "issues": []}]},
+  "fixture:budget-repair": {"initial_plan": "预算 2000 元，总费用 2300 元", "revision_plans": ["预算 2000 元，总费用 1500 元"], "reviews": [{"pass": true, "issues": []}]},
+  "fixture:l2-repair": {"initial_plan": "预算 2000 元，总费用 1200 元", "revision_plans": ["预算 2000 元，总费用 1100 元"], "reviews": [{"pass": false, "issues": ["缺少休息安排"]}, {"pass": true, "issues": []}]},
+  "fixture:exhausted": {"initial_plan": "预算 2000 元，总费用 2300 元", "reviews": [{"pass": true, "issues": []}]},
+  "fixture:llm-timeout": {"error": "timeout"},
+  "fixture:empty-response": {"error": "empty_response"},
+  "fixture:none": {"initial_plan": "未配置离线方案", "reviews": [{"pass": true, "issues": []}]}
+}
