@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from src.domain.models.constraint import (
+    Constraint,
+    ConstraintSnapshot,
+    ConstraintSource,
+    ConstraintValue,
+)
 from src.domain.models.enums import (
     ConstraintHardness,
     ErrorCategory,
@@ -9,6 +15,12 @@ from src.domain.models.enums import (
     InteractionMode,
     IssueSeverity,
     WorkflowStatus,
+)
+from src.domain.models.trip_request import (
+    BudgetSemantics,
+    BudgetSpec,
+    TravelerProfile,
+    TripRequest,
 )
 from src.domain.models.value_objects import (
     CandidateId,
@@ -29,10 +41,16 @@ from src.domain.models.value_objects import (
 )
 
 __all__ = [
+    "BudgetSemantics",
+    "BudgetSpec",
     "CandidateId",
     "CheckpointId",
+    "Constraint",
     "ConstraintHardness",
     "ConstraintId",
+    "ConstraintSnapshot",
+    "ConstraintSource",
+    "ConstraintValue",
     "DateRange",
     "ErrorCategory",
     "EvidenceId",
@@ -48,6 +66,8 @@ __all__ = [
     "SessionId",
     "StableId",
     "TraceId",
+    "TravelerProfile",
     "TripId",
+    "TripRequest",
     "WorkflowStatus",
 ]
