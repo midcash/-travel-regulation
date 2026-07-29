@@ -1,0 +1,5570 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "1.0",
+  "schemas": {
+    "BudgetBreakdown": {
+      "$defs": {
+        "BudgetLine": {
+          "additionalProperties": false,
+          "description": "计划预算中的一条分类金额。",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/Money"
+            },
+            "category": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          "required": [
+            "category",
+            "amount"
+          ],
+          "title": "BudgetLine",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "计划预算总额及分类明细。",
+      "properties": {
+        "lines": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BudgetLine"
+          },
+          "title": "Lines",
+          "type": "array"
+        },
+        "total": {
+          "$ref": "#/$defs/Money"
+        }
+      },
+      "required": [
+        "total"
+      ],
+      "title": "BudgetBreakdown",
+      "type": "object"
+    },
+    "BudgetLine": {
+      "$defs": {
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "计划预算中的一条分类金额。",
+      "properties": {
+        "amount": {
+          "$ref": "#/$defs/Money"
+        },
+        "category": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "amount"
+      ],
+      "title": "BudgetLine",
+      "type": "object"
+    },
+    "BudgetSpec": {
+      "$defs": {
+        "BudgetSemantics": {
+          "description": "预算金额的解释方式。",
+          "enum": [
+            "maximum",
+            "range",
+            "target"
+          ],
+          "title": "BudgetSemantics",
+          "type": "string"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "带金额语义的预算约束。",
+      "properties": {
+        "maximum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "semantics": {
+          "$ref": "#/$defs/BudgetSemantics"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "semantics"
+      ],
+      "title": "BudgetSpec",
+      "type": "object"
+    },
+    "Candidate": {
+      "$defs": {
+        "ContextCandidate": {
+          "additionalProperties": false,
+          "description": "不直接作为行程项目的环境上下文候选。",
+          "properties": {
+            "candidate_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Candidate Id",
+              "type": "string"
+            },
+            "context_type": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Context Type",
+              "type": "string"
+            },
+            "evidence_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "kind": {
+              "const": "context",
+              "default": "context",
+              "title": "Kind",
+              "type": "string"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "name": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "scope": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Scope",
+              "type": "string"
+            },
+            "tags": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Tags",
+              "type": "array"
+            }
+          },
+          "required": [
+            "candidate_id",
+            "name",
+            "context_type",
+            "scope"
+          ],
+          "title": "ContextCandidate",
+          "type": "object"
+        },
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        },
+        "PlaceCandidate": {
+          "additionalProperties": false,
+          "description": "景点、餐饮或活动候选。",
+          "properties": {
+            "address": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Address"
+            },
+            "candidate_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Candidate Id",
+              "type": "string"
+            },
+            "category": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Category",
+              "type": "string"
+            },
+            "evidence_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "kind": {
+              "const": "place",
+              "default": "place",
+              "title": "Kind",
+              "type": "string"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "name": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "tags": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Tags",
+              "type": "array"
+            }
+          },
+          "required": [
+            "candidate_id",
+            "name",
+            "category"
+          ],
+          "title": "PlaceCandidate",
+          "type": "object"
+        },
+        "StayCandidate": {
+          "additionalProperties": false,
+          "description": "住宿候选。",
+          "properties": {
+            "area": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Area",
+              "type": "string"
+            },
+            "candidate_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Candidate Id",
+              "type": "string"
+            },
+            "check_in": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Check In"
+            },
+            "check_out": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Check Out"
+            },
+            "evidence_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "kind": {
+              "const": "stay",
+              "default": "stay",
+              "title": "Kind",
+              "type": "string"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "name": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "tags": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Tags",
+              "type": "array"
+            },
+            "total_price": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "candidate_id",
+            "name",
+            "area"
+          ],
+          "title": "StayCandidate",
+          "type": "object"
+        },
+        "TransportCandidate": {
+          "additionalProperties": false,
+          "description": "交通候选。",
+          "properties": {
+            "arrival_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Arrival At"
+            },
+            "candidate_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Candidate Id",
+              "type": "string"
+            },
+            "departure_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Departure At"
+            },
+            "destination": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Destination",
+              "type": "string"
+            },
+            "evidence_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "kind": {
+              "const": "transport",
+              "default": "transport",
+              "title": "Kind",
+              "type": "string"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "mode": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Mode",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "origin": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Origin",
+              "type": "string"
+            },
+            "tags": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Tags",
+              "type": "array"
+            }
+          },
+          "required": [
+            "candidate_id",
+            "name",
+            "mode",
+            "origin",
+            "destination"
+          ],
+          "title": "TransportCandidate",
+          "type": "object"
+        }
+      },
+      "discriminator": {
+        "mapping": {
+          "context": "#/$defs/ContextCandidate",
+          "place": "#/$defs/PlaceCandidate",
+          "stay": "#/$defs/StayCandidate",
+          "transport": "#/$defs/TransportCandidate"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TransportCandidate"
+        },
+        {
+          "$ref": "#/$defs/StayCandidate"
+        },
+        {
+          "$ref": "#/$defs/PlaceCandidate"
+        },
+        {
+          "$ref": "#/$defs/ContextCandidate"
+        }
+      ]
+    },
+    "Checkpoint": {
+      "$defs": {
+        "BudgetSemantics": {
+          "description": "预算金额的解释方式。",
+          "enum": [
+            "maximum",
+            "range",
+            "target"
+          ],
+          "title": "BudgetSemantics",
+          "type": "string"
+        },
+        "BudgetSpec": {
+          "additionalProperties": false,
+          "description": "带金额语义的预算约束。",
+          "properties": {
+            "maximum": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "minimum": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "semantics": {
+              "$ref": "#/$defs/BudgetSemantics"
+            },
+            "target": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "semantics"
+          ],
+          "title": "BudgetSpec",
+          "type": "object"
+        },
+        "Constraint": {
+          "additionalProperties": false,
+          "description": "单条类型化旅行约束。",
+          "properties": {
+            "category": {
+              "minLength": 1,
+              "title": "Category",
+              "type": "string"
+            },
+            "confidence": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Confidence"
+            },
+            "conflict_group": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Conflict Group"
+            },
+            "hardness": {
+              "$ref": "#/$defs/ConstraintHardness"
+            },
+            "id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Id",
+              "type": "string"
+            },
+            "normalized_value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                }
+              ],
+              "description": "已归一化的约束值",
+              "title": "Normalized Value"
+            },
+            "priority": {
+              "minimum": 0,
+              "title": "Priority",
+              "type": "integer"
+            },
+            "scope": {
+              "minLength": 1,
+              "title": "Scope",
+              "type": "string"
+            },
+            "source": {
+              "$ref": "#/$defs/ConstraintSource"
+            },
+            "user_confirmed": {
+              "default": false,
+              "title": "User Confirmed",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "category",
+            "normalized_value",
+            "hardness",
+            "priority",
+            "scope",
+            "source",
+            "confidence"
+          ],
+          "title": "Constraint",
+          "type": "object"
+        },
+        "ConstraintHardness": {
+          "description": "约束对可行性的影响等级。",
+          "enum": [
+            "hard",
+            "soft",
+            "assumption",
+            "unknown"
+          ],
+          "title": "ConstraintHardness",
+          "type": "string"
+        },
+        "ConstraintSnapshot": {
+          "additionalProperties": false,
+          "description": "规划本轮使用的不可变约束快照。",
+          "properties": {
+            "constraints": {
+              "items": {
+                "$ref": "#/$defs/Constraint"
+              },
+              "title": "Constraints",
+              "type": "array"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "request_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "version": {
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "version",
+            "created_at",
+            "request_id"
+          ],
+          "title": "ConstraintSnapshot",
+          "type": "object"
+        },
+        "ConstraintSource": {
+          "description": "约束来源。",
+          "enum": [
+            "user",
+            "profile",
+            "system",
+            "assumption"
+          ],
+          "title": "ConstraintSource",
+          "type": "string"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "ErrorCategory": {
+          "description": "工作流失败的安全分类。",
+          "enum": [
+            "validation",
+            "configuration",
+            "llm",
+            "tool",
+            "evidence",
+            "budget",
+            "timeout",
+            "state_conflict",
+            "security",
+            "internal"
+          ],
+          "title": "ErrorCategory",
+          "type": "string"
+        },
+        "EvidenceItem": {
+          "additionalProperties": false,
+          "description": "可被候选和方案引用的单条事实。",
+          "properties": {
+            "confidence": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Confidence"
+            },
+            "constraint_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Constraint Refs",
+              "type": "array"
+            },
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "evidence_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Evidence Id",
+              "type": "string"
+            },
+            "fact_type": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Fact Type",
+              "type": "string"
+            },
+            "observed_at": {
+              "format": "date-time",
+              "title": "Observed At",
+              "type": "string"
+            },
+            "source": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/EvidenceStatus"
+            },
+            "valid_until": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Valid Until"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                }
+              ],
+              "description": "已标准化的事实值",
+              "title": "Value"
+            }
+          },
+          "required": [
+            "evidence_id",
+            "entity_id",
+            "fact_type",
+            "value",
+            "source",
+            "source_ref",
+            "observed_at",
+            "status",
+            "confidence"
+          ],
+          "title": "EvidenceItem",
+          "type": "object"
+        },
+        "EvidenceSnapshot": {
+          "additionalProperties": false,
+          "description": "某一时点可供规划使用的证据快照。",
+          "properties": {
+            "conflict_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Conflict Refs",
+              "type": "array"
+            },
+            "coverage": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "default": "0",
+              "title": "Coverage"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "evidence_items": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/EvidenceItem"
+              },
+              "title": "Evidence Items",
+              "type": "array"
+            },
+            "freshness": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "default": "0",
+              "title": "Freshness"
+            },
+            "snapshot_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Snapshot Id",
+              "type": "string"
+            },
+            "unavailable_capabilities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Unavailable Capabilities",
+              "type": "array"
+            }
+          },
+          "required": [
+            "snapshot_id",
+            "created_at"
+          ],
+          "title": "EvidenceSnapshot",
+          "type": "object"
+        },
+        "EvidenceStatus": {
+          "description": "证据在当前快照中的可信状态。",
+          "enum": [
+            "verified",
+            "conflicting",
+            "stale",
+            "unavailable"
+          ],
+          "title": "EvidenceStatus",
+          "type": "string"
+        },
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "InteractionMode": {
+          "description": "用户请求在交互控制平面中的工作模式。",
+          "enum": [
+            "answer",
+            "clarify",
+            "plan",
+            "refine",
+            "compare",
+            "replan",
+            "action",
+            "unsupported"
+          ],
+          "title": "InteractionMode",
+          "type": "string"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        },
+        "TravelerProfile": {
+          "additionalProperties": false,
+          "description": "影响规划的同行人群数量和无障碍需求。",
+          "properties": {
+            "accessibility_needs": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Accessibility Needs",
+              "type": "array"
+            },
+            "adults": {
+              "minimum": 1,
+              "title": "Adults",
+              "type": "integer"
+            },
+            "children": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Children",
+              "type": "integer"
+            },
+            "seniors": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Seniors",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "adults"
+          ],
+          "title": "TravelerProfile",
+          "type": "object"
+        },
+        "TripRequest": {
+          "additionalProperties": false,
+          "description": "旅行规划请求的结构化入口契约。",
+          "properties": {
+            "budget": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BudgetSpec"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "date_range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "destinations": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Destinations",
+              "type": "array"
+            },
+            "duration_days": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Duration Days"
+            },
+            "explicit_exclusions": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Explicit Exclusions",
+              "type": "array"
+            },
+            "locale": {
+              "default": "zh-CN",
+              "minLength": 2,
+              "title": "Locale",
+              "type": "string"
+            },
+            "origin": {
+              "minLength": 1,
+              "title": "Origin",
+              "type": "string"
+            },
+            "preferences": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Preferences",
+              "type": "array"
+            },
+            "raw_input_ref": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Raw Input Ref"
+            },
+            "request_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "requested_mode": {
+              "$ref": "#/$defs/InteractionMode",
+              "default": "plan"
+            },
+            "schema_version": {
+              "default": "1.0",
+              "minLength": 1,
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "session_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Session Id",
+              "type": "string"
+            },
+            "timezone": {
+              "default": "Asia/Shanghai",
+              "minLength": 1,
+              "title": "Timezone",
+              "type": "string"
+            },
+            "travelers": {
+              "$ref": "#/$defs/TravelerProfile"
+            },
+            "trip_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Trip Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "request_id",
+            "trip_id",
+            "session_id",
+            "origin",
+            "destinations",
+            "travelers"
+          ],
+          "title": "TripRequest",
+          "type": "object"
+        },
+        "TripState": {
+          "additionalProperties": false,
+          "description": "会话与旅行工作流的不可变状态快照。",
+          "properties": {
+            "constraint_snapshot": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstraintSnapshot"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "evidence_snapshot": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EvidenceSnapshot"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "last_error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/WorkflowErrorPayload"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "pending_action": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Pending Action"
+            },
+            "plan_version": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Plan Version"
+            },
+            "session_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Session Id",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/WorkflowStatus",
+              "default": "collecting"
+            },
+            "trip_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Trip Id",
+              "type": "string"
+            },
+            "trip_request": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TripRequest"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "version": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "trip_id",
+            "session_id"
+          ],
+          "title": "TripState",
+          "type": "object"
+        },
+        "WorkflowErrorPayload": {
+          "additionalProperties": false,
+          "description": "可安全暴露给调用方的工作流错误字段。",
+          "properties": {
+            "category": {
+              "$ref": "#/$defs/ErrorCategory"
+            },
+            "code": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            },
+            "retryable": {
+              "default": false,
+              "title": "Retryable",
+              "type": "boolean"
+            },
+            "safe_message": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Safe Message",
+              "type": "string"
+            },
+            "stage": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Stage",
+              "type": "string"
+            },
+            "trace_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Trace Id",
+              "type": "string"
+            },
+            "upstream_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Upstream Refs",
+              "type": "array"
+            }
+          },
+          "required": [
+            "trace_id",
+            "stage",
+            "category",
+            "code",
+            "safe_message"
+          ],
+          "title": "WorkflowErrorPayload",
+          "type": "object"
+        },
+        "WorkflowStatus": {
+          "description": "旅行规划工作流允许使用的状态。",
+          "enum": [
+            "collecting",
+            "clarifying",
+            "researching",
+            "drafting",
+            "validating",
+            "repairing",
+            "needs_confirmation",
+            "confirmed",
+            "stale",
+            "replanning",
+            "completed",
+            "failed"
+          ],
+          "title": "WorkflowStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "可恢复的不可变旅行状态快照。",
+      "properties": {
+        "checkpoint_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Checkpoint Id",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/TripState"
+        },
+        "trip_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Trip Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "trip_id",
+        "state"
+      ],
+      "title": "Checkpoint",
+      "type": "object"
+    },
+    "Constraint": {
+      "$defs": {
+        "ConstraintHardness": {
+          "description": "约束对可行性的影响等级。",
+          "enum": [
+            "hard",
+            "soft",
+            "assumption",
+            "unknown"
+          ],
+          "title": "ConstraintHardness",
+          "type": "string"
+        },
+        "ConstraintSource": {
+          "description": "约束来源。",
+          "enum": [
+            "user",
+            "profile",
+            "system",
+            "assumption"
+          ],
+          "title": "ConstraintSource",
+          "type": "string"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "单条类型化旅行约束。",
+      "properties": {
+        "category": {
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "conflict_group": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conflict Group"
+        },
+        "hardness": {
+          "$ref": "#/$defs/ConstraintHardness"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "normalized_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "$ref": "#/$defs/DateRange"
+            },
+            {
+              "$ref": "#/$defs/GeoPoint"
+            }
+          ],
+          "description": "已归一化的约束值",
+          "title": "Normalized Value"
+        },
+        "priority": {
+          "minimum": 0,
+          "title": "Priority",
+          "type": "integer"
+        },
+        "scope": {
+          "minLength": 1,
+          "title": "Scope",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/ConstraintSource"
+        },
+        "user_confirmed": {
+          "default": false,
+          "title": "User Confirmed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "normalized_value",
+        "hardness",
+        "priority",
+        "scope",
+        "source",
+        "confidence"
+      ],
+      "title": "Constraint",
+      "type": "object"
+    },
+    "ConstraintSnapshot": {
+      "$defs": {
+        "Constraint": {
+          "additionalProperties": false,
+          "description": "单条类型化旅行约束。",
+          "properties": {
+            "category": {
+              "minLength": 1,
+              "title": "Category",
+              "type": "string"
+            },
+            "confidence": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Confidence"
+            },
+            "conflict_group": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Conflict Group"
+            },
+            "hardness": {
+              "$ref": "#/$defs/ConstraintHardness"
+            },
+            "id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Id",
+              "type": "string"
+            },
+            "normalized_value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                }
+              ],
+              "description": "已归一化的约束值",
+              "title": "Normalized Value"
+            },
+            "priority": {
+              "minimum": 0,
+              "title": "Priority",
+              "type": "integer"
+            },
+            "scope": {
+              "minLength": 1,
+              "title": "Scope",
+              "type": "string"
+            },
+            "source": {
+              "$ref": "#/$defs/ConstraintSource"
+            },
+            "user_confirmed": {
+              "default": false,
+              "title": "User Confirmed",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "category",
+            "normalized_value",
+            "hardness",
+            "priority",
+            "scope",
+            "source",
+            "confidence"
+          ],
+          "title": "Constraint",
+          "type": "object"
+        },
+        "ConstraintHardness": {
+          "description": "约束对可行性的影响等级。",
+          "enum": [
+            "hard",
+            "soft",
+            "assumption",
+            "unknown"
+          ],
+          "title": "ConstraintHardness",
+          "type": "string"
+        },
+        "ConstraintSource": {
+          "description": "约束来源。",
+          "enum": [
+            "user",
+            "profile",
+            "system",
+            "assumption"
+          ],
+          "title": "ConstraintSource",
+          "type": "string"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "规划本轮使用的不可变约束快照。",
+      "properties": {
+        "constraints": {
+          "items": {
+            "$ref": "#/$defs/Constraint"
+          },
+          "title": "Constraints",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "created_at",
+        "request_id"
+      ],
+      "title": "ConstraintSnapshot",
+      "type": "object"
+    },
+    "ContextCandidate": {
+      "$defs": {
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "不直接作为行程项目的环境上下文候选。",
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "context_type": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Context Type",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "kind": {
+          "const": "context",
+          "default": "context",
+          "title": "Kind",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeoPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "scope": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Scope",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "name",
+        "context_type",
+        "scope"
+      ],
+      "title": "ContextCandidate",
+      "type": "object"
+    },
+    "DateRange": {
+      "additionalProperties": false,
+      "description": "包含起止日期的闭区间。",
+      "properties": {
+        "end": {
+          "format": "date",
+          "title": "End",
+          "type": "string"
+        },
+        "start": {
+          "format": "date",
+          "title": "Start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "DateRange",
+      "type": "object"
+    },
+    "EvidenceItem": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "EvidenceStatus": {
+          "description": "证据在当前快照中的可信状态。",
+          "enum": [
+            "verified",
+            "conflicting",
+            "stale",
+            "unavailable"
+          ],
+          "title": "EvidenceStatus",
+          "type": "string"
+        },
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "可被候选和方案引用的单条事实。",
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Confidence"
+        },
+        "constraint_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Constraint Refs",
+          "type": "array"
+        },
+        "entity_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "evidence_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "fact_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Fact Type",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "source_ref": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Source Ref",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/EvidenceStatus"
+        },
+        "valid_until": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Valid Until"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "$ref": "#/$defs/DateRange"
+            },
+            {
+              "$ref": "#/$defs/GeoPoint"
+            }
+          ],
+          "description": "已标准化的事实值",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "entity_id",
+        "fact_type",
+        "value",
+        "source",
+        "source_ref",
+        "observed_at",
+        "status",
+        "confidence"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
+    "EvidenceSnapshot": {
+      "$defs": {
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "EvidenceItem": {
+          "additionalProperties": false,
+          "description": "可被候选和方案引用的单条事实。",
+          "properties": {
+            "confidence": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Confidence"
+            },
+            "constraint_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Constraint Refs",
+              "type": "array"
+            },
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "evidence_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Evidence Id",
+              "type": "string"
+            },
+            "fact_type": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Fact Type",
+              "type": "string"
+            },
+            "observed_at": {
+              "format": "date-time",
+              "title": "Observed At",
+              "type": "string"
+            },
+            "source": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/EvidenceStatus"
+            },
+            "valid_until": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Valid Until"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                }
+              ],
+              "description": "已标准化的事实值",
+              "title": "Value"
+            }
+          },
+          "required": [
+            "evidence_id",
+            "entity_id",
+            "fact_type",
+            "value",
+            "source",
+            "source_ref",
+            "observed_at",
+            "status",
+            "confidence"
+          ],
+          "title": "EvidenceItem",
+          "type": "object"
+        },
+        "EvidenceStatus": {
+          "description": "证据在当前快照中的可信状态。",
+          "enum": [
+            "verified",
+            "conflicting",
+            "stale",
+            "unavailable"
+          ],
+          "title": "EvidenceStatus",
+          "type": "string"
+        },
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "某一时点可供规划使用的证据快照。",
+      "properties": {
+        "conflict_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Conflict Refs",
+          "type": "array"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Coverage"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "evidence_items": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceItem"
+          },
+          "title": "Evidence Items",
+          "type": "array"
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Freshness"
+        },
+        "snapshot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "unavailable_capabilities": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Unavailable Capabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "created_at"
+      ],
+      "title": "EvidenceSnapshot",
+      "type": "object"
+    },
+    "GeoPoint": {
+      "additionalProperties": false,
+      "description": "WGS84 地理坐标。",
+      "properties": {
+        "latitude": {
+          "maximum": 90,
+          "minimum": -90,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Longitude",
+          "type": "number"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude"
+      ],
+      "title": "GeoPoint",
+      "type": "object"
+    },
+    "ItineraryDay": {
+      "additionalProperties": false,
+      "description": "行程中的一天及其项目引用。",
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "day_number": {
+          "minimum": 1,
+          "title": "Day Number",
+          "type": "integer"
+        },
+        "item_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Item Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "day_number"
+      ],
+      "title": "ItineraryDay",
+      "type": "object"
+    },
+    "ItineraryPlan": {
+      "$defs": {
+        "BudgetBreakdown": {
+          "additionalProperties": false,
+          "description": "计划预算总额及分类明细。",
+          "properties": {
+            "lines": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/BudgetLine"
+              },
+              "title": "Lines",
+              "type": "array"
+            },
+            "total": {
+              "$ref": "#/$defs/Money"
+            }
+          },
+          "required": [
+            "total"
+          ],
+          "title": "BudgetBreakdown",
+          "type": "object"
+        },
+        "BudgetLine": {
+          "additionalProperties": false,
+          "description": "计划预算中的一条分类金额。",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/Money"
+            },
+            "category": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          "required": [
+            "category",
+            "amount"
+          ],
+          "title": "BudgetLine",
+          "type": "object"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "IssueSeverity": {
+          "description": "验证问题的严重级别。",
+          "enum": [
+            "info",
+            "warning",
+            "blocking"
+          ],
+          "title": "IssueSeverity",
+          "type": "string"
+        },
+        "ItineraryDay": {
+          "additionalProperties": false,
+          "description": "行程中的一天及其项目引用。",
+          "properties": {
+            "date": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Date"
+            },
+            "day_number": {
+              "minimum": 1,
+              "title": "Day Number",
+              "type": "integer"
+            },
+            "item_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Item Refs",
+              "type": "array"
+            }
+          },
+          "required": [
+            "day_number"
+          ],
+          "title": "ItineraryDay",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        },
+        "PlanAlternative": {
+          "additionalProperties": false,
+          "description": "可供用户比较的替代方案引用。",
+          "properties": {
+            "alternative_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Alternative Id",
+              "type": "string"
+            },
+            "item_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Item Refs",
+              "type": "array"
+            },
+            "rationale": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Rationale",
+              "type": "string"
+            }
+          },
+          "required": [
+            "alternative_id",
+            "rationale"
+          ],
+          "title": "PlanAlternative",
+          "type": "object"
+        },
+        "PlanBuffer": {
+          "additionalProperties": false,
+          "description": "计划中显式记录的时间或预算缓冲。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "buffer_type": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Buffer Type",
+              "type": "string"
+            },
+            "minutes": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Minutes"
+            }
+          },
+          "required": [
+            "buffer_type"
+          ],
+          "title": "PlanBuffer",
+          "type": "object"
+        },
+        "PlanItem": {
+          "additionalProperties": false,
+          "description": "行程中的单个可追踪项目。",
+          "properties": {
+            "candidate_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Candidate Id",
+              "type": "string"
+            },
+            "day_number": {
+              "minimum": 1,
+              "title": "Day Number",
+              "type": "integer"
+            },
+            "end_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "End At"
+            },
+            "evidence_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "plan_item_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Plan Item Id",
+              "type": "string"
+            },
+            "start_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Start At"
+            },
+            "title": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Title",
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan_item_id",
+            "candidate_id",
+            "day_number",
+            "title"
+          ],
+          "title": "PlanItem",
+          "type": "object"
+        },
+        "ValidationGate": {
+          "description": "验证问题所属的质量门。",
+          "enum": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4",
+            "g5",
+            "g6"
+          ],
+          "title": "ValidationGate",
+          "type": "string"
+        },
+        "ValidationIssue": {
+          "additionalProperties": false,
+          "description": "可供验证器和 Targeted Repair 消费的结构化问题。",
+          "properties": {
+            "affected_ids": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Affected Ids",
+              "type": "array"
+            },
+            "constraint_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Constraint Refs",
+              "type": "array"
+            },
+            "evidence_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "gate": {
+              "$ref": "#/$defs/ValidationGate"
+            },
+            "issue_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Issue Id",
+              "type": "string"
+            },
+            "message": {
+              "maxLength": 1024,
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "repair_strategy": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Repair Strategy",
+              "type": "string"
+            },
+            "retryable": {
+              "default": false,
+              "title": "Retryable",
+              "type": "boolean"
+            },
+            "severity": {
+              "$ref": "#/$defs/IssueSeverity"
+            },
+            "type": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "issue_id",
+            "gate",
+            "severity",
+            "type",
+            "message",
+            "repair_strategy"
+          ],
+          "title": "ValidationIssue",
+          "type": "object"
+        },
+        "WorkflowStatus": {
+          "description": "旅行规划工作流允许使用的状态。",
+          "enum": [
+            "collecting",
+            "clarifying",
+            "researching",
+            "drafting",
+            "validating",
+            "repairing",
+            "needs_confirmation",
+            "confirmed",
+            "stale",
+            "replanning",
+            "completed",
+            "failed"
+          ],
+          "title": "WorkflowStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "可追溯、可验证且可版本化的行程计划。",
+      "properties": {
+        "alternatives": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanAlternative"
+          },
+          "title": "Alternatives",
+          "type": "array"
+        },
+        "assumptions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "budget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BudgetBreakdown"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "buffers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanBuffer"
+          },
+          "title": "Buffers",
+          "type": "array"
+        },
+        "date_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DateRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "days": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ItineraryDay"
+          },
+          "title": "Days",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "items": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlanItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "plan_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkflowStatus"
+        },
+        "validation_report": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ValidationIssue"
+          },
+          "title": "Validation Report",
+          "type": "array"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "plan_id",
+        "version",
+        "status"
+      ],
+      "title": "ItineraryPlan",
+      "type": "object"
+    },
+    "LegacyPlanResult": {
+      "additionalProperties": false,
+      "description": "当前 legacy planner 的类型化结果边界。\n\n该模型保留旧流程的自由文本语义，但阻止未声明字段和宽松类型进入新代码。\n它不是 M1 的 ``ItineraryPlan``，因为 M1 尚未实现自由文本到结构化行程的解析。",
+      "properties": {
+        "issues_found": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues Found",
+          "type": "array"
+        },
+        "plan": {
+          "minLength": 1,
+          "title": "Plan",
+          "type": "string"
+        },
+        "rounds": {
+          "minimum": 1,
+          "title": "Rounds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plan",
+        "rounds",
+        "issues_found"
+      ],
+      "title": "LegacyPlanResult",
+      "type": "object"
+    },
+    "Money": {
+      "additionalProperties": false,
+      "description": "使用 Decimal 表示的非负金额。",
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "currency": {
+          "maxLength": 3,
+          "minLength": 3,
+          "title": "Currency",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "title": "Money",
+      "type": "object"
+    },
+    "PlaceCandidate": {
+      "$defs": {
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "景点、餐饮或活动候选。",
+      "properties": {
+        "address": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "category": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Category",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "kind": {
+          "const": "place",
+          "default": "place",
+          "title": "Kind",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeoPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "name",
+        "category"
+      ],
+      "title": "PlaceCandidate",
+      "type": "object"
+    },
+    "PlanAlternative": {
+      "additionalProperties": false,
+      "description": "可供用户比较的替代方案引用。",
+      "properties": {
+        "alternative_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Alternative Id",
+          "type": "string"
+        },
+        "item_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Item Refs",
+          "type": "array"
+        },
+        "rationale": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "alternative_id",
+        "rationale"
+      ],
+      "title": "PlanAlternative",
+      "type": "object"
+    },
+    "PlanBuffer": {
+      "$defs": {
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "计划中显式记录的时间或预算缓冲。",
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "buffer_type": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Buffer Type",
+          "type": "string"
+        },
+        "minutes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minutes"
+        }
+      },
+      "required": [
+        "buffer_type"
+      ],
+      "title": "PlanBuffer",
+      "type": "object"
+    },
+    "PlanItem": {
+      "additionalProperties": false,
+      "description": "行程中的单个可追踪项目。",
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "day_number": {
+          "minimum": 1,
+          "title": "Day Number",
+          "type": "integer"
+        },
+        "end_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End At"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "plan_item_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Plan Item Id",
+          "type": "string"
+        },
+        "start_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start At"
+        },
+        "title": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plan_item_id",
+        "candidate_id",
+        "day_number",
+        "title"
+      ],
+      "title": "PlanItem",
+      "type": "object"
+    },
+    "PlanTripResult": {
+      "additionalProperties": false,
+      "description": "规划用例对外暴露的类型化结果。",
+      "properties": {
+        "issues_found": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues Found",
+          "type": "array"
+        },
+        "plan": {
+          "title": "Plan",
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "rounds": {
+          "title": "Rounds",
+          "type": "integer"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "trip_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Trip Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "trip_id",
+        "session_id",
+        "plan",
+        "rounds",
+        "issues_found"
+      ],
+      "title": "PlanTripResult",
+      "type": "object"
+    },
+    "StayCandidate": {
+      "$defs": {
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "住宿候选。",
+      "properties": {
+        "area": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Area",
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "check_in": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check In"
+        },
+        "check_out": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check Out"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "kind": {
+          "const": "stay",
+          "default": "stay",
+          "title": "Kind",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeoPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "total_price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "candidate_id",
+        "name",
+        "area"
+      ],
+      "title": "StayCandidate",
+      "type": "object"
+    },
+    "TransportCandidate": {
+      "$defs": {
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "交通候选。",
+      "properties": {
+        "arrival_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arrival At"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "departure_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Departure At"
+        },
+        "destination": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Destination",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "kind": {
+          "const": "transport",
+          "default": "transport",
+          "title": "Kind",
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeoPoint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Mode",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "origin": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Origin",
+          "type": "string"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "name",
+        "mode",
+        "origin",
+        "destination"
+      ],
+      "title": "TransportCandidate",
+      "type": "object"
+    },
+    "TravelerProfile": {
+      "additionalProperties": false,
+      "description": "影响规划的同行人群数量和无障碍需求。",
+      "properties": {
+        "accessibility_needs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accessibility Needs",
+          "type": "array"
+        },
+        "adults": {
+          "minimum": 1,
+          "title": "Adults",
+          "type": "integer"
+        },
+        "children": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Children",
+          "type": "integer"
+        },
+        "seniors": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Seniors",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "adults"
+      ],
+      "title": "TravelerProfile",
+      "type": "object"
+    },
+    "TripRequest": {
+      "$defs": {
+        "BudgetSemantics": {
+          "description": "预算金额的解释方式。",
+          "enum": [
+            "maximum",
+            "range",
+            "target"
+          ],
+          "title": "BudgetSemantics",
+          "type": "string"
+        },
+        "BudgetSpec": {
+          "additionalProperties": false,
+          "description": "带金额语义的预算约束。",
+          "properties": {
+            "maximum": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "minimum": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "semantics": {
+              "$ref": "#/$defs/BudgetSemantics"
+            },
+            "target": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "semantics"
+          ],
+          "title": "BudgetSpec",
+          "type": "object"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "InteractionMode": {
+          "description": "用户请求在交互控制平面中的工作模式。",
+          "enum": [
+            "answer",
+            "clarify",
+            "plan",
+            "refine",
+            "compare",
+            "replan",
+            "action",
+            "unsupported"
+          ],
+          "title": "InteractionMode",
+          "type": "string"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        },
+        "TravelerProfile": {
+          "additionalProperties": false,
+          "description": "影响规划的同行人群数量和无障碍需求。",
+          "properties": {
+            "accessibility_needs": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Accessibility Needs",
+              "type": "array"
+            },
+            "adults": {
+              "minimum": 1,
+              "title": "Adults",
+              "type": "integer"
+            },
+            "children": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Children",
+              "type": "integer"
+            },
+            "seniors": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Seniors",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "adults"
+          ],
+          "title": "TravelerProfile",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "旅行规划请求的结构化入口契约。",
+      "properties": {
+        "budget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BudgetSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "date_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DateRange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "destinations": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Destinations",
+          "type": "array"
+        },
+        "duration_days": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Days"
+        },
+        "explicit_exclusions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Explicit Exclusions",
+          "type": "array"
+        },
+        "locale": {
+          "default": "zh-CN",
+          "minLength": 2,
+          "title": "Locale",
+          "type": "string"
+        },
+        "origin": {
+          "minLength": 1,
+          "title": "Origin",
+          "type": "string"
+        },
+        "preferences": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Preferences",
+          "type": "array"
+        },
+        "raw_input_ref": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Input Ref"
+        },
+        "request_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Request Id",
+          "type": "string"
+        },
+        "requested_mode": {
+          "$ref": "#/$defs/InteractionMode",
+          "default": "plan"
+        },
+        "schema_version": {
+          "default": "1.0",
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "Asia/Shanghai",
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
+        },
+        "travelers": {
+          "$ref": "#/$defs/TravelerProfile"
+        },
+        "trip_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Trip Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "trip_id",
+        "session_id",
+        "origin",
+        "destinations",
+        "travelers"
+      ],
+      "title": "TripRequest",
+      "type": "object"
+    },
+    "TripState": {
+      "$defs": {
+        "BudgetSemantics": {
+          "description": "预算金额的解释方式。",
+          "enum": [
+            "maximum",
+            "range",
+            "target"
+          ],
+          "title": "BudgetSemantics",
+          "type": "string"
+        },
+        "BudgetSpec": {
+          "additionalProperties": false,
+          "description": "带金额语义的预算约束。",
+          "properties": {
+            "maximum": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "minimum": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "semantics": {
+              "$ref": "#/$defs/BudgetSemantics"
+            },
+            "target": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "semantics"
+          ],
+          "title": "BudgetSpec",
+          "type": "object"
+        },
+        "Constraint": {
+          "additionalProperties": false,
+          "description": "单条类型化旅行约束。",
+          "properties": {
+            "category": {
+              "minLength": 1,
+              "title": "Category",
+              "type": "string"
+            },
+            "confidence": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Confidence"
+            },
+            "conflict_group": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Conflict Group"
+            },
+            "hardness": {
+              "$ref": "#/$defs/ConstraintHardness"
+            },
+            "id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Id",
+              "type": "string"
+            },
+            "normalized_value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                }
+              ],
+              "description": "已归一化的约束值",
+              "title": "Normalized Value"
+            },
+            "priority": {
+              "minimum": 0,
+              "title": "Priority",
+              "type": "integer"
+            },
+            "scope": {
+              "minLength": 1,
+              "title": "Scope",
+              "type": "string"
+            },
+            "source": {
+              "$ref": "#/$defs/ConstraintSource"
+            },
+            "user_confirmed": {
+              "default": false,
+              "title": "User Confirmed",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "category",
+            "normalized_value",
+            "hardness",
+            "priority",
+            "scope",
+            "source",
+            "confidence"
+          ],
+          "title": "Constraint",
+          "type": "object"
+        },
+        "ConstraintHardness": {
+          "description": "约束对可行性的影响等级。",
+          "enum": [
+            "hard",
+            "soft",
+            "assumption",
+            "unknown"
+          ],
+          "title": "ConstraintHardness",
+          "type": "string"
+        },
+        "ConstraintSnapshot": {
+          "additionalProperties": false,
+          "description": "规划本轮使用的不可变约束快照。",
+          "properties": {
+            "constraints": {
+              "items": {
+                "$ref": "#/$defs/Constraint"
+              },
+              "title": "Constraints",
+              "type": "array"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "request_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "version": {
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "version",
+            "created_at",
+            "request_id"
+          ],
+          "title": "ConstraintSnapshot",
+          "type": "object"
+        },
+        "ConstraintSource": {
+          "description": "约束来源。",
+          "enum": [
+            "user",
+            "profile",
+            "system",
+            "assumption"
+          ],
+          "title": "ConstraintSource",
+          "type": "string"
+        },
+        "DateRange": {
+          "additionalProperties": false,
+          "description": "包含起止日期的闭区间。",
+          "properties": {
+            "end": {
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            },
+            "start": {
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "title": "DateRange",
+          "type": "object"
+        },
+        "ErrorCategory": {
+          "description": "工作流失败的安全分类。",
+          "enum": [
+            "validation",
+            "configuration",
+            "llm",
+            "tool",
+            "evidence",
+            "budget",
+            "timeout",
+            "state_conflict",
+            "security",
+            "internal"
+          ],
+          "title": "ErrorCategory",
+          "type": "string"
+        },
+        "EvidenceItem": {
+          "additionalProperties": false,
+          "description": "可被候选和方案引用的单条事实。",
+          "properties": {
+            "confidence": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Confidence"
+            },
+            "constraint_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Constraint Refs",
+              "type": "array"
+            },
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "evidence_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Evidence Id",
+              "type": "string"
+            },
+            "fact_type": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Fact Type",
+              "type": "string"
+            },
+            "observed_at": {
+              "format": "date-time",
+              "title": "Observed At",
+              "type": "string"
+            },
+            "source": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/EvidenceStatus"
+            },
+            "valid_until": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Valid Until"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "$ref": "#/$defs/Money"
+                },
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "$ref": "#/$defs/GeoPoint"
+                }
+              ],
+              "description": "已标准化的事实值",
+              "title": "Value"
+            }
+          },
+          "required": [
+            "evidence_id",
+            "entity_id",
+            "fact_type",
+            "value",
+            "source",
+            "source_ref",
+            "observed_at",
+            "status",
+            "confidence"
+          ],
+          "title": "EvidenceItem",
+          "type": "object"
+        },
+        "EvidenceSnapshot": {
+          "additionalProperties": false,
+          "description": "某一时点可供规划使用的证据快照。",
+          "properties": {
+            "conflict_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Conflict Refs",
+              "type": "array"
+            },
+            "coverage": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "default": "0",
+              "title": "Coverage"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "evidence_items": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/EvidenceItem"
+              },
+              "title": "Evidence Items",
+              "type": "array"
+            },
+            "freshness": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "default": "0",
+              "title": "Freshness"
+            },
+            "snapshot_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Snapshot Id",
+              "type": "string"
+            },
+            "unavailable_capabilities": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Unavailable Capabilities",
+              "type": "array"
+            }
+          },
+          "required": [
+            "snapshot_id",
+            "created_at"
+          ],
+          "title": "EvidenceSnapshot",
+          "type": "object"
+        },
+        "EvidenceStatus": {
+          "description": "证据在当前快照中的可信状态。",
+          "enum": [
+            "verified",
+            "conflicting",
+            "stale",
+            "unavailable"
+          ],
+          "title": "EvidenceStatus",
+          "type": "string"
+        },
+        "GeoPoint": {
+          "additionalProperties": false,
+          "description": "WGS84 地理坐标。",
+          "properties": {
+            "latitude": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Latitude",
+              "type": "number"
+            },
+            "longitude": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Longitude",
+              "type": "number"
+            }
+          },
+          "required": [
+            "latitude",
+            "longitude"
+          ],
+          "title": "GeoPoint",
+          "type": "object"
+        },
+        "InteractionMode": {
+          "description": "用户请求在交互控制平面中的工作模式。",
+          "enum": [
+            "answer",
+            "clarify",
+            "plan",
+            "refine",
+            "compare",
+            "replan",
+            "action",
+            "unsupported"
+          ],
+          "title": "InteractionMode",
+          "type": "string"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
+        },
+        "TravelerProfile": {
+          "additionalProperties": false,
+          "description": "影响规划的同行人群数量和无障碍需求。",
+          "properties": {
+            "accessibility_needs": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Accessibility Needs",
+              "type": "array"
+            },
+            "adults": {
+              "minimum": 1,
+              "title": "Adults",
+              "type": "integer"
+            },
+            "children": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Children",
+              "type": "integer"
+            },
+            "seniors": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Seniors",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "adults"
+          ],
+          "title": "TravelerProfile",
+          "type": "object"
+        },
+        "TripRequest": {
+          "additionalProperties": false,
+          "description": "旅行规划请求的结构化入口契约。",
+          "properties": {
+            "budget": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BudgetSpec"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "date_range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DateRange"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "destinations": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Destinations",
+              "type": "array"
+            },
+            "duration_days": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Duration Days"
+            },
+            "explicit_exclusions": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Explicit Exclusions",
+              "type": "array"
+            },
+            "locale": {
+              "default": "zh-CN",
+              "minLength": 2,
+              "title": "Locale",
+              "type": "string"
+            },
+            "origin": {
+              "minLength": 1,
+              "title": "Origin",
+              "type": "string"
+            },
+            "preferences": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Preferences",
+              "type": "array"
+            },
+            "raw_input_ref": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Raw Input Ref"
+            },
+            "request_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Request Id",
+              "type": "string"
+            },
+            "requested_mode": {
+              "$ref": "#/$defs/InteractionMode",
+              "default": "plan"
+            },
+            "schema_version": {
+              "default": "1.0",
+              "minLength": 1,
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "session_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Session Id",
+              "type": "string"
+            },
+            "timezone": {
+              "default": "Asia/Shanghai",
+              "minLength": 1,
+              "title": "Timezone",
+              "type": "string"
+            },
+            "travelers": {
+              "$ref": "#/$defs/TravelerProfile"
+            },
+            "trip_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Trip Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "request_id",
+            "trip_id",
+            "session_id",
+            "origin",
+            "destinations",
+            "travelers"
+          ],
+          "title": "TripRequest",
+          "type": "object"
+        },
+        "WorkflowErrorPayload": {
+          "additionalProperties": false,
+          "description": "可安全暴露给调用方的工作流错误字段。",
+          "properties": {
+            "category": {
+              "$ref": "#/$defs/ErrorCategory"
+            },
+            "code": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            },
+            "retryable": {
+              "default": false,
+              "title": "Retryable",
+              "type": "boolean"
+            },
+            "safe_message": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Safe Message",
+              "type": "string"
+            },
+            "stage": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Stage",
+              "type": "string"
+            },
+            "trace_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Trace Id",
+              "type": "string"
+            },
+            "upstream_refs": {
+              "default": [],
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "title": "Upstream Refs",
+              "type": "array"
+            }
+          },
+          "required": [
+            "trace_id",
+            "stage",
+            "category",
+            "code",
+            "safe_message"
+          ],
+          "title": "WorkflowErrorPayload",
+          "type": "object"
+        },
+        "WorkflowStatus": {
+          "description": "旅行规划工作流允许使用的状态。",
+          "enum": [
+            "collecting",
+            "clarifying",
+            "researching",
+            "drafting",
+            "validating",
+            "repairing",
+            "needs_confirmation",
+            "confirmed",
+            "stale",
+            "replanning",
+            "completed",
+            "failed"
+          ],
+          "title": "WorkflowStatus",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "会话与旅行工作流的不可变状态快照。",
+      "properties": {
+        "constraint_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConstraintSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "evidence_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EvidenceSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "last_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowErrorPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pending_action": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pending Action"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "session_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkflowStatus",
+          "default": "collecting"
+        },
+        "trip_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Trip Id",
+          "type": "string"
+        },
+        "trip_request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TripRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "trip_id",
+        "session_id"
+      ],
+      "title": "TripState",
+      "type": "object"
+    },
+    "ValidationIssue": {
+      "$defs": {
+        "IssueSeverity": {
+          "description": "验证问题的严重级别。",
+          "enum": [
+            "info",
+            "warning",
+            "blocking"
+          ],
+          "title": "IssueSeverity",
+          "type": "string"
+        },
+        "ValidationGate": {
+          "description": "验证问题所属的质量门。",
+          "enum": [
+            "g0",
+            "g1",
+            "g2",
+            "g3",
+            "g4",
+            "g5",
+            "g6"
+          ],
+          "title": "ValidationGate",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "可供验证器和 Targeted Repair 消费的结构化问题。",
+      "properties": {
+        "affected_ids": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Affected Ids",
+          "type": "array"
+        },
+        "constraint_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Constraint Refs",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "gate": {
+          "$ref": "#/$defs/ValidationGate"
+        },
+        "issue_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Issue Id",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "repair_strategy": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Repair Strategy",
+          "type": "string"
+        },
+        "retryable": {
+          "default": false,
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/IssueSeverity"
+        },
+        "type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issue_id",
+        "gate",
+        "severity",
+        "type",
+        "message",
+        "repair_strategy"
+      ],
+      "title": "ValidationIssue",
+      "type": "object"
+    },
+    "WorkflowErrorPayload": {
+      "$defs": {
+        "ErrorCategory": {
+          "description": "工作流失败的安全分类。",
+          "enum": [
+            "validation",
+            "configuration",
+            "llm",
+            "tool",
+            "evidence",
+            "budget",
+            "timeout",
+            "state_conflict",
+            "security",
+            "internal"
+          ],
+          "title": "ErrorCategory",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "可安全暴露给调用方的工作流错误字段。",
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/ErrorCategory"
+        },
+        "code": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "retryable": {
+          "default": false,
+          "title": "Retryable",
+          "type": "boolean"
+        },
+        "safe_message": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Safe Message",
+          "type": "string"
+        },
+        "stage": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Stage",
+          "type": "string"
+        },
+        "trace_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Trace Id",
+          "type": "string"
+        },
+        "upstream_refs": {
+          "default": [],
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "title": "Upstream Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "trace_id",
+        "stage",
+        "category",
+        "code",
+        "safe_message"
+      ],
+      "title": "WorkflowErrorPayload",
+      "type": "object"
+    }
+  },
+  "title": "Travel Planning M1 Contracts"
+}
