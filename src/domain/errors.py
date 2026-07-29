@@ -83,3 +83,23 @@ class InvalidStateTransitionError(ValueError):
         self.source = source
         self.target = target
         super().__init__(f"workflow transition is not allowed: {source.value} -> {target.value}")
+
+
+class StateConflictError(RuntimeError):
+    """???????????????????????"""
+
+    def __init__(self, trip_id: StableId, expected_version: int, actual_version: int) -> None:
+        self.trip_id = trip_id
+        self.expected_version = expected_version
+        self.actual_version = actual_version
+        super().__init__(
+            f"state version conflict for {trip_id}: "
+            f"expected {expected_version}, actual {actual_version}"
+        )
+
+
+class StateNotFoundError(LookupError):
+    """?????????????????"""
+
+    def __init__(self, trip_id: StableId) -> None:
+        self.trip_id = trip_id
