@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from src.domain.models.candidates import (
+    Candidate,
+    CandidateBase,
+    ContextCandidate,
+    PlaceCandidate,
+    StayCandidate,
+    TransportCandidate,
+)
 from src.domain.models.constraint import (
     Constraint,
     ConstraintSnapshot,
@@ -16,12 +24,23 @@ from src.domain.models.enums import (
     IssueSeverity,
     WorkflowStatus,
 )
+from src.domain.models.evidence import EvidenceItem, EvidenceSnapshot, EvidenceValue
+from src.domain.models.itinerary import (
+    BudgetBreakdown,
+    BudgetLine,
+    ItineraryDay,
+    ItineraryPlan,
+    PlanAlternative,
+    PlanBuffer,
+    PlanItem,
+)
 from src.domain.models.trip_request import (
     BudgetSemantics,
     BudgetSpec,
     TravelerProfile,
     TripRequest,
 )
+from src.domain.models.validation import ValidationGate, ValidationIssue
 from src.domain.models.value_objects import (
     CandidateId,
     CheckpointId,
@@ -41,8 +60,12 @@ from src.domain.models.value_objects import (
 )
 
 __all__ = [
+    "BudgetBreakdown",
+    "BudgetLine",
     "BudgetSemantics",
     "BudgetSpec",
+    "Candidate",
+    "CandidateBase",
     "CandidateId",
     "CheckpointId",
     "Constraint",
@@ -51,23 +74,37 @@ __all__ = [
     "ConstraintSnapshot",
     "ConstraintSource",
     "ConstraintValue",
+    "ContextCandidate",
     "DateRange",
     "ErrorCategory",
     "EvidenceId",
+    "EvidenceItem",
+    "EvidenceSnapshot",
     "EvidenceStatus",
+    "EvidenceValue",
     "GeoPoint",
     "InteractionMode",
     "IssueId",
     "IssueSeverity",
+    "ItineraryDay",
+    "ItineraryPlan",
     "Money",
+    "PlaceCandidate",
+    "PlanAlternative",
+    "PlanBuffer",
     "PlanId",
+    "PlanItem",
     "PlanItemId",
     "RequestId",
     "SessionId",
     "StableId",
+    "StayCandidate",
     "TraceId",
+    "TransportCandidate",
     "TravelerProfile",
     "TripId",
     "TripRequest",
+    "ValidationGate",
+    "ValidationIssue",
     "WorkflowStatus",
 ]
