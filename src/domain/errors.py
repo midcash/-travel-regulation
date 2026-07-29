@@ -6,7 +6,7 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.domain.models.enums import ErrorCategory
+from src.domain.models.enums import ErrorCategory, WorkflowStatus
 from src.domain.models.value_objects import StableId, TraceId
 
 
@@ -74,3 +74,12 @@ class WorkflowError(RuntimeError):
     def public_payload(self) -> WorkflowErrorPayload:
         """返回不包含内部 cause 的不可变错误载荷。"""
         return self.payload
+
+
+class InvalidStateTransitionError(ValueError):
+    """尝试执行未列入工作流白名单的状态转换。"""
+
+    def __init__(self, source: WorkflowStatus, target: WorkflowStatus) -> None:
+        self.source = source
+        self.target = target
+        super().__init__(f"workflow transition is not allowed: {source.value} -> {target.value}")

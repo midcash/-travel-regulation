@@ -60,6 +60,7 @@ from src.domain.models.value_objects import (
 )
 
 __all__ = [
+    "ALLOWED_WORKFLOW_TRANSITIONS",
     "BudgetBreakdown",
     "BudgetLine",
     "BudgetSemantics",
@@ -104,7 +105,20 @@ __all__ = [
     "TravelerProfile",
     "TripId",
     "TripRequest",
+    "TripState",
     "ValidationGate",
     "ValidationIssue",
     "WorkflowStatus",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """按需加载状态模型，避免领域错误与模型包互相初始化。"""
+    if name in {"ALLOWED_WORKFLOW_TRANSITIONS", "TripState"}:
+        from src.domain.models.state import ALLOWED_WORKFLOW_TRANSITIONS, TripState
+
+        return {
+            "ALLOWED_WORKFLOW_TRANSITIONS": ALLOWED_WORKFLOW_TRANSITIONS,
+            "TripState": TripState,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
