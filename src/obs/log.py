@@ -1,28 +1,19 @@
-"""
-结构化日志模块。
-
-基于 structlog，配置 JSON 渲染器，自动注入 OpenTelemetry trace_id/span_id。
-替代所有 print() 调用。
-
-用法:
-    from src.obs.log import get_logger
-    logger = get_logger(__name__)
-    logger.info("agent_started", agent="planner", session_id="default")
-"""
+"""Structured logging and request correlation context."""
 
 from __future__ import annotations
 
 import sys
-from collections.abc import MutableMapping
+from collections.abc import Iterator, MutableMapping
+from contextlib import contextmanager
 from typing import Any, cast
 
 import structlog
+from structlog.contextvars import bound_contextvars
 
-# 强制 stdout 使用 UTF-8 编码（Windows GBK 终端导致中文乱码）
 if sys.stdout.encoding != "utf-8":
-    reconfigure = getattr(sys.stdout, 'reconfigure', None)
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
     if callable(reconfigure):
-        reconfigure(encoding='utf-8')
+        reconfigure(encoding="utf-8")
 
 
 def _add_otel_context(
@@ -30,11 +21,7 @@ def _add_otel_context(
     method_name: str,
     event_dict: MutableMapping[str, Any],
 ) -> MutableMapping[str, Any]:
-    """向每条日志注入当前 OTel span 的 trace_id 和 span_id。
-
-    若 OTel 未配置（无 TracerProvider），span.is_recording() 返回 False，
-    跳过注入，不影响日志输出。
-    """
+    """Add OTel Trace and Span IDs without overwriting the business trace_id."""
     try:
         from opentelemetry import trace
     except ImportError:
@@ -42,14 +29,19 @@ def _add_otel_context(
 
     span = trace.get_current_span()
     if span.is_recording():
-        ctx = span.get_span_context()
-        event_dict["trace_id"] = format(ctx.trace_id, "032x")
-        event_dict["span_id"] = format(ctx.span_id, "016x")
+        context = span.get_span_context()
+        otel_trace_id = format(context.trace_id, "032x")
+        otel_span_id = format(context.span_id, "016x")
+        event_dict.setdefault("trace_id", otel_trace_id)
+        event_dict.setdefault("span_id", otel_span_id)
+        event_dict.setdefault("otel_trace_id", otel_trace_id)
+        event_dict.setdefault("otel_span_id", otel_span_id)
     return event_dict
 
 
 structlog.configure(
     processors=[
+        structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         _add_otel_context,
         structlog.processors.TimeStamper(fmt="iso"),
@@ -61,12 +53,32 @@ structlog.configure(
 
 
 def get_logger(name: str = __name__) -> structlog.stdlib.BoundLogger:
-    """获取结构化 logger 实例。
-
-    Args:
-        name: logger 名称，通常传 __name__。
-
-    Returns:
-        配置好的 BoundLogger，所有日志以 JSON 格式输出到 stdout。
-    """
+    """Return a configured structured logger."""
     return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))
+
+
+@contextmanager
+def bind_request_context(
+    *,
+    trace_id: str,
+    request_id: str,
+    trip_id: str,
+    session_id: str,
+    otel_trace_id: str,
+    workflow_status: str | None = None,
+    state_version: int | None = None,
+) -> Iterator[None]:
+    """Bind safe request identifiers for the current context scope."""
+    values: dict[str, Any] = {
+        "trace_id": trace_id,
+        "otel_trace_id": otel_trace_id,
+        "request_id": request_id,
+        "trip_id": trip_id,
+        "session_id": session_id,
+    }
+    if workflow_status is not None:
+        values["workflow_status"] = workflow_status
+    if state_version is not None:
+        values["state_version"] = state_version
+    with bound_contextvars(**values):
+        yield

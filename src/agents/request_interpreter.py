@@ -16,6 +16,7 @@ from src.domain.models.state import TripState
 from src.domain.models.value_objects import TraceId
 from src.gateway.json_utils import JsonResponseError, parse_json_object
 from src.guard.g0 import G0SecurityContext, G0ValidationResult, G0Validator
+from src.obs.trace import trace_agent
 from src.ports.llm_gateway import LLMGateway
 
 REQUEST_INTERPRETER_PROMPT_VERSION: Final[str] = "m2-request-interpreter-v2"
@@ -96,7 +97,9 @@ class RequestInterpreter:
         )
 
         try:
-            raw_response = self._gateway.complete(prompt, settings=self._settings)
+            session_id = current_state.session_id if current_state is not None else "unknown"
+            with trace_agent("request_interpreter", session_id, trace_id=str(trace_id)):
+                raw_response = self._gateway.complete(prompt, settings=self._settings)
         except ConfigurationError as exc:
             self._raise_workflow_error(
                 trace_id,

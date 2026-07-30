@@ -33,6 +33,7 @@ from src.domain.state_repository_errors import StateNotFoundError
 from src.gateway.deepseek_adapter import DeepSeekLLMGateway
 from src.guard.g0 import G0SecurityContext, G0Validator
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
+from src.obs.trace import trace_workflow_request
 from src.ports.llm_gateway import LLMGateway
 from src.ports.state_repository import StateRepository
 
@@ -128,69 +129,77 @@ class TripInteractionFacade:
         security_context = context or _default_cli_security_context()
         trace_id = f"route:{request.trip_id}:{request.request_id}"
 
-        try:
-            g0_result = self._g0_validator.validate(raw_input, context=security_context)
-            interpretation = self._interpreter.interpret(
-                raw_input,
-                context=security_context,
-                trace_id=trace_id,
-                conversation_summary=conversation_summary,
-                current_state=state,
-                allowed_modes=tuple(InteractionMode),
-                redacted_input=redacted_input,
-            )
-            created_at = self._clock()
-            snapshot = self._constraint_service.build_snapshot(
-                interpretation,
-                request_id=request.request_id,
-                trace_id=trace_id,
-                created_at=created_at,
-                previous_snapshot=state.constraint_snapshot,
-                negation_text=raw_input,
-                reference_date=reference_date or created_at.date(),
-            )
-            readiness = self._readiness_evaluator.evaluate(
-                snapshot,
-                trace_id=trace_id,
-                interpretation=interpretation,
-                context=_readiness_context(
+        with trace_workflow_request(
+            trace_id=trace_id,
+            request_id=str(request.request_id),
+            trip_id=str(request.trip_id),
+            session_id=str(request.session_id),
+            workflow_status=state.status.value,
+            state_version=state.version,
+        ):
+            try:
+                g0_result = self._g0_validator.validate(raw_input, context=security_context)
+                interpretation = self._interpreter.interpret(
+                    raw_input,
+                    context=security_context,
+                    trace_id=trace_id,
+                    conversation_summary=conversation_summary,
+                    current_state=state,
+                    allowed_modes=tuple(InteractionMode),
+                    redacted_input=redacted_input,
+                )
+                created_at = self._clock()
+                snapshot = self._constraint_service.build_snapshot(
+                    interpretation,
+                    request_id=request.request_id,
+                    trace_id=trace_id,
+                    created_at=created_at,
+                    previous_snapshot=state.constraint_snapshot,
+                    negation_text=raw_input,
+                    reference_date=reference_date or created_at.date(),
+                )
+                readiness = self._readiness_evaluator.evaluate(
+                    snapshot,
+                    trace_id=trace_id,
                     interpretation=interpretation,
-                    request=request,
+                    context=_readiness_context(
+                        interpretation=interpretation,
+                        request=request,
+                        current_plan_ref=current_plan_ref,
+                        security_context=security_context,
+                    ),
+                )
+                decision = self._router.route(
+                    interpretation,
+                    readiness,
+                    g0_result=g0_result,
                     current_plan_ref=current_plan_ref,
-                    security_context=security_context,
-                ),
-            )
-            decision = self._router.route(
-                interpretation,
-                readiness,
-                g0_result=g0_result,
-                current_plan_ref=current_plan_ref,
-            )
-            active_state = self._apply_and_save_state(
-                state,
-                decision,
-                request=request,
-                constraint_snapshot=snapshot,
-            )
-            clarification = (
-                self._clarification_builder.build(readiness)
-                if decision.mode == InteractionMode.CLARIFY.value
-                else None
-            )
-            plan_result = None
-            if decision.mode == InteractionMode.PLAN.value:
-                plan_result = self._planner.execute(request)
-            return TripInteractionResult(
-                route_decision=decision,
-                state=active_state,
-                constraint_snapshot=snapshot,
-                readiness=readiness,
-                clarification=clarification,
-                plan_result=plan_result,
-            )
-        except Exception:
-            self._mark_failed(active_state)
-            raise
+                )
+                active_state = self._apply_and_save_state(
+                    state,
+                    decision,
+                    request=request,
+                    constraint_snapshot=snapshot,
+                )
+                clarification = (
+                    self._clarification_builder.build(readiness)
+                    if decision.mode == InteractionMode.CLARIFY.value
+                    else None
+                )
+                plan_result = None
+                if decision.mode == InteractionMode.PLAN.value:
+                    plan_result = self._planner.execute(request)
+                return TripInteractionResult(
+                    route_decision=decision,
+                    state=active_state,
+                    constraint_snapshot=snapshot,
+                    readiness=readiness,
+                    clarification=clarification,
+                    plan_result=plan_result,
+                )
+            except Exception:
+                self._mark_failed(active_state)
+                raise
 
     def _load_or_create_state(self, request: TripRequest) -> TripState:
         try:
