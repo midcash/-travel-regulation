@@ -5,6 +5,7 @@
 
 替代旧的 orchestrator + workflow_engine + Phase 1 pipeline 的 5 次串行调用。
 """
+
 from __future__ import annotations
 
 import time
@@ -14,13 +15,20 @@ from src.config import Settings
 from src.engine.prompts import build_plan_prompt, build_revision_prompt
 from src.gateway.deepseek import ask_llm
 from src.guard.negation import extract_negation_constraints
+from src.obs.legacy import (
+    IssueReferenceRegistry,
+    record_legacy_review,
+    record_legacy_revision_completed,
+    record_legacy_revision_exhausted,
+    record_legacy_revision_requested,
+)
 from src.obs.log import get_logger
 from src.obs.metric import (
     AGENT_CALLS_TOTAL,
     AGENT_DURATION_SECONDS,
     RETRY_COUNT_TOTAL,
 )
-from src.obs.trace import trace_agent, trace_session
+from src.obs.trace import trace_agent, trace_named_span, trace_session
 from src.review.l1 import run_l1_checks
 from src.review.l2 import run_l2_review
 
@@ -31,6 +39,7 @@ class PlanResult(TypedDict):
     plan: str
     rounds: int
     issues_found: list[str]
+
 
 MAX_REVISION_ROUNDS = 2
 
@@ -62,16 +71,15 @@ def plan(
         {"plan": str, "rounds": int, "issues_found": list[str]}
     """
     if settings is None:
-        raise PlanningError('bootstrap', 'Settings must be provided by the composition root')
+        raise PlanningError("bootstrap", "Settings must be provided by the composition root")
     current_settings = settings
-    revision_limit = (
-        current_settings.max_revision_rounds if max_rounds is None else max_rounds
-    )
+    revision_limit = current_settings.max_revision_rounds if max_rounds is None else max_rounds
     if revision_limit < 0:
-        raise PlanningError('configuration', '最大修订轮次不能小于 0')
+        raise PlanningError("configuration", "最大修订轮次不能小于 0")
 
     t_start = time.perf_counter()
     all_issues_found: list[str] = []
+    issue_registry = IssueReferenceRegistry()
 
     with trace_session("default"):
         # ---- Phase 0: Negation Guard ----
@@ -89,7 +97,7 @@ def plan(
                     settings=current_settings,
                 )
             except Exception as exc:
-                raise PlanningError('generation', '初始方案生成失败') from exc
+                raise PlanningError("generation", "初始方案生成失败") from exc
         elapsed_a = int((time.perf_counter() - t_a) * 1000)
         AGENT_CALLS_TOTAL.labels(agent="planner_a", status="success").inc()
         AGENT_DURATION_SECONDS.labels(agent="planner_a").observe(elapsed_a / 1000)
@@ -97,25 +105,41 @@ def plan(
 
         # ---- Revision Loop ----
         for round_num in range(revision_limit + 1):
-            # L1: 确定性校验
-            l1_issues = run_l1_checks(plan_text, constraints)
+            review_round = round_num + 1
+            review_started_at = time.perf_counter()
+            # L1 deterministic gate
+            with trace_named_span("gate.l1", attributes={"workflow.round": review_round}):
+                l1_issues = run_l1_checks(plan_text, constraints)
             if l1_issues:
                 logger.info("l1_issues_found", count=len(l1_issues), round=round_num)
 
-            # L2: LLM-B 对抗评审
-            try:
-                l2_result = run_l2_review(
-                    user_input,
-                    plan_text,
-                    constraints,
-                    settings=current_settings,
+            # L2 legacy critic
+            with trace_agent("legacy_critic", "default"):
+                try:
+                    l2_result = run_l2_review(
+                        user_input,
+                        plan_text,
+                        constraints,
+                        settings=current_settings,
+                    )
+                except Exception as exc:
+                    raise PlanningError("review", "\u65b9\u6848\u8bc4\u5ba1\u5931\u8d25") from exc
+            if not isinstance(l2_result, dict) or not isinstance(l2_result.get("pass"), bool):
+                raise PlanningError(
+                    "review", "\u65b9\u6848\u8bc4\u5ba1\u8fd4\u56de\u683c\u5f0f\u975e\u6cd5"
                 )
-            except Exception as exc:
-                raise PlanningError('review', '方案评审失败') from exc
-            if not isinstance(l2_result, dict) or not isinstance(
-                l2_result.get('pass'), bool
-            ):
-                raise PlanningError('review', '方案评审返回格式非法')
+
+            l2_issues = l2_result.get("issues", [])
+            if not isinstance(l2_issues, list):
+                l2_issues = list(l2_issues)
+            review = record_legacy_review(
+                issue_registry,
+                round=review_round,
+                l1_issues=l1_issues,
+                l2_passed=l2_result["pass"],
+                l2_issues=l2_issues,
+                duration_ms=int((time.perf_counter() - review_started_at) * 1000),
+            )
 
             if not l1_issues and l2_result["pass"]:
                 logger.info(
@@ -130,37 +154,41 @@ def plan(
             all_issues_found.extend(round_issues)
 
             if round_num >= revision_limit:
+                record_legacy_revision_exhausted(review)
                 logger.warning(
                     "revision_rounds_exhausted",
                     max_rounds=revision_limit,
                     remaining_issues=len(round_issues),
                 )
-                raise PlanningError('revision', '修订轮次耗尽，方案未通过验证')
+                raise PlanningError("revision", "修订轮次耗尽，方案未通过验证")
 
             # ---- LLM-A 修订 ----
-            RETRY_COUNT_TOTAL.labels(
-                agent="planner_a", reason="l2_review"
-            ).inc()
+            record_legacy_revision_requested(review)
+            RETRY_COUNT_TOTAL.labels(agent="planner_a", reason="l2_review").inc()
             logger.info(
                 "plan_revision",
                 round=round_num + 1,
                 issue_count=len(round_issues),
             )
-            issues_text = "\n".join(
-                f"{i+1}. {issue}" for i, issue in enumerate(round_issues)
-            )
+            issues_text = "\n".join(f"{i + 1}. {issue}" for i, issue in enumerate(round_issues))
             t_a = time.perf_counter()
-            with trace_agent("planner_a_revision", "default"):
-                try:
-                    plan_text = ask_llm(
-                        build_revision_prompt(user_input, plan_text, issues_text),
-                        settings=current_settings,
-                    )
-                except Exception as exc:
-                    raise PlanningError('revision', '方案修订失败') from exc
+            with trace_named_span("legacy.revision", attributes={"workflow.round": review_round}):
+                with trace_agent("planner_a_revision", "default"):
+                    try:
+                        plan_text = ask_llm(
+                            build_revision_prompt(user_input, plan_text, issues_text),
+                            settings=current_settings,
+                        )
+                    except Exception as exc:
+                        raise PlanningError("revision", "方案修订失败") from exc
             elapsed_a = int((time.perf_counter() - t_a) * 1000)
             AGENT_CALLS_TOTAL.labels(agent="planner_a", status="success").inc()
             AGENT_DURATION_SECONDS.labels(agent="planner_a").observe(elapsed_a / 1000)
+            record_legacy_revision_completed(
+                round=review_round,
+                duration_ms=elapsed_a,
+                output_chars=len(plan_text),
+            )
 
     return {
         "plan": plan_text,

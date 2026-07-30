@@ -17,14 +17,7 @@ from src.domain.errors import WorkflowError
 from src.obs.log import bind_request_context
 
 _AttributeValue = (
-    str
-    | bool
-    | int
-    | float
-    | Sequence[str]
-    | Sequence[bool]
-    | Sequence[int]
-    | Sequence[float]
+    str | bool | int | float | Sequence[str] | Sequence[bool] | Sequence[int] | Sequence[float]
 )
 
 _resource = Resource.create({"service.name": "travel-planner-agent"})
@@ -114,17 +107,19 @@ def trace_workflow_request(
 
 @contextmanager
 def trace_session(session_id: str) -> Iterator[trace.Span]:
-    """Keep legacy planner compatible and reuse an existing request root."""
+    """Create the legacy.plan span under the current request when available."""
     current = trace.get_current_span()
     if current.get_span_context().is_valid:
-        yield current
+        with trace_named_span("legacy.plan", attributes={"session_id": session_id}) as span:
+            yield span
         return
     with _tracer.start_as_current_span(
         "session",
         attributes={"session_id": session_id},
         record_exception=False,
-    ) as span:
-        yield span
+    ):
+        with trace_named_span("legacy.plan", attributes={"session_id": session_id}) as span:
+            yield span
 
 
 @contextmanager
@@ -159,7 +154,46 @@ def trace_agent(
         attributes=attributes,
         record_exception=False,
     ) as span:
-        yield span
+        try:
+            yield span
+        except BaseException as exc:
+            span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            span.set_attribute("error.type", type(exc).__name__)
+            raise
+
+
+@contextmanager
+def trace_named_span(
+    name: str,
+    *,
+    attributes: dict[str, _AttributeValue] | None = None,
+) -> Iterator[trace.Span]:
+    """Create a named legacy workflow child Span with safe error status."""
+    if not name.strip():
+        raise ValueError("span name must not be empty")
+    span_attributes: dict[str, _AttributeValue] = {}
+    business_trace_id = _current_business_trace_id()
+    if business_trace_id is not None:
+        span_attributes["workflow.trace_id"] = business_trace_id
+    if attributes:
+        span_attributes.update(attributes)
+    with _tracer.start_as_current_span(
+        name,
+        attributes=span_attributes,
+        record_exception=False,
+    ) as span:
+        try:
+            yield span
+        except BaseException as exc:
+            span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            span.set_attribute("error.type", type(exc).__name__)
+            payload = exc.public_payload() if isinstance(exc, WorkflowError) else None
+            if payload is not None:
+                span.set_attribute("workflow.stage", str(payload.stage))
+                span.set_attribute("workflow.code", str(payload.code))
+            else:
+                span.set_attribute("workflow.code", "UNEXPECTED_INTERNAL_ERROR")
+            raise
 
 
 @contextmanager
@@ -179,6 +213,7 @@ def trace_llm_call(model: str, provider: str = "deepseek") -> Iterator[trace.Spa
         record_exception=False,
     ) as span:
         yield span
+
 
 _STAGE_SPAN_NAMES: dict[str, str] = {
     "g0": "stage.g0",
