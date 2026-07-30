@@ -111,7 +111,7 @@ def test_facade_emits_ordered_stage_summaries_and_spans(
     result = facade.execute(_request(), "请安排上海到杭州的三日行程。")
 
     completed = [
-        event for event in _events(capsys.readouterr().out) if event["event"] == "stage_completed"
+        event for event in _events(capsys.readouterr().err) if event["event"] == "stage_completed"
     ]
     assert [event["stage"] for event in completed] == [
         "g0",
@@ -167,7 +167,7 @@ def test_stage_failure_event_contains_safe_workflow_error_fields(
             )
 
     failed = [
-        event for event in _events(capsys.readouterr().out) if event["event"] == "stage_failed"
+        event for event in _events(capsys.readouterr().err) if event["event"] == "stage_failed"
     ]
     assert len(failed) == 1
     assert failed[0]["stage"] == "constraint_service"

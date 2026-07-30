@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import TextIO
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode
 
@@ -20,12 +22,53 @@ _AttributeValue = (
     str | bool | int | float | Sequence[str] | Sequence[bool] | Sequence[int] | Sequence[float]
 )
 
+_console_span_exporter_enabled = False
+
+
+class _ToggleableConsoleSpanProcessor(SimpleSpanProcessor):
+    """Keep the exporter installed while allowing the local switch to change."""
+
+    def on_end(self, span: ReadableSpan) -> None:
+        if _console_span_exporter_enabled:
+            super().on_end(span)
+
+
 _resource = Resource.create({"service.name": "travel-planner-agent"})
 _provider = TracerProvider(resource=_resource)
-_provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter(out=sys.stderr)))
+_console_span_processor: _ToggleableConsoleSpanProcessor | None = None
 trace.set_tracer_provider(_provider)
 
 _tracer = trace.get_tracer(__name__)
+
+
+def configure_console_span_exporter(
+    enabled: bool,
+    *,
+    output: TextIO | None = None,
+) -> None:
+    """Enable the optional local Console Span exporter once per provider."""
+    global _console_span_processor, _console_span_exporter_enabled
+    if _console_span_processor is None and enabled:
+        _console_span_processor = _ToggleableConsoleSpanProcessor(
+            ConsoleSpanExporter(out=output or sys.stderr)
+        )
+        _provider.add_span_processor(_console_span_processor)
+    _console_span_exporter_enabled = enabled and _console_span_processor is not None
+
+
+def console_span_exporter_enabled() -> bool:
+    """Return whether the local Console Span exporter is active."""
+    return _console_span_exporter_enabled
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() == "true"
+
+
+configure_console_span_exporter(_env_bool("CONSOLE_SPAN_EXPORTER"))
 
 
 @dataclass(frozen=True, slots=True)

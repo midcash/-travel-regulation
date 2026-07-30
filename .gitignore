@@ -23,3 +23,7 @@ Thumbs.db
 .DS_Store
 .coverage
 htmlcov/
+# Local observability runtime artifacts
+runtime/
+logs/
+traces/

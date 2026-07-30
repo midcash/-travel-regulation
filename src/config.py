@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from math import isfinite
 
+_LOG_LEVELS = frozenset({'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'})
+
 
 class ConfigurationError(ValueError):
     # 配置值非法或违反 strict 约束。
@@ -29,6 +31,8 @@ class Settings:
     deepseek_max_tokens: int | None = None
     amap_api_key: str | None = field(default=None, repr=False)
     tuniu_api_key: str | None = field(default=None, repr=False)
+    log_level: str = 'INFO'
+    console_span_exporter: bool = False
 
     # M0～M8 strict。
     def __post_init__(self) -> None:
@@ -57,6 +61,12 @@ class Settings:
             raise ConfigurationError('DEEPSEEK_MAX_TOKENS must be positive')
         if not self.deepseek_model.strip():
             raise ConfigurationError('DEEPSEEK_MODEL must not be empty')
+        normalized_log_level = self.log_level.strip().upper()
+        object.__setattr__(self, 'log_level', normalized_log_level)
+        if normalized_log_level not in _LOG_LEVELS:
+            raise ConfigurationError(
+                f'LOG_LEVEL must be one of {", ".join(sorted(_LOG_LEVELS))}'
+            )
 
     def validate_runtime(self, *, require_llm: bool = True) -> None:
         "Validate runtime credentials for the active workflow."
@@ -92,6 +102,11 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         ),
         amap_api_key=_optional(values.get('AMAP_API_KEY')),
         tuniu_api_key=_optional(values.get('TUNIU_API_KEY')),
+        log_level=values.get('LOG_LEVEL', 'INFO').strip().upper(),
+        console_span_exporter=_parse_bool(
+            values.get('CONSOLE_SPAN_EXPORTER', 'false'),
+            'CONSOLE_SPAN_EXPORTER',
+        ),
     )
 
 

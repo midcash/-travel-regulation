@@ -82,6 +82,7 @@ def test_cli_internal_exception_returns_failure_without_traceback(
 
     assert main.main(['去深圳']) == 1
     captured = capsys.readouterr()
-    assert 'workflow_failed' in captured.out
+    assert 'workflow_failed' in captured.err
+    assert '{' not in captured.out
     assert '工作流失败' in captured.err
     assert 'secret-key' not in captured.out + captured.err

@@ -68,7 +68,7 @@ def test_request_logger_context_contains_both_trace_ids_and_is_restored(
         assert get_contextvars()["trace_id"] == context.trace_id
         assert get_contextvars()["otel_trace_id"] == context.otel_trace_id
 
-    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    payload = json.loads(capsys.readouterr().err.strip().splitlines()[-1])
     assert payload["event"] == "request_context_probe"
     assert payload["trace_id"] == "route:trip-2:req-2"
     assert payload["otel_trace_id"] == context.otel_trace_id

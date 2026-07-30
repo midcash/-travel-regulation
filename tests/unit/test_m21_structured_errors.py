@@ -111,7 +111,7 @@ def test_unknown_planner_error_is_safe_and_persisted(
     with pytest.raises(RuntimeError, match="secret-key"):
         _facade(repository).execute(_request(), "请安排一次旅行")
 
-    events = _events(capsys.readouterr().out)
+    events = _events(capsys.readouterr().err)
     failure = next(event for event in events if event["event"] == "workflow_failed")
     assert failure["code"] == "UNEXPECTED_INTERNAL_ERROR"
     assert failure["category"] == "internal"
@@ -133,7 +133,7 @@ def test_state_persistence_failure_does_not_replace_root_error(
             _request(), "请安排一次旅行"
         )
 
-    events = _events(capsys.readouterr().out)
+    events = _events(capsys.readouterr().err)
     persistence = next(
         event for event in events if event["event"] == "state_persistence_failed"
     )
@@ -154,7 +154,7 @@ def test_unknown_stage_failure_has_safe_classification(
 
     failure = next(
         event
-        for event in _events(capsys.readouterr().out)
+        for event in _events(capsys.readouterr().err)
         if event["event"] == "stage_failed"
     )
     assert failure["code"] == "UNEXPECTED_INTERNAL_ERROR"
@@ -175,7 +175,7 @@ def test_state_load_error_is_logged_without_changing_exception(
 
     failure = next(
         event
-        for event in _events(capsys.readouterr().out)
+        for event in _events(capsys.readouterr().err)
         if event["event"] == "workflow_failed"
     )
     assert failure["stage"] == "unknown"

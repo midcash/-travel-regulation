@@ -10,7 +10,8 @@ from src.application.use_cases.plan_trip import PlanTripResult, PlanTripUseCase
 from src.bootstrap import bootstrap_settings
 from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.obs.errors import from_exception
-from src.obs.log import get_logger
+from src.obs.log import configure_logging, get_logger
+from src.obs.trace import configure_console_span_exporter
 
 _DEFAULT_PLAN_TRIP_USE_CASE = PlanTripUseCase
 
@@ -86,9 +87,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     request = _build_cli_request(user_input)
     trace_id = f"cli:{request.trip_id}:{request.request_id}"
-    logger.info('start', input_chars=len(user_input), trace_id=trace_id)
     try:
         settings = bootstrap_settings()
+        configure_logging(settings.log_level)
+        configure_console_span_exporter(settings.console_span_exporter)
+        logger.info('start', input_chars=len(user_input), trace_id=trace_id)
         use_case = PlanTripUseCase(settings)
         if isinstance(use_case, _DEFAULT_PLAN_TRIP_USE_CASE):
             result = TripInteractionFacade(

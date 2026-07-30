@@ -44,7 +44,7 @@ def test_legacy_review_revision_events_keep_safe_refs_and_preserve_result(
 
     assert result["plan"].endswith("FINAL_PLAN_TEXT")
     assert result["rounds"] == 2
-    events = _events(capsys.readouterr().out)
+    events = _events(capsys.readouterr().err)
     reviews = [event for event in events if event["event"] == "legacy_review_completed"]
     assert len(reviews) == 2
     first_review = reviews[0]
@@ -94,7 +94,7 @@ def test_legacy_revision_exhausted_emits_unresolved_refs_and_keeps_failure(
         loop.plan("city-trip", max_rounds=0, settings=_settings())
 
     assert raised.value.stage == "revision"
-    events = _events(capsys.readouterr().out)
+    events = _events(capsys.readouterr().err)
     exhausted = [event for event in events if event["event"] == "legacy_revision_exhausted"]
     assert len(exhausted) == 1
     assert exhausted[0]["round"] == 1

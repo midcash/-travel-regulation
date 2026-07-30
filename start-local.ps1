@@ -35,6 +35,8 @@ $allowedVariables = [System.Collections.Generic.HashSet[string]]::new(
     'LLM_TIMEOUT_SECONDS'
     'EXTERNAL_API_TIMEOUT_SECONDS'
     'MAX_REVISION_ROUNDS'
+    'LOG_LEVEL'
+    'CONSOLE_SPAN_EXPORTER'
 ) | ForEach-Object {
     [void]$allowedVariables.Add($_)
 }
@@ -131,6 +133,12 @@ if ($LiveSmoke -and $MainArgs.Count -gt 0) {
 $loadedDisplay = ($loadedNames | Sort-Object -Unique) -join ', '
 Write-Host "已将本地配置载入进程环境：$loadedDisplay"
 Write-Host '密钥值不会显示，环境变量仅在当前 PowerShell 进程及其子进程中有效。'
+Write-Host 'Output channels: human CLI -> stdout; application JSONL -> stderr.'
+$consoleSpanValue = [Environment]::GetEnvironmentVariable('CONSOLE_SPAN_EXPORTER', 'Process')
+if ([string]::IsNullOrWhiteSpace($consoleSpanValue)) {
+    $consoleSpanValue = 'false'
+}
+Write-Host "Console Span exporter: $consoleSpanValue (disabled by default; enabled output -> stderr)."
 
 if ($ValidateOnly) {
     Write-Host '本地启动配置验证通过；未启动 Python，未调用外部 API。'
