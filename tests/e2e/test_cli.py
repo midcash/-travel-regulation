@@ -81,6 +81,7 @@ def test_cli_internal_exception_returns_failure_without_traceback(
     monkeypatch.setattr(main, 'PlanTripUseCase', FailingUseCase)
 
     assert main.main(['去深圳']) == 1
-    output = capsys.readouterr().out
-    assert 'plan_failed' in output
-    assert 'secret-key' not in output
+    captured = capsys.readouterr()
+    assert 'workflow_failed' in captured.out
+    assert '工作流失败' in captured.err
+    assert 'secret-key' not in captured.out + captured.err

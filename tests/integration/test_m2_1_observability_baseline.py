@@ -257,7 +257,12 @@ def test_m2_behavior_samples_remain_fixed(case: BaselineCase) -> None:
 
     assert execution.persisted_state.status is case.expected_state
     assert execution.persisted_state.version == 2
-    assert execution.persisted_state.last_error is None
+    if case.expected_error_stage is None:
+        assert execution.persisted_state.last_error is None
+    else:
+        assert execution.persisted_state.last_error is not None
+        assert execution.persisted_state.last_error.stage == case.expected_error_stage
+        assert execution.persisted_state.last_error.code == case.expected_error_code
     assert len(execution.gateway.calls) == 1
     assert execution.planner_call_count == case.expected_planner_calls
 

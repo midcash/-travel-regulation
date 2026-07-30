@@ -33,10 +33,14 @@ from src.domain.state_repository_errors import StateNotFoundError
 from src.gateway.deepseek_adapter import DeepSeekLLMGateway
 from src.guard.g0 import G0SecurityContext, G0Validator
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
+from src.obs.errors import WorkflowFailure, from_exception
+from src.obs.log import get_logger
 from src.obs.stage import observe_stage
 from src.obs.trace import trace_workflow_request
 from src.ports.llm_gateway import LLMGateway
 from src.ports.state_repository import StateRepository
+
+logger = get_logger(__name__)
 
 
 class PlanExecutor(Protocol):
@@ -125,10 +129,15 @@ class TripInteractionFacade:
         """
         if not isinstance(request, TripRequest):
             raise TypeError("request must be a TripRequest")
-        state = self._load_or_create_state(request)
+        trace_id = f"route:{request.trip_id}:{request.request_id}"
+        try:
+            state = self._load_or_create_state(request)
+        except Exception as exc:
+            failure = from_exception(exc, trace_id=trace_id)
+            logger.error("workflow_failed", **failure.event_fields())
+            raise
         active_state = state
         security_context = context or _default_cli_security_context()
-        trace_id = f"route:{request.trip_id}:{request.request_id}"
 
         with trace_workflow_request(
             trace_id=trace_id,
@@ -287,8 +296,13 @@ class TripInteractionFacade:
                     clarification=clarification,
                     plan_result=plan_result,
                 )
-            except Exception:
-                self._mark_failed(active_state)
+            except Exception as exc:
+                failure = from_exception(
+                    exc,
+                    trace_id=trace_id,
+                )
+                logger.error("workflow_failed", **failure.event_fields())
+                self._mark_failed(active_state, failure)
                 raise
 
     def _load_or_create_state(self, request: TripRequest) -> TripState:
@@ -343,13 +357,27 @@ class TripInteractionFacade:
             )
         return self._state_repository.save(updated, expected_version=state.version)
 
-    def _mark_failed(self, state: TripState) -> None:
+    def _mark_failed(self, state: TripState, failure: WorkflowFailure) -> None:
         if state.status is WorkflowStatus.FAILED or not state.can_transition_to(
             WorkflowStatus.FAILED
         ):
             return
-        failed = state.transition_to(WorkflowStatus.FAILED)
-        self._state_repository.save(failed, expected_version=state.version)
+        failed = state.transition_to(WorkflowStatus.FAILED).model_copy(
+            update={"last_error": failure.payload}
+        )
+        try:
+            self._state_repository.save(failed, expected_version=state.version)
+        except Exception as persistence_error:
+            persistence_failure = from_exception(
+                persistence_error,
+                trace_id=str(failure.payload.trace_id),
+                stage="state_persistence",
+            )
+            logger.error(
+                "state_persistence_failed",
+                **persistence_failure.event_fields(),
+                root_failure_code=failure.payload.code,
+            )
 
 
 def _default_cli_security_context() -> G0SecurityContext:

@@ -9,6 +9,7 @@ from src.application.interaction_facade import TripInteractionFacade, TripIntera
 from src.application.use_cases.plan_trip import PlanTripResult, PlanTripUseCase
 from src.bootstrap import bootstrap_settings
 from src.domain.models.trip_request import TravelerProfile, TripRequest
+from src.obs.errors import from_exception
 from src.obs.log import get_logger
 
 _DEFAULT_PLAN_TRIP_USE_CASE = PlanTripUseCase
@@ -83,10 +84,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             '预算2000元用于个人休闲，喜欢科技和创意园区。'
         )
 
-    logger.info('start', input_chars=len(user_input))
+    request = _build_cli_request(user_input)
+    trace_id = f"cli:{request.trip_id}:{request.request_id}"
+    logger.info('start', input_chars=len(user_input), trace_id=trace_id)
     try:
         settings = bootstrap_settings()
-        request = _build_cli_request(user_input)
         use_case = PlanTripUseCase(settings)
         if isinstance(use_case, _DEFAULT_PLAN_TRIP_USE_CASE):
             result = TripInteractionFacade(
@@ -97,10 +99,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             # 保留已有测试和外部调用方替换 PLAN Facade 的兼容入口。
             result = use_case.execute(request)
     except Exception as exc:
-        logger.error(
-            'plan_failed',
-            error_type=type(exc).__name__,
-            stage=getattr(exc, 'stage', 'unknown'),
+        failure = from_exception(exc, trace_id=trace_id)
+        logger.error('workflow_failed', **failure.event_fields())
+        print(
+            "工作流失败："
+            f"trace_id={failure.payload.trace_id} "
+            f"stage={failure.payload.stage} "
+            f"code={failure.payload.code} "
+            f"message={failure.payload.safe_message}",
+            file=sys.stderr,
         )
         return 1
     _print_result(result)

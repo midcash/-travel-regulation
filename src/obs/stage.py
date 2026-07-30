@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from opentelemetry.trace import Span
 
+from src.domain.errors import WorkflowError
+from src.obs.errors import UNEXPECTED_INTERNAL_ERROR_CODE, UNEXPECTED_INTERNAL_SAFE_MESSAGE
 from src.obs.log import get_logger
 from src.obs.trace import trace_stage
 
@@ -97,11 +99,12 @@ def _emit(event: str, **fields: Any) -> None:
 
 
 def _failure_summary(exc: BaseException) -> dict[str, Any]:
-    payload = getattr(exc, "payload", None)
+    payload = exc.public_payload() if isinstance(exc, WorkflowError) else None
     if payload is None:
         return {
             "category": "internal",
-            "code": "UNEXPECTED_INTERNAL_ERROR",
+            "code": UNEXPECTED_INTERNAL_ERROR_CODE,
+            "safe_message": UNEXPECTED_INTERNAL_SAFE_MESSAGE,
             "retryable": False,
             "cause_type": type(exc).__name__,
         }
@@ -114,7 +117,7 @@ def _failure_summary(exc: BaseException) -> dict[str, Any]:
         "safe_message": payload.safe_message,
         "upstream_refs": tuple(str(ref) for ref in payload.upstream_refs),
         "retryable": payload.retryable,
-        "cause_type": type(cause).__name__ if cause is not None else None,
+        "cause_type": type(cause).__name__ if cause is not None else type(exc).__name__,
     }
 
 

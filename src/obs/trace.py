@@ -13,6 +13,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode
 
+from src.domain.errors import WorkflowError
 from src.obs.log import bind_request_context
 
 _AttributeValue = (
@@ -211,7 +212,7 @@ def trace_stage(
         except BaseException as exc:
             span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
             span.set_attribute("error.type", type(exc).__name__)
-            payload = getattr(exc, "payload", None)
+            payload = exc.public_payload() if isinstance(exc, WorkflowError) else None
             if payload is not None:
                 span.set_attribute("workflow.stage", str(payload.stage))
                 span.set_attribute("workflow.code", str(payload.code))
