@@ -33,6 +33,7 @@ from src.domain.state_repository_errors import StateNotFoundError
 from src.gateway.deepseek_adapter import DeepSeekLLMGateway
 from src.guard.g0 import G0SecurityContext, G0Validator
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
+from src.obs.stage import observe_stage
 from src.obs.trace import trace_workflow_request
 from src.ports.llm_gateway import LLMGateway
 from src.ports.state_repository import StateRepository
@@ -138,49 +139,138 @@ class TripInteractionFacade:
             state_version=state.version,
         ):
             try:
-                g0_result = self._g0_validator.validate(raw_input, context=security_context)
-                interpretation = self._interpreter.interpret(
-                    raw_input,
-                    context=security_context,
-                    trace_id=trace_id,
-                    conversation_summary=conversation_summary,
-                    current_state=state,
-                    allowed_modes=tuple(InteractionMode),
-                    redacted_input=redacted_input,
-                )
+                with observe_stage("g0") as stage:
+                    g0_result = self._g0_validator.validate(raw_input, context=security_context)
+                    stage.add_summary(
+                        schema_version="m2.g0.v1",
+                        input_count=1,
+                        output_count=1,
+                        passed=g0_result.passed,
+                        issue_codes=tuple(issue.code.value for issue in g0_result.issues),
+                        safety_flags=tuple(flag.value for flag in g0_result.safety_flags),
+                        pii_detected=g0_result.pii_detected,
+                    )
+                with observe_stage("interpreter") as stage:
+                    interpretation = self._interpreter.interpret(
+                        raw_input,
+                        context=security_context,
+                        trace_id=trace_id,
+                        conversation_summary=conversation_summary,
+                        current_state=state,
+                        allowed_modes=tuple(InteractionMode),
+                        redacted_input=redacted_input,
+                    )
+                    stage.add_summary(
+                        schema_version="m2.interpretation.v1",
+                        input_count=1,
+                        output_count=1,
+                        mode_hint=(
+                            interpretation.mode_hint.value
+                            if interpretation.mode_hint is not None
+                            else None
+                        ),
+                        candidate_count=len(interpretation.constraint_candidates),
+                        candidate_categories=tuple(
+                            sorted(
+                                {
+                                    candidate.category
+                                    for candidate in interpretation.constraint_candidates
+                                }
+                            )
+                        ),
+                        entity_count=len(interpretation.extracted_entities),
+                        confidence=float(interpretation.overall_confidence),
+                    )
                 created_at = self._clock()
-                snapshot = self._constraint_service.build_snapshot(
-                    interpretation,
-                    request_id=request.request_id,
-                    trace_id=trace_id,
-                    created_at=created_at,
-                    previous_snapshot=state.constraint_snapshot,
-                    negation_text=raw_input,
-                    reference_date=reference_date or created_at.date(),
-                )
-                readiness = self._readiness_evaluator.evaluate(
-                    snapshot,
-                    trace_id=trace_id,
-                    interpretation=interpretation,
-                    context=_readiness_context(
+                with observe_stage("constraint_service") as stage:
+                    snapshot = self._constraint_service.build_snapshot(
+                        interpretation,
+                        request_id=request.request_id,
+                        trace_id=trace_id,
+                        created_at=created_at,
+                        previous_snapshot=state.constraint_snapshot,
+                        negation_text=raw_input,
+                        reference_date=reference_date or created_at.date(),
+                    )
+                    stage.add_summary(
+                        schema_version="m2.constraint_snapshot.v1",
+                        input_count=len(interpretation.constraint_candidates),
+                        output_count=len(snapshot.constraints),
+                        snapshot_version=snapshot.version,
+                        constraint_count=len(snapshot.constraints),
+                        categories=tuple(sorted({item.category for item in snapshot.constraints})),
+                        conflict_group_count=len(
+                            {
+                                item.conflict_group
+                                for item in snapshot.constraints
+                                if item.conflict_group is not None
+                            }
+                        ),
+                    )
+                with observe_stage("readiness_evaluator") as stage:
+                    readiness = self._readiness_evaluator.evaluate(
+                        snapshot,
+                        trace_id=trace_id,
                         interpretation=interpretation,
-                        request=request,
+                        context=_readiness_context(
+                            interpretation=interpretation,
+                            request=request,
+                            current_plan_ref=current_plan_ref,
+                            security_context=security_context,
+                        ),
+                    )
+                    stage.add_summary(
+                        schema_version="m2.readiness.v1",
+                        input_count=len(snapshot.constraints),
+                        output_count=1,
+                        snapshot_version=readiness.snapshot_version,
+                        blocker_count=len(readiness.blockers),
+                        assumption_count=len(readiness.assumptions),
+                        ready=readiness.ready,
+                        blocker_codes=tuple(blocker.code.value for blocker in readiness.blockers),
+                        blocker_ids=tuple(str(blocker.issue_id) for blocker in readiness.blockers),
+                        assumption_codes=tuple(
+                            assumption.code.value for assumption in readiness.assumptions
+                        ),
+                        confidence=float(readiness.confidence),
+                    )
+                with observe_stage("router") as stage:
+                    decision = self._router.route(
+                        interpretation,
+                        readiness,
+                        g0_result=g0_result,
                         current_plan_ref=current_plan_ref,
-                        security_context=security_context,
-                    ),
-                )
-                decision = self._router.route(
-                    interpretation,
-                    readiness,
-                    g0_result=g0_result,
-                    current_plan_ref=current_plan_ref,
-                )
-                active_state = self._apply_and_save_state(
-                    state,
-                    decision,
-                    request=request,
-                    constraint_snapshot=snapshot,
-                )
+                    )
+                    stage.add_summary(
+                        schema_version="m2.route.v1",
+                        input_count=1,
+                        output_count=1,
+                        mode=decision.mode,
+                        decision_code=decision.reason_codes[0].value,
+                        reason_codes=tuple(code.value for code in decision.reason_codes),
+                        required_capabilities=decision.required_capabilities,
+                        missing_blocker_ids=tuple(
+                            str(blocker_id) for blocker_id in decision.missing_blockers
+                        ),
+                    )
+                with observe_stage("state") as stage:
+                    stage.add_summary(
+                        schema_version="m2.state.v1",
+                        input_count=1,
+                        output_count=1,
+                        state_before=state.status.value,
+                        state_version_before=state.version,
+                    )
+                    active_state = self._apply_and_save_state(
+                        state,
+                        decision,
+                        request=request,
+                        constraint_snapshot=snapshot,
+                    )
+                    stage.add_summary(
+                        state_after=active_state.status.value,
+                        state_version=active_state.version,
+                    )
                 clarification = (
                     self._clarification_builder.build(readiness)
                     if decision.mode == InteractionMode.CLARIFY.value

@@ -178,3 +178,43 @@ def trace_llm_call(model: str, provider: str = "deepseek") -> Iterator[trace.Spa
         record_exception=False,
     ) as span:
         yield span
+
+_STAGE_SPAN_NAMES: dict[str, str] = {
+    "g0": "stage.g0",
+    "interpreter": "stage.interpreter",
+    "constraint_service": "stage.constraint_snapshot",
+    "readiness_evaluator": "stage.readiness",
+    "router": "stage.route",
+    "state": "stage.state_persistence",
+}
+
+
+@contextmanager
+def trace_stage(
+    stage: str,
+    *,
+    attributes: dict[str, _AttributeValue] | None = None,
+) -> Iterator[trace.Span]:
+    """Create an application-boundary child Span for one M2.1 stage."""
+    if not stage.strip():
+        raise ValueError("stage must not be empty")
+    span_attributes: dict[str, _AttributeValue] = {"workflow.stage": stage}
+    if attributes:
+        span_attributes.update(attributes)
+    with _tracer.start_as_current_span(
+        _STAGE_SPAN_NAMES.get(stage, f"stage.{stage}"),
+        attributes=span_attributes,
+        record_exception=False,
+    ) as span:
+        try:
+            yield span
+        except BaseException as exc:
+            span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            span.set_attribute("error.type", type(exc).__name__)
+            payload = getattr(exc, "payload", None)
+            if payload is not None:
+                span.set_attribute("workflow.stage", str(payload.stage))
+                span.set_attribute("workflow.code", str(payload.code))
+            else:
+                span.set_attribute("workflow.code", "UNEXPECTED_INTERNAL_ERROR")
+            raise
