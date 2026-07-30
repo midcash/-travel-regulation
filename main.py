@@ -5,15 +5,22 @@ import sys
 from collections.abc import Sequence
 from uuid import uuid4
 
+from src.application.interaction_facade import TripInteractionFacade, TripInteractionResult
 from src.application.use_cases.plan_trip import PlanTripResult, PlanTripUseCase
 from src.bootstrap import bootstrap_settings
 from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.obs.log import get_logger
 
+_DEFAULT_PLAN_TRIP_USE_CASE = PlanTripUseCase
+
 logger = get_logger(__name__)
 
 
-def _print_result(result: PlanTripResult) -> None:
+def _print_result(result: PlanTripResult | TripInteractionResult) -> None:
+    if isinstance(result, TripInteractionResult):
+        _print_interaction_result(result)
+        return
+
     plan_text = result.plan
     rounds = result.rounds
     issues = result.issues_found
@@ -38,6 +45,33 @@ def _print_result(result: PlanTripResult) -> None:
         print('\n✅ 方案通过评审')
 
 
+
+def _print_interaction_result(result: TripInteractionResult) -> None:
+    """以 CLI 可读形式展示 M2 路由结果，不泄露原始输入。"""
+    decision = result.route_decision
+    if result.plan_result is not None:
+        _print_result(result.plan_result)
+        return
+
+    print('\n' + '=' * 60)
+    print(f'路由：{decision.mode}')
+    print(f'状态：{result.state.status.value}（版本 {result.state.version}）')
+    if result.clarification is not None:
+        print('\n需要补充的信息：')
+        for question in result.clarification.questions:
+            print(f'  - {question.question}')
+    if result.plan_result is None and result.clarification is None:
+        print('当前请求已完成路由，未在 M2 执行外部旅行工具。')
+    print('=' * 60)
+    logger.info(
+        'interaction_summary',
+        route_mode=decision.mode,
+        state=result.state.status.value,
+        state_version=result.state.version,
+        blockers=len(result.readiness.blockers),
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     # 支持命令行参数或内置测试用例。
     arguments = list(sys.argv[1:] if argv is None else argv)
@@ -53,7 +87,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         settings = bootstrap_settings()
         request = _build_cli_request(user_input)
-        result = PlanTripUseCase(settings).execute(request)
+        use_case = PlanTripUseCase(settings)
+        if isinstance(use_case, _DEFAULT_PLAN_TRIP_USE_CASE):
+            result = TripInteractionFacade(
+                settings,
+                planner=use_case,
+            ).execute(request, user_input)
+        else:
+            # 保留已有测试和外部调用方替换 PLAN Facade 的兼容入口。
+            result = use_case.execute(request)
     except Exception as exc:
         logger.error(
             'plan_failed',
