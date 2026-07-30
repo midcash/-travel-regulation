@@ -142,18 +142,14 @@ class G0Validator:
                 )
 
         if type(raw_input) is not str:
-            issues.append(
-                _issue(G0IssueCode.INVALID_INPUT, "input must be a string")
-            )
+            issues.append(_issue(G0IssueCode.INVALID_INPUT, "input must be a string"))
             return _result(0, flags, issues, context_ref)
 
         input_length = len(raw_input)
         if not raw_input.strip():
             issues.append(_issue(G0IssueCode.INPUT_EMPTY, "input must not be empty"))
         if input_length > self._max_input_length:
-            issues.append(
-                _issue(G0IssueCode.INPUT_TOO_LONG, "input exceeds the maximum length")
-            )
+            issues.append(_issue(G0IssueCode.INPUT_TOO_LONG, "input exceeds the maximum length"))
         if _CONTROL_CHARACTER_PATTERN.search(raw_input):
             issues.append(
                 _issue(
@@ -185,7 +181,10 @@ class G0Validator:
         if _DANGEROUS_ACTION_PATTERN.search(raw_input):
             flags.append(SafetyFlag.DANGEROUS_ACTION)
             issues.append(
-                _issue(G0IssueCode.DANGEROUS_ACTION, "dangerous action requires a safety boundary")
+                _issue(
+                    G0IssueCode.DANGEROUS_ACTION,
+                    "dangerous action requires a safety boundary",
+                )
             )
 
         if _UNAUTHORIZED_ACTION_PATTERN.search(raw_input):
@@ -202,9 +201,7 @@ class G0Validator:
 
         if _contains_invalid_date(raw_input):
             flags.append(SafetyFlag.INVALID_INPUT)
-            issues.append(
-                _issue(G0IssueCode.INVALID_DATE_FORMAT, "input contains an invalid date")
-            )
+            issues.append(_issue(G0IssueCode.INVALID_DATE_FORMAT, "input contains an invalid date"))
 
         return _result(input_length, flags, issues, context_ref, pii_detected=pii_detected)
 
@@ -250,7 +247,8 @@ _PII_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"(?:[\w.+-]+@[\w-]+(?:\.[\w-]+)+|(?<!\d)1[3-9]\d{9}(?!\d)|(?<!\d)\d{17}[\dXx](?!\d))"
 )
 _PROMPT_INJECTION_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"(?:忽略(?:之前|上文|所有)(?:的)?(?:指令|规则|提示)|忘记(?:之前|上文)(?:的)?(?:指令|规则)|"
+    r"(?:忽略(?:(?:之前|上文)(?:的)?(?:所有)?|所有(?:(?:之前|上文)(?:的)?)?)"
+    r"(?:指令|规则|提示)|忘记(?:之前|上文)(?:的)?(?:所有)?(?:指令|规则)|"
     r"(?:ignore|disregard|forget)\s+(?:all\s+)?(?:previous|prior|above)|"
     r"(?:system\s+prompt|developer\s+message|reveal\s+(?:your\s+)?prompt))",
     re.IGNORECASE,
