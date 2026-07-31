@@ -1,43 +1,40 @@
-"""
-KnowledgeAgent — LLM Tool-Calling 编排器（方案A）
-使用 DeepSeek function calling 自主决定调用高德/途牛 API。
-最大 3 轮 tool-calling，输出与 PlannerAgent 对齐的结构化数据。
-API 失败直接返回 error 标记，不降级。
-"""
+"""M3 兼容 Facade：将旧 Tool Calling 入口转发到类型化 Provider Port。"""
+
+from __future__ import annotations
+
+import hashlib
 import json
-import urllib.parse
-import urllib.request
-from collections.abc import Callable
-from typing import cast
+from collections.abc import Callable, Coroutine, Mapping
+from datetime import UTC, date, datetime
+from decimal import Decimal
+from typing import Any, cast
 
-from src.config import Settings
+from pydantic import TypeAdapter
 
-# M0 保留旧模块的环境变量读取以维持兼容；迁移到组合根属于 M3 范围。
-# 不在导入时加载 .env，避免测试意外读取开发者本地凭证。
+from src.domain.models.provider import (
+    GeoProviderResult,
+    GeoQuery,
+    PlaceProviderResult,
+    PlaceQuery,
+    ProviderQueryBase,
+    StayProviderResult,
+    StayQuery,
+    TransportProviderResult,
+    TransportQuery,
+)
+from src.domain.models.value_objects import DateRange, StableId, TraceId
+from src.ports.clock import Clock
+from src.ports.tool_errors import ToolConfigurationError
+from src.ports.tool_provider import GeoProvider, PlaceProvider, StayProvider, TransportProvider
 
-# ============================================================
-# 配置
-# ============================================================
+LegacyToolResult = dict[str, object]
+LegacySynchronousRunner = Callable[[Coroutine[Any, Any, LegacyToolResult]], LegacyToolResult]
+LegacyToolExecutor = Callable[..., LegacyToolResult]
+_ProviderResult = (
+    GeoProviderResult | PlaceProviderResult | StayProviderResult | TransportProviderResult
+)
 
-
-
-
-
-# max_tokens 读取（与 deepseek_gateway 保持一致，默认不限制）
-
-MAX_ROUNDS = 5
-DEFAULT_TIMEOUT = 15
-
-# 途牛 MCP 端点
-TUNIU_ENDPOINTS = {
-    "hotel":  "https://openapi.tuniu.cn/mcp/hotel",
-    "flight": "https://openapi.tuniu.cn/mcp/flight",
-    "ticket": "https://openapi.tuniu.cn/mcp/ticket",
-}
-
-# ============================================================
-# 工具白名单
-# ============================================================
+# 此集合和 TOOLS 是遗留调用方仍会读取的公开入口；新代码不得依赖本模块。
 ALLOWED_TOOLS = {
     "amap_geocode",
     "tuniu_hotel_search",
@@ -45,23 +42,15 @@ ALLOWED_TOOLS = {
     "tuniu_ticket_search",
 }
 
-# ============================================================
-# 工具 Schema（OpenAI function calling 格式）
-# ============================================================
-TOOLS = [
+TOOLS: list[dict[str, object]] = [
     {
         "type": "function",
         "function": {
             "name": "amap_geocode",
-            "description": "高德地图地理编码：将地址转换为经纬度坐标。调用时机：需要获取目的地或景点的地理位置坐标时。",
+            "description": "Convert an address into geographic coordinates.",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "address": {
-                        "type": "string",
-                        "description": "要查询的地址，如'上海'、'北京市朝阳区'、'外滩'",
-                    }
-                },
+                "properties": {"address": {"type": "string"}},
                 "required": ["address"],
             },
         },
@@ -70,13 +59,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "tuniu_hotel_search",
-            "description": "途牛酒店价格查询：搜索指定城市的酒店及每晚价格。调用时机：用户需要住宿信息时。",
+            "description": "Search hotel availability and prices.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "city": {"type": "string", "description": "城市名，如'上海'"},
-                    "checkIn": {"type": "string", "description": "入住日期 YYYY-MM-DD"},
-                    "checkOut": {"type": "string", "description": "离店日期 YYYY-MM-DD"},
+                    "city": {"type": "string"},
+                    "checkIn": {"type": "string"},
+                    "checkOut": {"type": "string"},
                 },
                 "required": ["city", "checkIn", "checkOut"],
             },
@@ -86,13 +75,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "tuniu_flight_search",
-            "description": "途牛航班价格查询：搜索两地之间最低票价（含高铁）。调用时机：用户需要城际交通信息时。",
+            "description": "Search transport options between two cities.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "from_city": {"type": "string", "description": "出发城市"},
-                    "to_city": {"type": "string", "description": "到达城市"},
-                    "date": {"type": "string", "description": "出发日期 YYYY-MM-DD"},
+                    "from_city": {"type": "string"},
+                    "to_city": {"type": "string"},
+                    "date": {"type": "string"},
                 },
                 "required": ["from_city", "to_city", "date"],
             },
@@ -102,12 +91,12 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "tuniu_ticket_search",
-            "description": "途牛景区门票查询：搜索景点门票价格。调用时机：用户需要景区门票信息时。",
+            "description": "Search ticket options for a scenic destination.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "scenic": {"type": "string", "description": "景点名称，如'故宫'、'外滩'"},
-                    "city": {"type": "string", "description": "所在城市，如'上海'"},
+                    "scenic": {"type": "string"},
+                    "city": {"type": "string"},
                 },
                 "required": ["scenic", "city"],
             },
@@ -115,181 +104,220 @@ TOOLS = [
     },
 ]
 
-# ============================================================
-# System Prompt
-# ============================================================
-SYSTEM_PROMPT = """你是一个旅行数据查询 Agent。你可以调用工具获取真实的地理位置、酒店、航班、门票数据。
 
-## 工作流程
-1. 先调用 amap_geocode 获取目的地坐标
-2. 根据需要调用 tuniu_hotel_search / tuniu_flight_search / tuniu_ticket_search 获取价格
-3. 所有工具调用完成后，汇总为统一 JSON 输出
+class KnowledgeFacade:
+    """保留旧工具入口，并通过显式注入的 M3 Port 执行一次查询。"""
 
-## 最终输出 Schema
-{
-  "destination": {
-    "city": "城市名",
-    "coordinates": {"lat": 纬度, "lng": 经度},
-    "address": "详细地址"
-  },
-  "transportation": [
-    {
-      "type": "flight",
-      "from": "出发城市",
-      "to": "到达城市",
-      "date": "YYYY-MM-DD",
-      "price_range": {"low": 最低价, "median": 中位价, "high": 最高价},
-      "currency": "CNY"
-    }
-  ],
-  "hotels": [
-    {
-      "name": "酒店名",
-      "price_per_night": 每晚价格,
-      "rating": 评分,
-      "city": "城市"
-    }
-  ],
-  "attractions": [
-    {
-      "name": "景点名",
-      "ticket_price": 门票价格,
-      "city": "城市"
-    }
-  ],
-  "meals": {
-    "price_per_person": {"low": 最低, "median": 中位, "high": 最高},
-    "currency": "CNY",
-    "note": "基于目的地消费水平的估算"
-  }
-}
+    def __init__(
+        self,
+        *,
+        clock: Clock,
+        trace_id: TraceId,
+        timeout_seconds: Decimal,
+        geo_provider: GeoProvider | None = None,
+        transport_provider: TransportProvider | None = None,
+        stay_provider: StayProvider | None = None,
+        place_provider: PlaceProvider | None = None,
+        synchronous_runner: LegacySynchronousRunner | None = None,
+    ) -> None:
+        """保存组合根提供的依赖，不创建 Adapter、Settings 或 Fake。
 
-## 铁律
-- 先查询后输出，禁止编造任何数字
-- 今天的日期是2026年7月15日，调用工具的日期都在2026年7月15日之后
-- 工具调用失败时，对应字段标记 {"error": "失败原因"}
-- 最终输出只包含一行纯 JSON，无 markdown 标记、无解释文字
-- meals 数据基于酒店和门票价格水平合理估算"""
+        Args:
+            clock: 为旧入口生成查询标识的显式时钟。
+            trace_id: 当前调用链的稳定追踪标识。
+            timeout_seconds: 每次 Provider 调用的显式超时预算。
+            geo_provider: 已装配的地理 Provider。
+            transport_provider: 已装配的交通 Provider。
+            stay_provider: 已装配的住宿 Provider。
+            place_provider: 已装配的地点 Provider。
+            synchronous_runner: 旧同步入口使用的组合根注入执行器。
 
+        Raises:
+            TypeError: 依赖不满足对应 Port 或超时不是 Decimal。
+            ValueError: 超时预算不为正数。
+        """
+        if not isinstance(clock, Clock):
+            raise TypeError("clock must implement Clock")
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, Decimal):
+            raise TypeError("timeout_seconds must be a Decimal")
+        if timeout_seconds <= Decimal("0"):
+            raise ValueError("timeout_seconds must be positive")
+        _validate_provider("geo_provider", geo_provider, GeoProvider)
+        _validate_provider("transport_provider", transport_provider, TransportProvider)
+        _validate_provider("stay_provider", stay_provider, StayProvider)
+        _validate_provider("place_provider", place_provider, PlaceProvider)
+        if synchronous_runner is not None and not callable(synchronous_runner):
+            raise TypeError("synchronous_runner must be callable")
 
-# ============================================================
-# 工具执行器
-# ============================================================
+        self._clock = clock
+        self._trace_id = TypeAdapter(TraceId).validate_python(trace_id)
+        self._timeout_seconds = timeout_seconds
+        self._geo_provider = geo_provider
+        self._transport_provider = transport_provider
+        self._stay_provider = stay_provider
+        self._place_provider = place_provider
+        self._synchronous_runner = synchronous_runner
 
-def _exec_amap_geocode(address: str, settings: Settings | None = None) -> dict[str, object]:
-    """高德地理编码：地址 → 经纬度。"""
-    current = settings or Settings()
-    if not current.amap_api_key:
-        return {"error": "AMAP_API_KEY 未配置"}
-
-    params = urllib.parse.urlencode({
-        "key": current.amap_api_key,
-        "address": address,
-        "output": "JSON",
-    })
-    url = f"https://restapi.amap.com/v3/geocode/geo?{params}"
-
-    try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        data = json.loads(urllib.request.urlopen(req, timeout=current.external_api_timeout_seconds).read())
-    except Exception as e:
-        return {"error": f"高德 API 请求失败: {e}"}
-
-    geocodes = data.get("geocodes", [])
-    if not geocodes or data.get("status") != "1":
-        return {"error": f"未找到地址: {address}"}
-
-    best = geocodes[0]
-    location = best.get("location", "0,0")
-    lng_str, lat_str = location.split(",")
-    return {
-        "lat": float(lat_str),
-        "lng": float(lng_str),
-        "display_name": best.get("formatted_address", address),
-        "adcode": best.get("adcode"),
-    }
-
-
-def _tuniu_mcp_call(endpoint_name: str, tool_name: str, arguments: dict[str, object], settings: Settings | None = None) -> dict[str, object]:
-    """途牛 MCP JSON-RPC 2.0 调用。"""
-    current = settings or Settings()
-    if not current.tuniu_api_key:
-        return {"error": "TUNIU_API_KEY 未配置"}
-
-    endpoint = TUNIU_ENDPOINTS[endpoint_name]
-    payload = json.dumps({
-        "jsonrpc": "2.0",
-        "method": "tools/call",
-        "params": {"name": tool_name, "arguments": arguments},
-        "id": 1,
-    }).encode("utf-8")
-
-    try:
-        req = urllib.request.Request(
-            endpoint,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream",
-                "apiKey": current.tuniu_api_key,
-            },
-            method="POST",
+    async def amap_geocode(self, address: str) -> LegacyToolResult:
+        """通过 GeoProvider 执行旧版高德地理编码入口。"""
+        query = GeoQuery(
+            query_id=self._query_id("amap_geocode", {"address": address}),
+            trace_id=self._trace_id,
+            text=address,
+            timeout_seconds=self._timeout_seconds,
         )
-        body = urllib.request.urlopen(req, timeout=current.external_api_timeout_seconds).read().decode("utf-8")
-    except Exception as e:
-        return {"error": f"途牛 {endpoint_name} API 请求失败: {e}"}
+        provider = self._geo_provider
+        if provider is None:
+            raise _missing_provider(query, provider="amap", capability="geo", operation="geo_search")
+        result = await provider.search(query, timeout_seconds=self._timeout_seconds)
+        item = result.items[0]
+        return {
+            "lat": item.location.latitude,
+            "lng": item.location.longitude,
+            "display_name": item.address or item.name,
+            "source_ref": result.source_ref,
+        }
 
-    # 解析响应（SSE 或纯 JSON）
-    data = None
-    if "data:" in body:
-        for line in body.split("\n"):
-            if line.startswith("data:"):
-                try:
-                    data = json.loads(line[5:].strip())
-                except json.JSONDecodeError:
-                    pass
-    if data is None:
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            return {"error": "途牛响应解析失败", "raw": body[:300]}
+    async def tuniu_hotel_search(
+        self,
+        city: str,
+        check_in: str,
+        check_out: str,
+    ) -> LegacyToolResult:
+        """通过 StayProvider 执行旧版途牛酒店查询入口。"""
+        start = _parse_legacy_date(check_in, field_name="checkIn")
+        end = _parse_legacy_date(check_out, field_name="checkOut")
+        if end <= start:
+            raise ValueError("checkOut must be later than checkIn")
+        query = StayQuery(
+            query_id=self._query_id(
+                "tuniu_hotel_search",
+                {"city": city, "checkIn": check_in, "checkOut": check_out},
+            ),
+            trace_id=self._trace_id,
+            destination=city,
+            date_range=DateRange(start=start, end=end),
+            timeout_seconds=self._timeout_seconds,
+        )
+        provider = self._stay_provider
+        if provider is None:
+            raise _missing_provider(query, provider="tuniu", capability="stay", operation="stay_search")
+        result = await provider.search(query, timeout_seconds=self._timeout_seconds)
+        return _serialize_result(result)
 
-    if "error" in (data or {}):
-        err = data["error"]
-        return {"error": f"途牛 JSON-RPC 错误: {err.get('message', str(err))}"}
+    async def tuniu_flight_search(
+        self,
+        from_city: str,
+        to_city: str,
+        departure_date: str,
+    ) -> LegacyToolResult:
+        """通过 TransportProvider 执行旧版途牛交通查询入口。"""
+        departure_day = _parse_legacy_date(departure_date, field_name="date")
+        departure_after = datetime(
+            departure_day.year,
+            departure_day.month,
+            departure_day.day,
+            tzinfo=UTC,
+        )
+        query = TransportQuery(
+            query_id=self._query_id(
+                "tuniu_flight_search",
+                {"from_city": from_city, "to_city": to_city, "date": departure_date},
+            ),
+            trace_id=self._trace_id,
+            origin=from_city,
+            destination=to_city,
+            departure_after=departure_after,
+            timeout_seconds=self._timeout_seconds,
+        )
+        provider = self._transport_provider
+        if provider is None:
+            raise _missing_provider(
+                query,
+                provider="tuniu",
+                capability="transport",
+                operation="transport_search",
+            )
+        result = await provider.search(query, timeout_seconds=self._timeout_seconds)
+        return _serialize_result(result)
 
-    result = data.get("result")
-    if result is None:
-        return {"error": "途牛返回空结果"}
+    async def tuniu_ticket_search(self, scenic: str, city: str) -> LegacyToolResult:
+        """通过 PlaceProvider 执行旧版途牛景区门票查询入口。"""
+        _require_non_empty_text(city, field_name="city")
+        query = PlaceQuery(
+            query_id=self._query_id(
+                "tuniu_ticket_search",
+                {"scenic": scenic, "city": city},
+            ),
+            trace_id=self._trace_id,
+            destination=scenic,
+            category="ticket",
+            timeout_seconds=self._timeout_seconds,
+        )
+        provider = self._place_provider
+        if provider is None:
+            raise _missing_provider(query, provider="tuniu", capability="place", operation="place_search")
+        result = await provider.search(query, timeout_seconds=self._timeout_seconds)
+        return _serialize_result(result)
 
-    # MCP 响应可能包装在 content 数组中
-    if isinstance(result, dict) and "content" in result:
-        for block in result["content"]:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text", "")
-                try:
-                    return cast(dict[str, object], json.loads(text) if isinstance(text, str) else text)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-    return cast(dict[str, object], result)
+    def execute_synchronously(
+        self,
+        operation: Callable[[], Coroutine[Any, Any, LegacyToolResult]],
+    ) -> LegacyToolResult:
+        """通过组合根注入的执行器保留旧同步入口，不在 Facade 内创建事件循环。"""
+        runner = self._synchronous_runner
+        if runner is None:
+            raise ToolConfigurationError(
+                provider="knowledge_facade",
+                operation="legacy_entrypoint",
+                trace_id=self._trace_id,
+                safe_message="legacy facade requires an explicitly injected synchronous runner",
+            )
+        return runner(operation())
+
+    def _query_id(self, operation: str, arguments: Mapping[str, str]) -> StableId:
+        """用注入 Clock 生成可审计的旧入口查询标识，避免硬编码当前日期。"""
+        seed = json.dumps(
+            {
+                "trace_id": self._trace_id,
+                "operation": operation,
+                "arguments": dict(arguments),
+                "observed_at": self._clock.now().isoformat(),
+            },
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:24]
+        return f"legacy-knowledge.{operation}:{digest}"
+
+
+_legacy_facade: KnowledgeFacade | None = None
+
+
+def configure_legacy_facade(facade: KnowledgeFacade) -> None:
+    """由组合根显式安装临时 Facade，供旧 TOOL_EXECUTORS 入口使用。"""
+    if not isinstance(facade, KnowledgeFacade):
+        raise TypeError("facade must be a KnowledgeFacade")
+    global _legacy_facade
+    _legacy_facade = facade
+
+
+def _exec_amap_geocode(address: str) -> LegacyToolResult:
+    """保留同步高德入口，并转发到显式安装的 Facade。"""
+    facade = _require_legacy_facade()
+    return facade.execute_synchronously(lambda: facade.amap_geocode(address))
 
 
 def _exec_tuniu_hotel_search(
     city: str,
     checkIn: str,
     checkOut: str,
-    settings: Settings | None = None,
-) -> dict[str, object]:
-    """Search hotel prices through the Tuniu adapter."""
-    return _tuniu_mcp_call(
-        "hotel",
-        "tuniuHotelSearch",
-        {
-            "cityName": city,
-            "checkIn": checkIn,
-            "checkOut": checkOut,
-        },
-        settings=settings,
+) -> LegacyToolResult:
+    """保留同步酒店入口，并转发到显式安装的 Facade。"""
+    facade = _require_legacy_facade()
+    return facade.execute_synchronously(
+        lambda: facade.tuniu_hotel_search(city, checkIn, checkOut)
     )
 
 
@@ -297,38 +325,21 @@ def _exec_tuniu_flight_search(
     from_city: str,
     to_city: str,
     date: str,
-    settings: Settings | None = None,
-) -> dict[str, object]:
-    """Search flight prices through the Tuniu adapter."""
-    return _tuniu_mcp_call(
-        "flight",
-        "searchLowestPriceFlight",
-        {
-            "departureCityName": from_city,
-            "arrivalCityName": to_city,
-            "departureDate": date,
-        },
-        settings=settings,
+) -> LegacyToolResult:
+    """保留同步交通入口，并转发到显式安装的 Facade。"""
+    facade = _require_legacy_facade()
+    return facade.execute_synchronously(
+        lambda: facade.tuniu_flight_search(from_city, to_city, date)
     )
 
 
-def _exec_tuniu_ticket_search(
-    scenic: str,
-    city: str,
-    settings: Settings | None = None,
-) -> dict[str, object]:
-    """Search ticket prices through the Tuniu adapter."""
-    return _tuniu_mcp_call(
-        "ticket",
-        "query_cheapest_tickets",
-        {
-            "scenic_name": scenic,
-            "cityName": city,
-        },
-        settings=settings,
-    )
+def _exec_tuniu_ticket_search(scenic: str, city: str) -> LegacyToolResult:
+    """保留同步门票入口，并转发到显式安装的 Facade。"""
+    facade = _require_legacy_facade()
+    return facade.execute_synchronously(lambda: facade.tuniu_ticket_search(scenic, city))
 
-TOOL_EXECUTORS: dict[str, Callable[..., dict[str, object]]] = {
+
+TOOL_EXECUTORS: dict[str, LegacyToolExecutor] = {
     "amap_geocode": _exec_amap_geocode,
     "tuniu_hotel_search": _exec_tuniu_hotel_search,
     "tuniu_flight_search": _exec_tuniu_flight_search,
@@ -336,8 +347,69 @@ TOOL_EXECUTORS: dict[str, Callable[..., dict[str, object]]] = {
 }
 
 
-# ============================================================
-# 旧 run() 入口已移除（AgentContext/AgentResult 已废弃）。
-# 工具执行器（TOOL_EXECUTORS）可直接通过注册表调用，
-# 新的 tool-calling 循环将在 engine/loop.py 中重新实现。
-# ============================================================
+def _validate_provider(
+    name: str,
+    provider: object | None,
+    port: type[GeoProvider] | type[PlaceProvider] | type[StayProvider] | type[TransportProvider],
+) -> None:
+    """拒绝不满足 Port 的显式依赖，避免延迟到网络调用后失败。"""
+    if provider is not None and not isinstance(provider, port):
+        raise TypeError(f"{name} must implement its provider port")
+
+
+def _missing_provider(
+    query: ProviderQueryBase,
+    *,
+    provider: str,
+    capability: str,
+    operation: str,
+) -> ToolConfigurationError:
+    """构造缺失显式 Provider 时的 M3 失败。"""
+    return ToolConfigurationError(
+        provider=provider,
+        operation=operation,
+        trace_id=query.trace_id,
+        query_id=query.query_id,
+        safe_message=f"legacy facade requires an explicitly assembled {capability} provider",
+    )
+
+
+def _parse_legacy_date(value: str, *, field_name: str) -> date:
+    """解析遗留入口使用的 ISO 日期字符串。"""
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be an ISO date string")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an ISO date in YYYY-MM-DD format") from exc
+
+
+def _require_non_empty_text(value: str, *, field_name: str) -> None:
+    """校验遗留参数不会在 Port 边界前被静默丢弃。"""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must not be blank")
+
+
+def _serialize_result(result: _ProviderResult) -> LegacyToolResult:
+    """仅在遗留边界序列化标准化 DTO，不暴露供应商原始响应。"""
+    return cast(LegacyToolResult, result.model_dump(mode="json"))
+
+
+def _require_legacy_facade() -> KnowledgeFacade:
+    """在未由组合根安装 Facade 时显式失败。"""
+    if _legacy_facade is None:
+        raise ToolConfigurationError(
+            provider="knowledge_facade",
+            operation="legacy_entrypoint",
+            safe_message="legacy knowledge facade has not been configured",
+        )
+    return _legacy_facade
+
+
+__all__ = [
+    "ALLOWED_TOOLS",
+    "KnowledgeFacade",
+    "TOOLS",
+    "TOOL_EXECUTORS",
+    "configure_legacy_facade",
+]
