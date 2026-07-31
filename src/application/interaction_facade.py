@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, date, datetime
+from time import perf_counter
 from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
@@ -155,6 +156,15 @@ class TripInteractionFacade:
             workflow_status=state.status.value,
             state_version=state.version,
         ):
+            workflow_started_at = perf_counter()
+            logger.info(
+                "workflow_started",
+                stage="request",
+                status="started",
+                duration_ms=0,
+                workflow_status=state.status.value,
+                state_version=state.version,
+            )
             try:
                 with observe_stage("g0") as stage:
                     g0_result = self._g0_validator.validate(raw_input, context=security_context)
@@ -302,6 +312,14 @@ class TripInteractionFacade:
                 if decision.mode == InteractionMode.PLAN.value:
                     plan_result = self._planner.execute(request)
                 record_workflow_result("success")
+                logger.info(
+                    "workflow_completed",
+                    stage="request",
+                    status="succeeded",
+                    duration_ms=max(0, int((perf_counter() - workflow_started_at) * 1000)),
+                    workflow_status=active_state.status.value,
+                    state_version=active_state.version,
+                )
                 return TripInteractionResult(
                     route_decision=decision,
                     state=active_state,
@@ -317,7 +335,12 @@ class TripInteractionFacade:
                 )
                 record_workflow_result("failure")
                 record_workflow_error(failure.payload.category.value)
-                logger.error("workflow_failed", **failure.event_fields())
+                logger.error(
+                    "workflow_failed",
+                    **failure.event_fields(
+                        duration_ms=max(0, int((perf_counter() - workflow_started_at) * 1000))
+                    ),
+                )
                 self._mark_failed(active_state, failure)
                 raise
 

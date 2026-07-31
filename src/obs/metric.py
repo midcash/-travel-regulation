@@ -77,7 +77,7 @@ LABEL_ALLOWLIST: dict[str, frozenset[str]] = {
     "reason": frozenset({"l2_review"}),
     "source": frozenset({"l1", "l2"}),
     "stage": _ALLOWED_STAGES,
-    "status": frozenset({"success", "failure", "started", "completed", "requested"}),
+    "status": frozenset({"success", "failure", "started", "completed", "requested", "failed"}),
     "type": frozenset({"input", "output"}),
 }
 
