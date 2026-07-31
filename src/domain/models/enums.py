@@ -36,6 +36,17 @@ class EvidenceStatus(str, Enum):
     UNAVAILABLE = "unavailable"
 
 
+class EvidenceTtlCategory(str, Enum):
+    """决定证据有效期上限的业务类别。"""
+
+    STATIC_GEOGRAPHY = "static_geography"
+    BUSINESS_HOURS_POLICY = "business_hours_policy"
+    WEATHER_FORECAST = "weather_forecast"
+    TRANSPORT_SCHEDULE = "transport_schedule"
+    QUOTE_INVENTORY = "quote_inventory"
+    EXCHANGE_RATE = "exchange_rate"
+
+
 class WorkflowStatus(str, Enum):
     """旅行规划工作流允许使用的状态。"""
 

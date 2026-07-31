@@ -2,16 +2,35 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 
-from src.domain.models.enums import EvidenceStatus
-from src.domain.models.evidence import EvidenceRegistration
+from src.domain.models.enums import EvidenceStatus, EvidenceTtlCategory
+from src.domain.models.evidence import EvidenceRegistration, EvidenceTtlPolicy
 from src.domain.models.value_objects import Money
 from src.infrastructure.evidence.in_memory import InMemoryEvidenceRepository
 from src.ports.evidence_repository import EvidenceRepository
+from tests.support.clock_fakes import FakeClock
+
+
+def _ttl_policy() -> EvidenceTtlPolicy:
+    return EvidenceTtlPolicy(
+        static_geography=timedelta(days=30),
+        business_hours_policy=timedelta(hours=12),
+        weather_forecast=timedelta(hours=2),
+        transport_schedule=timedelta(minutes=15),
+        quote_inventory=timedelta(minutes=5),
+        exchange_rate=timedelta(hours=1),
+    )
+
+
+def _repository() -> InMemoryEvidenceRepository:
+    return InMemoryEvidenceRepository(
+        clock=FakeClock(datetime(2026, 8, 1, 9, tzinfo=UTC)),
+        ttl_policy=_ttl_policy(),
+    )
 
 
 def _registration(**overrides: object) -> EvidenceRegistration:
@@ -24,6 +43,7 @@ def _registration(**overrides: object) -> EvidenceRegistration:
         "source_ref": "https://example.test/hotels/1",
         "observed_at": datetime(2026, 8, 1, 9, tzinfo=UTC),
         "valid_until": datetime(2026, 8, 1, 10, tzinfo=UTC),
+        "ttl_category": EvidenceTtlCategory.QUOTE_INVENTORY,
         "status": EvidenceStatus.VERIFIED,
         "confidence": Decimal("0.9"),
         "raw_payload_ref": "payload:hotel-1",
@@ -34,7 +54,7 @@ def _registration(**overrides: object) -> EvidenceRegistration:
 
 
 def test_in_memory_evidence_repository_implements_port_and_isolates_results() -> None:
-    repository = InMemoryEvidenceRepository()
+    repository = _repository()
     assert isinstance(repository, EvidenceRepository)
 
     registered = repository.register(_registration())
@@ -46,8 +66,8 @@ def test_in_memory_evidence_repository_implements_port_and_isolates_results() ->
 
 
 def test_in_memory_evidence_repository_registration_is_idempotent_and_stable() -> None:
-    first_repository = InMemoryEvidenceRepository()
-    second_repository = InMemoryEvidenceRepository()
+    first_repository = _repository()
+    second_repository = _repository()
     registration = _registration()
 
     first = first_repository.register(registration)
@@ -59,7 +79,7 @@ def test_in_memory_evidence_repository_registration_is_idempotent_and_stable() -
 
 
 def test_in_memory_evidence_repository_filters_by_entity_fact_and_query() -> None:
-    repository = InMemoryEvidenceRepository()
+    repository = _repository()
     price = repository.register(_registration())
     availability = repository.register(
         _registration(
@@ -84,7 +104,7 @@ def test_in_memory_evidence_repository_filters_by_entity_fact_and_query() -> Non
 
 
 def test_in_memory_evidence_repository_preserves_conflicting_sources() -> None:
-    repository = InMemoryEvidenceRepository()
+    repository = _repository()
     first = repository.register(_registration())
     conflict = repository.register(
         _registration(
@@ -105,7 +125,7 @@ def test_in_memory_evidence_repository_preserves_conflicting_sources() -> None:
 
 
 def test_in_memory_evidence_repository_rejects_untyped_registration() -> None:
-    repository = InMemoryEvidenceRepository()
+    repository = _repository()
 
     with pytest.raises(TypeError, match="EvidenceRegistration"):
         repository.register(object())  # type: ignore[arg-type]

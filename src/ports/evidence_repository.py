@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from src.domain.models.evidence import EvidenceItem, EvidenceRegistration
+from src.domain.models.evidence import (
+    EvidenceItem,
+    EvidenceRegistration,
+    EvidenceSnapshot,
+    EvidenceSnapshotQuery,
+)
 from src.domain.models.value_objects import StableId
 
 
@@ -23,3 +28,6 @@ class EvidenceRepository(Protocol):
         query_fingerprint: StableId | None = None,
     ) -> tuple[EvidenceItem, ...]:
         """返回同时满足所有已提供筛选条件的已注册证据。"""
+
+    def snapshot(self, query: EvidenceSnapshotQuery) -> EvidenceSnapshot:
+        """返回经 TTL 与来源冲突判定后的不可变当前快照。"""

@@ -6,8 +6,14 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from src.domain.models.enums import EvidenceStatus
-from src.domain.models.evidence import EvidenceItem, EvidenceRegistration, EvidenceSnapshot
+from src.domain.models.enums import EvidenceStatus, EvidenceTtlCategory
+from src.domain.models.evidence import (
+    EvidenceItem,
+    EvidenceRegistration,
+    EvidenceSnapshot,
+    EvidenceSnapshotQuery,
+    EvidenceTtlPolicy,
+)
 from src.domain.models.value_objects import DateRange, Money
 
 
@@ -22,6 +28,7 @@ def _evidence(evidence_id: str = "evidence-1", **overrides: object) -> EvidenceI
         "source_ref": "https://example.test/items/1",
         "observed_at": datetime(2026, 8, 1, 9, tzinfo=UTC),
         "valid_until": datetime(2026, 8, 2, 9, tzinfo=UTC),
+        "ttl_category": EvidenceTtlCategory.QUOTE_INVENTORY,
         "status": EvidenceStatus.VERIFIED,
         "confidence": Decimal("0.95"),
         "raw_payload_ref": "raw-payload-1",
@@ -59,6 +66,7 @@ def test_evidence_registration_requires_traceable_provider_query_and_schema_fiel
     assert registered.provider == "tuniu"
     assert registered.query_fingerprint == "query:hotel-1"
     assert registered.raw_payload_ref == "raw-payload-1"
+    assert registered.ttl_category is EvidenceTtlCategory.QUOTE_INVENTORY
     assert registered.schema_version == "m3.evidence.v1"
     with pytest.raises(ValidationError):
         EvidenceRegistration(**registration.model_dump(), raw_payload={"unsafe": True})
@@ -83,6 +91,22 @@ def test_evidence_snapshot_rejects_unknown_conflict_references() -> None:
             evidence_items=(evidence,),
             conflict_refs=("evidence-unknown",),
         )
+    with pytest.raises(ValidationError, match="timezone-aware"):
+        EvidenceSnapshot(snapshot_id="evidence-snapshot-3", created_at=datetime(2026, 8, 1, 9))
+
+
+def test_evidence_ttl_policy_and_snapshot_query_reject_invalid_configuration() -> None:
+    with pytest.raises(ValidationError, match="greater than zero"):
+        EvidenceTtlPolicy(
+            static_geography=timedelta(days=1),
+            business_hours_policy=timedelta(hours=1),
+            weather_forecast=timedelta(hours=1),
+            transport_schedule=timedelta(minutes=15),
+            quote_inventory=timedelta(),
+            exchange_rate=timedelta(hours=1),
+        )
+    with pytest.raises(ValidationError, match="must be unique"):
+        EvidenceSnapshotQuery(required_fact_types=("price", "price"))
 
 
 def test_evidence_value_union_accepts_date_range() -> None:

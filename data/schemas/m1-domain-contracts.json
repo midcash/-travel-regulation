@@ -1056,6 +1056,9 @@
             "status": {
               "$ref": "#/$defs/EvidenceStatus"
             },
+            "ttl_category": {
+              "$ref": "#/$defs/EvidenceTtlCategory"
+            },
             "valid_until": {
               "anyOf": [
                 {
@@ -1123,6 +1126,7 @@
             "source",
             "source_ref",
             "observed_at",
+            "ttl_category",
             "status",
             "confidence",
             "query_fingerprint",
@@ -1189,6 +1193,14 @@
               "default": "0",
               "title": "Freshness"
             },
+            "missing_fact_types": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Missing Fact Types",
+              "type": "array"
+            },
             "snapshot_id": {
               "maxLength": 128,
               "minLength": 1,
@@ -1221,6 +1233,19 @@
             "unavailable"
           ],
           "title": "EvidenceStatus",
+          "type": "string"
+        },
+        "EvidenceTtlCategory": {
+          "description": "决定证据有效期上限的业务类别。",
+          "enum": [
+            "static_geography",
+            "business_hours_policy",
+            "weather_forecast",
+            "transport_schedule",
+            "quote_inventory",
+            "exchange_rate"
+          ],
+          "title": "EvidenceTtlCategory",
           "type": "string"
         },
         "GeoPoint": {
@@ -2323,6 +2348,19 @@
           "title": "EvidenceStatus",
           "type": "string"
         },
+        "EvidenceTtlCategory": {
+          "description": "决定证据有效期上限的业务类别。",
+          "enum": [
+            "static_geography",
+            "business_hours_policy",
+            "weather_forecast",
+            "transport_schedule",
+            "quote_inventory",
+            "exchange_rate"
+          ],
+          "title": "EvidenceTtlCategory",
+          "type": "string"
+        },
         "GeoPoint": {
           "additionalProperties": false,
           "description": "WGS84 地理坐标。",
@@ -2482,6 +2520,9 @@
         "status": {
           "$ref": "#/$defs/EvidenceStatus"
         },
+        "ttl_category": {
+          "$ref": "#/$defs/EvidenceTtlCategory"
+        },
         "valid_until": {
           "anyOf": [
             {
@@ -2549,6 +2590,7 @@
         "source",
         "source_ref",
         "observed_at",
+        "ttl_category",
         "status",
         "confidence",
         "query_fingerprint",
@@ -2685,6 +2727,9 @@
             "status": {
               "$ref": "#/$defs/EvidenceStatus"
             },
+            "ttl_category": {
+              "$ref": "#/$defs/EvidenceTtlCategory"
+            },
             "valid_until": {
               "anyOf": [
                 {
@@ -2752,6 +2797,7 @@
             "source",
             "source_ref",
             "observed_at",
+            "ttl_category",
             "status",
             "confidence",
             "query_fingerprint",
@@ -2769,6 +2815,19 @@
             "unavailable"
           ],
           "title": "EvidenceStatus",
+          "type": "string"
+        },
+        "EvidenceTtlCategory": {
+          "description": "决定证据有效期上限的业务类别。",
+          "enum": [
+            "static_geography",
+            "business_hours_policy",
+            "weather_forecast",
+            "transport_schedule",
+            "quote_inventory",
+            "exchange_rate"
+          ],
+          "title": "EvidenceTtlCategory",
           "type": "string"
         },
         "GeoPoint": {
@@ -2883,6 +2942,14 @@
           ],
           "default": "0",
           "title": "Freshness"
+        },
+        "missing_fact_types": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Fact Types",
+          "type": "array"
         },
         "snapshot_id": {
           "maxLength": 128,
@@ -4927,6 +4994,9 @@
             "status": {
               "$ref": "#/$defs/EvidenceStatus"
             },
+            "ttl_category": {
+              "$ref": "#/$defs/EvidenceTtlCategory"
+            },
             "valid_until": {
               "anyOf": [
                 {
@@ -4994,6 +5064,7 @@
             "source",
             "source_ref",
             "observed_at",
+            "ttl_category",
             "status",
             "confidence",
             "query_fingerprint",
@@ -5060,6 +5131,14 @@
               "default": "0",
               "title": "Freshness"
             },
+            "missing_fact_types": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Missing Fact Types",
+              "type": "array"
+            },
             "snapshot_id": {
               "maxLength": 128,
               "minLength": 1,
@@ -5092,6 +5171,19 @@
             "unavailable"
           ],
           "title": "EvidenceStatus",
+          "type": "string"
+        },
+        "EvidenceTtlCategory": {
+          "description": "决定证据有效期上限的业务类别。",
+          "enum": [
+            "static_geography",
+            "business_hours_policy",
+            "weather_forecast",
+            "transport_schedule",
+            "quote_inventory",
+            "exchange_rate"
+          ],
+          "title": "EvidenceTtlCategory",
           "type": "string"
         },
         "GeoPoint": {

@@ -20,6 +20,7 @@ from src.domain.models.enums import (
     ConstraintHardness,
     ErrorCategory,
     EvidenceStatus,
+    EvidenceTtlCategory,
     InteractionMode,
     IssueSeverity,
     WorkflowStatus,
@@ -28,6 +29,8 @@ from src.domain.models.evidence import (
     EvidenceItem,
     EvidenceRegistration,
     EvidenceSnapshot,
+    EvidenceSnapshotQuery,
+    EvidenceTtlPolicy,
     EvidenceValue,
 )
 from src.domain.models.itinerary import (
@@ -87,7 +90,10 @@ __all__ = [
     "EvidenceItem",
     "EvidenceRegistration",
     "EvidenceSnapshot",
+    "EvidenceSnapshotQuery",
     "EvidenceStatus",
+    "EvidenceTtlCategory",
+    "EvidenceTtlPolicy",
     "EvidenceValue",
     "GeoPoint",
     "InteractionMode",
