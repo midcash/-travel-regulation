@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from src.obs.log import get_logger
+from src.obs.metric import record_legacy_review_issues, record_legacy_revision
 
 logger = get_logger(__name__)
 
@@ -79,6 +80,7 @@ def record_legacy_review(
         issue_summary_ref=registry.summary_reference(issue_refs),
         trigger_sources=trigger_sources,
     )
+    record_legacy_review_issues(l1_count=len(l1_issue_refs), l2_count=len(l2_issue_refs))
     logger.info(
         "legacy_review_completed",
         stage="legacy_critic",
@@ -99,6 +101,7 @@ def record_legacy_review(
 
 def record_legacy_revision_requested(observation: LegacyReviewObservation) -> None:
     """Emit the safe reason references that triggered one revision."""
+    record_legacy_revision("requested", round=observation.round)
     logger.info(
         "legacy_revision_requested",
         stage="legacy_revision",
@@ -118,6 +121,7 @@ def record_legacy_revision_completed(
     output_chars: int,
 ) -> None:
     """Emit revision completion metadata without the generated plan."""
+    record_legacy_revision("completed", round=round)
     logger.info(
         "legacy_revision_completed",
         stage="legacy_revision",
@@ -130,6 +134,7 @@ def record_legacy_revision_completed(
 
 def record_legacy_revision_exhausted(observation: LegacyReviewObservation) -> None:
     """Emit unresolved issue references before preserving fail-fast behavior."""
+    record_legacy_revision("exhausted", round=observation.round)
     logger.warning(
         "legacy_revision_exhausted",
         stage="legacy_revision",

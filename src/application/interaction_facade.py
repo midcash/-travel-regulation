@@ -35,6 +35,12 @@ from src.guard.g0 import G0SecurityContext, G0Validator
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
 from src.obs.errors import WorkflowFailure, from_exception
 from src.obs.log import get_logger
+from src.obs.metric import (
+    record_clarification_blockers,
+    record_route_mode,
+    record_workflow_error,
+    record_workflow_result,
+)
 from src.obs.stage import observe_stage
 from src.obs.trace import trace_workflow_request
 from src.ports.llm_gateway import LLMGateway
@@ -134,6 +140,8 @@ class TripInteractionFacade:
             state = self._load_or_create_state(request)
         except Exception as exc:
             failure = from_exception(exc, trace_id=trace_id)
+            record_workflow_result("failure")
+            record_workflow_error(failure.payload.category.value)
             logger.error("workflow_failed", **failure.event_fields())
             raise
         active_state = state
@@ -250,6 +258,11 @@ class TripInteractionFacade:
                         g0_result=g0_result,
                         current_plan_ref=current_plan_ref,
                     )
+                    record_route_mode(decision.mode)
+                    if decision.mode == InteractionMode.CLARIFY.value:
+                        record_clarification_blockers(
+                            tuple(blocker.code.value for blocker in readiness.blockers)
+                        )
                     stage.add_summary(
                         schema_version="m2.route.v1",
                         input_count=1,
@@ -288,6 +301,7 @@ class TripInteractionFacade:
                 plan_result = None
                 if decision.mode == InteractionMode.PLAN.value:
                     plan_result = self._planner.execute(request)
+                record_workflow_result("success")
                 return TripInteractionResult(
                     route_decision=decision,
                     state=active_state,
@@ -301,6 +315,8 @@ class TripInteractionFacade:
                     exc,
                     trace_id=trace_id,
                 )
+                record_workflow_result("failure")
+                record_workflow_error(failure.payload.category.value)
                 logger.error("workflow_failed", **failure.event_fields())
                 self._mark_failed(active_state, failure)
                 raise

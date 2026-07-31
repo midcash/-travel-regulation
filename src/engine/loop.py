@@ -23,11 +23,7 @@ from src.obs.legacy import (
     record_legacy_revision_requested,
 )
 from src.obs.log import get_logger
-from src.obs.metric import (
-    AGENT_CALLS_TOTAL,
-    AGENT_DURATION_SECONDS,
-    RETRY_COUNT_TOTAL,
-)
+from src.obs.metric import record_agent_call, record_retry
 from src.obs.trace import trace_agent, trace_named_span, trace_session
 from src.review.l1 import run_l1_checks
 from src.review.l2 import run_l2_review
@@ -99,8 +95,7 @@ def plan(
             except Exception as exc:
                 raise PlanningError("generation", "初始方案生成失败") from exc
         elapsed_a = int((time.perf_counter() - t_a) * 1000)
-        AGENT_CALLS_TOTAL.labels(agent="planner_a", status="success").inc()
-        AGENT_DURATION_SECONDS.labels(agent="planner_a").observe(elapsed_a / 1000)
+        record_agent_call("planner_a", "success", elapsed_a)
         logger.info("plan_generation_done", duration_ms=elapsed_a)
 
         # ---- Revision Loop ----
@@ -164,7 +159,7 @@ def plan(
 
             # ---- LLM-A 修订 ----
             record_legacy_revision_requested(review)
-            RETRY_COUNT_TOTAL.labels(agent="planner_a", reason="l2_review").inc()
+            record_retry("planner_a", "l2_review")
             logger.info(
                 "plan_revision",
                 round=round_num + 1,
@@ -182,8 +177,7 @@ def plan(
                     except Exception as exc:
                         raise PlanningError("revision", "方案修订失败") from exc
             elapsed_a = int((time.perf_counter() - t_a) * 1000)
-            AGENT_CALLS_TOTAL.labels(agent="planner_a", status="success").inc()
-            AGENT_DURATION_SECONDS.labels(agent="planner_a").observe(elapsed_a / 1000)
+            record_agent_call("planner_a", "success", elapsed_a)
             record_legacy_revision_completed(
                 round=review_round,
                 duration_ms=elapsed_a,

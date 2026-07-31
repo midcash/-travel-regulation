@@ -16,6 +16,7 @@ from src.domain.models.state import TripState
 from src.domain.models.value_objects import TraceId
 from src.gateway.json_utils import JsonResponseError, parse_json_object
 from src.guard.g0 import G0SecurityContext, G0ValidationResult, G0Validator
+from src.obs.metric import record_interpreter_failure
 from src.obs.trace import trace_agent
 from src.ports.llm_gateway import LLMGateway
 
@@ -123,12 +124,21 @@ class RequestInterpreter:
             )
 
         if type(raw_response) is not str:
+            record_interpreter_failure("schema")
             self._raise_invalid(trace_id, "LLM response must be text")
 
         try:
             payload = parse_json_object(raw_response)
             result = InterpretationResult.model_validate(payload)
-        except (JsonResponseError, ValidationError, TypeError, ValueError) as exc:
+        except JsonResponseError as exc:
+            record_interpreter_failure("parse")
+            self._raise_invalid(
+                trace_id,
+                "LLM response does not match InterpretationResult",
+                cause=exc,
+            )
+        except (ValidationError, TypeError, ValueError) as exc:
+            record_interpreter_failure("schema")
             self._raise_invalid(
                 trace_id,
                 "LLM response does not match InterpretationResult",
@@ -138,6 +148,7 @@ class RequestInterpreter:
         if normalized_modes and (
             result.mode_hint is not None and result.mode_hint not in normalized_modes
         ):
+            record_interpreter_failure("schema")
             self._raise_invalid(
                 trace_id,
                 "LLM response contains a mode outside the allowed set",
@@ -145,6 +156,7 @@ class RequestInterpreter:
 
         missing_flags = set(g0_result.safety_flags).difference(result.safety_flags)
         if missing_flags:
+            record_interpreter_failure("schema")
             self._raise_invalid(
                 trace_id,
                 "LLM response omitted a safety flag detected by G0",

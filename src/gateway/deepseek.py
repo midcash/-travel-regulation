@@ -11,11 +11,7 @@ from openai import OpenAI
 
 from src.config import Settings
 from src.obs.log import get_logger
-from src.obs.metric import (
-    LLM_CALLS_TOTAL,
-    LLM_DURATION_SECONDS,
-    LLM_TOKENS_TOTAL,
-)
+from src.obs.metric import record_llm_call
 from src.obs.trace import trace_llm_call
 
 logger = get_logger(__name__)
@@ -93,10 +89,11 @@ def ask_llm(
                 raise LLMResponseError("LLM 返回空响应")
         except Exception as exc:
             elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            LLM_CALLS_TOTAL.labels(
+            record_llm_call(
                 model=current.deepseek_model,
                 status="failure",
-            ).inc()
+                duration_ms=elapsed_ms,
+            )
             logger.error("llm_call_failed", model=current.deepseek_model)
             _notify(
                 observer,
@@ -121,10 +118,14 @@ def ask_llm(
         span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
         span.set_attribute("gen_ai.response.finish_reasons", finish_reason or "unknown")
 
-        LLM_CALLS_TOTAL.labels(model=current.deepseek_model, status="success").inc()
-        LLM_TOKENS_TOTAL.labels(model=current.deepseek_model, type="input").inc(input_tokens)
-        LLM_TOKENS_TOTAL.labels(model=current.deepseek_model, type="output").inc(output_tokens)
-        LLM_DURATION_SECONDS.labels(model=current.deepseek_model).observe(elapsed_ms / 1000)
+        record_llm_call(
+            model=current.deepseek_model,
+            status="success",
+            duration_ms=elapsed_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            finish_reason=finish_reason,
+        )
 
         logger.info(
             "llm_call_finished",

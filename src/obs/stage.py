@@ -10,6 +10,7 @@ from opentelemetry.trace import Span
 from src.domain.errors import WorkflowError
 from src.obs.errors import UNEXPECTED_INTERNAL_ERROR_CODE, UNEXPECTED_INTERNAL_SAFE_MESSAGE
 from src.obs.log import get_logger
+from src.obs.metric import record_stage
 from src.obs.trace import trace_stage
 
 logger = get_logger(__name__)
@@ -64,6 +65,7 @@ class StageObservation:
         try:
             if exc is None:
                 _set_span_summary(self._span, self._summary, duration_ms, "completed")
+                record_stage(self.stage, "completed", duration_ms)
                 _emit(
                     "stage_completed",
                     stage=self.stage,
@@ -74,6 +76,7 @@ class StageObservation:
             else:
                 failure = _failure_summary(exc)
                 _set_span_summary(self._span, failure, duration_ms, "failed")
+                record_stage(self.stage, "failed", duration_ms)
                 _emit(
                     "stage_failed",
                     stage=self.stage,
