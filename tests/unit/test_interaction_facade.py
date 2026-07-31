@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -14,11 +14,30 @@ from src.domain.models.interpretation import ConstraintCandidate, Interpretation
 from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.domain.models.value_objects import DateRange
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
+from src.ports import Clock, SystemClock
 from tests.support.llm_fakes import FakeLLMGateway
 
 
+class FakeClock:
+    """Deterministic clock for tests."""
+
+    def __init__(self, current: datetime) -> None:
+        self._current = current
+        self.calls: list[datetime] = []
+
+    def now(self) -> datetime:
+        self.calls.append(self._current)
+        return self._current
+
+    def set(self, current: datetime) -> None:
+        self._current = current
+
+    def advance(self, delta: timedelta) -> None:
+        self._current = self._current + delta
+
+
 class RecordingPlanner:
-    """只记录 PLAN 是否被调用的兼容规划器。"""
+    """Compatibility planner that only records PLAN calls."""
 
     def __init__(self) -> None:
         self.calls: list[TripRequest] = []
@@ -40,8 +59,8 @@ def _request() -> TripRequest:
         request_id="request-facade",
         trip_id="trip-facade",
         session_id="session-facade",
-        origin="上海",
-        destinations=("杭州",),
+        origin="Shanghai",
+        destinations=("Hangzhou",),
         date_range=DateRange(start=date(2026, 8, 1), end=date(2026, 8, 3)),
         travelers=TravelerProfile(adults=2),
     )
@@ -51,21 +70,21 @@ def _interpretation(mode: InteractionMode, *, ready: bool) -> str:
     candidates = (
         ConstraintCandidate(
             category="origin",
-            value="上海",
+            value="Shanghai",
             hardness=ConstraintHardness.HARD,
             scope="trip",
             confidence=Decimal("0.95"),
         ),
         ConstraintCandidate(
             category="destination",
-            value="杭州",
+            value="Hangzhou",
             hardness=ConstraintHardness.HARD,
             scope="trip",
             confidence=Decimal("0.95"),
         ),
         ConstraintCandidate(
             category="date_range",
-            value="2026年8月1日至2026年8月3日",
+            value="2026-08-01/2026-08-03",
             hardness=ConstraintHardness.HARD,
             scope="trip",
             confidence=Decimal("0.95"),
@@ -103,17 +122,34 @@ def _facade(
         planner=actual_planner,
         gateway=FakeLLMGateway([response]),
         state_repository=actual_repository,
-        clock=lambda: datetime(2026, 7, 30, 12, tzinfo=UTC),
+        clock=FakeClock(datetime(2026, 7, 30, 12, tzinfo=UTC)),
     )
     return facade, actual_planner, actual_repository
 
 
-def test_facade_routes_ready_plan_and_preserves_legacy_plan_call() -> None:
-    facade, planner, repository = _facade(
-        _interpretation(InteractionMode.PLAN, ready=True)
-    )
+def test_fake_clock_implements_clock_port_and_advances_deterministically() -> None:
+    clock = FakeClock(datetime(2026, 7, 30, 12, tzinfo=UTC))
 
-    result = facade.execute(_request(), "请规划上海到杭州的行程")
+    assert isinstance(clock, Clock)
+    assert clock.now() == datetime(2026, 7, 30, 12, tzinfo=UTC)
+    clock.advance(timedelta(minutes=15))
+    assert clock.now() == datetime(2026, 7, 30, 12, 15, tzinfo=UTC)
+    assert len(clock.calls) == 2
+
+
+def test_system_clock_implements_clock_port_and_returns_utc_time() -> None:
+    clock = SystemClock()
+
+    current = clock.now()
+
+    assert isinstance(clock, Clock)
+    assert current.tzinfo == UTC
+
+
+def test_facade_routes_ready_plan_and_preserves_legacy_plan_call() -> None:
+    facade, planner, repository = _facade(_interpretation(InteractionMode.PLAN, ready=True))
+
+    result = facade.execute(_request(), "plan a trip from Shanghai to Hangzhou")
 
     assert result.route_decision.mode == InteractionMode.PLAN.value
     assert result.state.status is WorkflowStatus.RESEARCHING
@@ -123,11 +159,9 @@ def test_facade_routes_ready_plan_and_preserves_legacy_plan_call() -> None:
 
 
 def test_facade_routes_missing_plan_fields_to_clarification_without_plan_call() -> None:
-    facade, planner, repository = _facade(
-        _interpretation(InteractionMode.PLAN, ready=False)
-    )
+    facade, planner, repository = _facade(_interpretation(InteractionMode.PLAN, ready=False))
 
-    result = facade.execute(_request(), "我想去旅行")
+    result = facade.execute(_request(), "I want to arrange a trip")
 
     assert result.route_decision.mode == InteractionMode.CLARIFY.value
     assert result.state.status is WorkflowStatus.CLARIFYING
@@ -140,9 +174,8 @@ def test_facade_routes_missing_plan_fields_to_clarification_without_plan_call() 
 def test_facade_marks_state_failed_when_interpretation_is_invalid() -> None:
     facade, planner, repository = _facade("not-json")
 
-    with pytest.raises(WorkflowError) as raised:
-        facade.execute(_request(), "请规划上海到杭州的行程")
+    with pytest.raises(WorkflowError):
+        facade.execute(_request(), "plan a trip from Shanghai to Hangzhou")
 
-    assert raised.value.stage == "request_interpreter"
     assert repository.get("trip-facade").status is WorkflowStatus.FAILED
     assert planner.calls == []

@@ -26,6 +26,7 @@ from src.engine import loop
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
 from tests.support.fakes import FakeLLM
 from tests.support.llm_fakes import FakeLLMGateway
+from tests.unit.test_interaction_facade import FakeClock
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,7 +227,7 @@ def _execute_case(
         planner=planner,
         gateway=gateway,
         state_repository=repository,
-        clock=lambda: datetime(2026, 7, 30, 12, tzinfo=UTC),
+        clock=FakeClock(datetime(2026, 7, 30, 12, tzinfo=UTC)),
     )
 
     try:

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date
 from time import perf_counter
 from typing import Protocol
 
@@ -44,6 +43,7 @@ from src.obs.metric import (
 )
 from src.obs.stage import observe_stage
 from src.obs.trace import trace_workflow_request
+from src.ports import Clock, SystemClock
 from src.ports.llm_gateway import LLMGateway
 from src.ports.state_repository import StateRepository
 
@@ -87,7 +87,7 @@ class TripInteractionFacade:
         router: InteractionRouter | None = None,
         state_integration: TripStateIntegration | None = None,
         clarification_builder: ClarificationBuilder | None = None,
-        clock: Callable[[], datetime] | None = None,
+        clock: Clock | None = None,
     ) -> None:
         self._settings = settings
         self._planner = planner
@@ -104,7 +104,7 @@ class TripInteractionFacade:
         self._router = router or InteractionRouter()
         self._state_integration = state_integration or TripStateIntegration()
         self._clarification_builder = clarification_builder or ClarificationBuilder()
-        self._clock = clock or (lambda: datetime.now(UTC))
+        self._clock = clock or SystemClock()
 
     def execute(
         self,
@@ -208,7 +208,7 @@ class TripInteractionFacade:
                         entity_count=len(interpretation.extracted_entities),
                         confidence=float(interpretation.overall_confidence),
                     )
-                created_at = self._clock()
+                created_at = self._clock.now()
                 with observe_stage("constraint_service") as stage:
                     snapshot = self._constraint_service.build_snapshot(
                         interpretation,
