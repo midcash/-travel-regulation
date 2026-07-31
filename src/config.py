@@ -31,6 +31,8 @@ class Settings:
     deepseek_max_tokens: int | None = None
     amap_api_key: str | None = field(default=None, repr=False)
     tuniu_api_key: str | None = field(default=None, repr=False)
+    amap_enabled: bool | None = None
+    tuniu_enabled: bool | None = None
     log_level: str = 'INFO'
     console_span_exporter: bool = False
 
@@ -61,6 +63,10 @@ class Settings:
             raise ConfigurationError('DEEPSEEK_MAX_TOKENS must be positive')
         if not self.deepseek_model.strip():
             raise ConfigurationError('DEEPSEEK_MODEL must not be empty')
+        if self.amap_enabled is None:
+            object.__setattr__(self, 'amap_enabled', _has_value(self.amap_api_key))
+        if self.tuniu_enabled is None:
+            object.__setattr__(self, 'tuniu_enabled', _has_value(self.tuniu_api_key))
         normalized_log_level = self.log_level.strip().upper()
         object.__setattr__(self, 'log_level', normalized_log_level)
         if normalized_log_level not in _LOG_LEVELS:
@@ -102,6 +108,8 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         ),
         amap_api_key=_optional(values.get('AMAP_API_KEY')),
         tuniu_api_key=_optional(values.get('TUNIU_API_KEY')),
+        amap_enabled=_parse_optional_bool(values.get('AMAP_ENABLED'), 'AMAP_ENABLED'),
+        tuniu_enabled=_parse_optional_bool(values.get('TUNIU_ENABLED'), 'TUNIU_ENABLED'),
         log_level=values.get('LOG_LEVEL', 'INFO').strip().upper(),
         console_span_exporter=_parse_bool(
             values.get('CONSOLE_SPAN_EXPORTER', 'false'),
@@ -130,6 +138,10 @@ def _parse_optional_int(raw: str | None, name: str) -> int | None:
     return None if raw is None or not raw.strip() else _parse_int(raw, name)
 
 
+def _parse_optional_bool(raw: str | None, name: str) -> bool | None:
+    return None if raw is None or not raw.strip() else _parse_bool(raw, name)
+
+
 def _parse_float(raw: str, name: str) -> float:
     try:
         return float(raw.strip())
@@ -142,3 +154,7 @@ def _optional(raw: str | None) -> str | None:
         return None
     normalized = raw.strip()
     return normalized or None
+
+
+def _has_value(value: str | None) -> bool:
+    return value is not None and bool(value.strip())
