@@ -136,6 +136,7 @@ class TransportResultItem(BaseModel):
     arrival_at: datetime | None = None
     total_price: Money | None = None
     source_ref: str = Field(min_length=1, max_length=2048)
+    external_text_trust: Literal["untrusted"] = "untrusted"
 
     @model_validator(mode="after")
     def validate_schedule(self) -> Self:
@@ -184,6 +185,7 @@ class StayResultItem(BaseModel):
     total_price: Money | None = None
     refundable: bool | None = None
     source_ref: str = Field(min_length=1, max_length=2048)
+    external_text_trust: Literal["untrusted"] = "untrusted"
 
     @model_validator(mode="after")
     def validate_stay_window(self) -> Self:
@@ -229,7 +231,9 @@ class PlaceResultItem(BaseModel):
     location: GeoPoint | None = None
     address: str | None = Field(default=None, min_length=1, max_length=512)
     tags: tuple[str, ...] = ()
+    total_price: Money | None = None
     source_ref: str = Field(min_length=1, max_length=2048)
+    external_text_trust: Literal["untrusted"] = "untrusted"
 
 
 class PlaceProviderResult(ProviderResultBase):

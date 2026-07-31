@@ -9,12 +9,15 @@ from src.infrastructure.tools.assembly import (
     ToolProviderAssembly,
     assemble_tool_providers,
 )
+from src.infrastructure.tools.tuniu import TuniuTravelProvider, create_tuniu_bindings
 
 __all__ = [
     "AdapterFactory",
     "AmapGeoProvider",
     "ProviderBindings",
     "ToolProviderAssembly",
+    "TuniuTravelProvider",
     "assemble_tool_providers",
     "create_amap_bindings",
+    "create_tuniu_bindings",
 ]
