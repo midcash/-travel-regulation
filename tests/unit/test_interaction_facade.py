@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -14,26 +14,8 @@ from src.domain.models.interpretation import ConstraintCandidate, Interpretation
 from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.domain.models.value_objects import DateRange
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
-from src.ports import Clock, SystemClock
+from tests.support.clock_fakes import FakeClock
 from tests.support.llm_fakes import FakeLLMGateway
-
-
-class FakeClock:
-    """Deterministic clock for tests."""
-
-    def __init__(self, current: datetime) -> None:
-        self._current = current
-        self.calls: list[datetime] = []
-
-    def now(self) -> datetime:
-        self.calls.append(self._current)
-        return self._current
-
-    def set(self, current: datetime) -> None:
-        self._current = current
-
-    def advance(self, delta: timedelta) -> None:
-        self._current = self._current + delta
 
 
 class RecordingPlanner:
@@ -125,25 +107,6 @@ def _facade(
         clock=FakeClock(datetime(2026, 7, 30, 12, tzinfo=UTC)),
     )
     return facade, actual_planner, actual_repository
-
-
-def test_fake_clock_implements_clock_port_and_advances_deterministically() -> None:
-    clock = FakeClock(datetime(2026, 7, 30, 12, tzinfo=UTC))
-
-    assert isinstance(clock, Clock)
-    assert clock.now() == datetime(2026, 7, 30, 12, tzinfo=UTC)
-    clock.advance(timedelta(minutes=15))
-    assert clock.now() == datetime(2026, 7, 30, 12, 15, tzinfo=UTC)
-    assert len(clock.calls) == 2
-
-
-def test_system_clock_implements_clock_port_and_returns_utc_time() -> None:
-    clock = SystemClock()
-
-    current = clock.now()
-
-    assert isinstance(clock, Clock)
-    assert current.tzinfo == UTC
 
 
 def test_facade_routes_ready_plan_and_preserves_legacy_plan_call() -> None:

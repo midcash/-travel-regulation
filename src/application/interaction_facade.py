@@ -43,7 +43,7 @@ from src.obs.metric import (
 )
 from src.obs.stage import observe_stage
 from src.obs.trace import trace_workflow_request
-from src.ports import Clock, SystemClock
+from src.ports.clock import Clock, SystemClock
 from src.ports.llm_gateway import LLMGateway
 from src.ports.state_repository import StateRepository
 

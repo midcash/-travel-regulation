@@ -26,7 +26,7 @@ from src.engine import loop
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
 from tests.support.fakes import FakeLLM
 from tests.support.llm_fakes import FakeLLMGateway
-from tests.unit.test_interaction_facade import FakeClock
+from tests.support.clock_fakes import FakeClock
 
 
 @dataclass(frozen=True, slots=True)

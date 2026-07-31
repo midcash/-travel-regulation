@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from src.ports.clock import Clock, FakeClock, SystemClock
+from src.ports.clock import Clock, SystemClock
 
-__all__ = ["Clock", "FakeClock", "SystemClock"]
+__all__ = ["Clock", "SystemClock"]
