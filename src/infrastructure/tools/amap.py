@@ -9,6 +9,7 @@ import math
 import re
 from collections.abc import Mapping
 from decimal import Decimal
+from time import perf_counter
 from typing import cast
 
 import httpx
@@ -18,6 +19,7 @@ from src.config import Settings
 from src.domain.models.provider import GeoProviderResult, GeoQuery, GeoResultItem
 from src.domain.models.value_objects import GeoPoint
 from src.infrastructure.tools.assembly import ProviderBindings
+from src.obs.metric import record_tool_call
 from src.ports.clock import Clock, SystemClock
 from src.ports.tool_errors import (
     ToolAuthenticationError,
@@ -109,41 +111,59 @@ class AmapGeoProvider:
         Raises:
             ToolError: 高德调用或响应不能满足类型化契约时抛出。
         """
-        timeout = _timeout_as_float(timeout_seconds)
-        params = {"key": self._api_key, "address": query.text, "output": "JSON"}
-        if query.region is not None:
-            params["city"] = query.region
-
+        started = perf_counter()
         try:
-            async with self._client.stream(
-                "GET",
-                AMAP_GEOCODE_URL,
-                params=params,
-                headers={"Accept": "application/json"},
-                timeout=timeout,
-            ) as response:
-                _raise_for_http_status(response.status_code, query)
-                body = await _read_limited_body(response, query)
-        except httpx.TimeoutException as exc:
-            raise ToolTimeoutError(
-                provider="amap",
-                operation="geo_search",
-                trace_id=query.trace_id,
-                query_id=query.query_id,
-                safe_message="provider request timed out",
-            ) from exc
-        except httpx.TransportError as exc:
-            raise ToolTransportError(
-                provider="amap",
-                operation="geo_search",
-                trace_id=query.trace_id,
-                query_id=query.query_id,
-                safe_message="provider transport failed",
-            ) from exc
+            timeout = _timeout_as_float(timeout_seconds)
+            params = {"key": self._api_key, "address": query.text, "output": "JSON"}
+            if query.region is not None:
+                params["city"] = query.region
 
-        payload = _decode_json_payload(body, query)
-        _raise_for_amap_business_status(payload, query)
-        return self._normalize_result(payload, query)
+            try:
+                async with self._client.stream(
+                    "GET",
+                    AMAP_GEOCODE_URL,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                    timeout=timeout,
+                ) as response:
+                    _raise_for_http_status(response.status_code, query)
+                    body = await _read_limited_body(response, query)
+            except httpx.TimeoutException as exc:
+                raise ToolTimeoutError(
+                    provider="amap",
+                    operation="geo_search",
+                    trace_id=query.trace_id,
+                    query_id=query.query_id,
+                    safe_message="provider request timed out",
+                ) from exc
+            except httpx.TransportError as exc:
+                raise ToolTransportError(
+                    provider="amap",
+                    operation="geo_search",
+                    trace_id=query.trace_id,
+                    query_id=query.query_id,
+                    safe_message="provider transport failed",
+                ) from exc
+
+            payload = _decode_json_payload(body, query)
+            _raise_for_amap_business_status(payload, query)
+            result = self._normalize_result(payload, query)
+        except Exception:
+            record_tool_call(
+                provider="amap",
+                operation="geo_search",
+                status="failure",
+                duration_ms=_elapsed_ms(started),
+            )
+            raise
+
+        record_tool_call(
+            provider="amap",
+            operation="geo_search",
+            status="success",
+            duration_ms=_elapsed_ms(started),
+        )
+        return result
 
     def _normalize_result(
         self, payload: Mapping[str, object], query: GeoQuery
@@ -203,6 +223,11 @@ def _timeout_as_float(timeout_seconds: Decimal) -> float:
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout_seconds must be positive and finite")
     return timeout
+
+
+def _elapsed_ms(started: float) -> int:
+    """将单次调用的单调时钟差转换为非负毫秒。"""
+    return max(0, int((perf_counter() - started) * 1000))
 
 
 async def _read_limited_body(response: httpx.Response, query: GeoQuery) -> bytes:

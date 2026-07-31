@@ -10,6 +10,7 @@ import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from time import perf_counter
 from typing import cast, overload
 
 import httpx
@@ -30,6 +31,7 @@ from src.domain.models.provider import (
 )
 from src.domain.models.value_objects import Money
 from src.infrastructure.tools.assembly import ProviderBindings
+from src.obs.metric import record_tool_call
 from src.ports.clock import Clock, SystemClock
 from src.ports.tool_errors import (
     ToolAuthenticationError,
@@ -94,13 +96,47 @@ class TuniuTravelProvider:
         timeout_seconds: Decimal,
     ) -> TransportProviderResult | StayProviderResult | PlaceProviderResult:
         """Dispatch one capability-specific query without retry or fallback."""
+        operation: str
         if isinstance(query, TransportQuery):
-            return await self._search_transport(query, timeout_seconds=timeout_seconds)
-        if isinstance(query, StayQuery):
-            return await self._search_stay(query, timeout_seconds=timeout_seconds)
-        if isinstance(query, PlaceQuery):
-            return await self._search_place(query, timeout_seconds=timeout_seconds)
-        raise TypeError("query must be a Tuniu-supported provider query")
+            operation = "transport_search"
+        elif isinstance(query, StayQuery):
+            operation = "stay_search"
+        elif isinstance(query, PlaceQuery):
+            operation = "place_search"
+        else:
+            raise TypeError("query must be a Tuniu-supported provider query")
+
+        started = perf_counter()
+        result: TransportProviderResult | StayProviderResult | PlaceProviderResult
+        try:
+            if operation == "transport_search":
+                result = await self._search_transport(
+                    cast(TransportQuery, query), timeout_seconds=timeout_seconds
+                )
+            elif operation == "stay_search":
+                result = await self._search_stay(
+                    cast(StayQuery, query), timeout_seconds=timeout_seconds
+                )
+            else:
+                result = await self._search_place(
+                    cast(PlaceQuery, query), timeout_seconds=timeout_seconds
+                )
+        except Exception:
+            record_tool_call(
+                provider="tuniu",
+                operation=operation,
+                status="failure",
+                duration_ms=_elapsed_ms(started),
+            )
+            raise
+
+        record_tool_call(
+            provider="tuniu",
+            operation=operation,
+            status="success",
+            duration_ms=_elapsed_ms(started),
+        )
+        return result
 
     async def _search_transport(
         self, query: TransportQuery, *, timeout_seconds: Decimal
@@ -300,6 +336,11 @@ def _timeout_as_float(timeout_seconds: Decimal) -> float:
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout_seconds must be positive and finite")
     return timeout
+
+
+def _elapsed_ms(started: float) -> int:
+    """将单次调用的单调时钟差转换为非负毫秒。"""
+    return max(0, int((perf_counter() - started) * 1000))
 
 
 async def _read_limited_body(

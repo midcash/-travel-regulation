@@ -64,7 +64,10 @@ LABEL_ALLOWLIST: dict[str, frozenset[str]] = {
             "internal",
         }
     ),
+    "candidate_kind": frozenset({"transport", "stay", "place", "context"}),
+    "candidate_outcome": frozenset({"accepted", "rejected"}),
     "event": frozenset({"requested", "completed", "exhausted"}),
+    "evidence_status": frozenset({"verified", "conflicting", "stale", "unavailable"}),
     "finish_reason": frozenset(
         {"stop", "length", "tool_calls", "function_call", "content_filter", "unknown"}
     ),
@@ -73,7 +76,17 @@ LABEL_ALLOWLIST: dict[str, frozenset[str]] = {
         {"answer", "clarify", "plan", "refine", "compare", "replan", "action", "unsupported"}
     ),
     "model": frozenset({"deepseek-chat", "deepseek-reasoner"}),
+    "operation": frozenset({"geo_search", "transport_search", "stay_search", "place_search"}),
     "phase": frozenset({"generation", "review", "revision"}),
+    "provider": frozenset({"amap", "tuniu"}),
+    "reject_code": frozenset(
+        {
+            "evidence_missing",
+            "evidence_not_verified",
+            "hard_constraint_violation",
+            "hard_constraint_data_missing",
+        }
+    ),
     "reason": frozenset({"l2_review"}),
     "source": frozenset({"l1", "l2"}),
     "stage": _ALLOWED_STAGES,
@@ -274,6 +287,72 @@ LEGACY_REVISION_ROUNDS = Histogram(
 )
 
 
+# ---- M3 aggregate metrics ----
+
+TOOL_CALLS_TOTAL = Counter(
+    "tool_calls_total",
+    "M3 Provider 工具调用总次数",
+    ["provider", "operation", "status"],
+)
+
+TOOL_DURATION_SECONDS = Histogram(
+    "tool_duration_seconds",
+    "M3 Provider 工具调用耗时（秒）",
+    ["provider", "operation"],
+    buckets=[0.001, 0.01, 0.1, 0.5, 1, 2, 5, 10, 30, 60],
+)
+
+EVIDENCE_ITEMS_TOTAL = Counter(
+    "evidence_items_total",
+    "Evidence 快照中的证据状态总数",
+    ["evidence_status"],
+)
+
+EVIDENCE_SNAPSHOTS_TOTAL = Counter(
+    "evidence_snapshots_total",
+    "Evidence 快照生成总次数",
+)
+
+EVIDENCE_SNAPSHOT_COVERAGE_RATIO = Histogram(
+    "evidence_snapshot_coverage_ratio",
+    "Evidence 快照事实覆盖率",
+    buckets=[0, 0.25, 0.5, 0.75, 0.9, 1],
+)
+
+EVIDENCE_SNAPSHOT_FRESHNESS_RATIO = Histogram(
+    "evidence_snapshot_freshness_ratio",
+    "Evidence 快照新鲜度比例",
+    buckets=[0, 0.25, 0.5, 0.75, 0.9, 1],
+)
+
+EVIDENCE_CONFLICTS_TOTAL = Counter(
+    "evidence_conflicts_total",
+    "Evidence 快照冲突引用总数",
+)
+
+EVIDENCE_MISSING_TOTAL = Counter(
+    "evidence_missing_total",
+    "Evidence 快照缺失事实类型总数",
+)
+
+CANDIDATE_POOL_CANDIDATES_TOTAL = Counter(
+    "candidate_pool_candidates_total",
+    "Candidate Pool 入选/拒绝候选总数",
+    ["candidate_kind", "candidate_outcome"],
+)
+
+CANDIDATE_POOL_REJECTIONS_TOTAL = Counter(
+    "candidate_pool_rejections_total",
+    "Candidate Pool 结构化拒绝原因总数",
+    ["reject_code"],
+)
+
+CANDIDATE_POOL_DEFERRED_CONSTRAINTS_TOTAL = Counter(
+    "candidate_pool_deferred_constraints_total",
+    "Candidate Pool 延后处理的硬约束总数",
+)
+
+
 def record_workflow_result(status: str) -> None:
     """Record a successful or failed workflow request."""
     safe_increment(WORKFLOW_REQUESTS_TOTAL, status=status)
@@ -346,3 +425,70 @@ def record_legacy_revision(event: str, *, round: int | None = None) -> None:
     safe_increment(LEGACY_REVISION_EVENTS_TOTAL, event=event)
     if round is not None:
         safe_observe(LEGACY_REVISION_ROUNDS, max(round, 0), event=event)
+
+
+def record_tool_call(
+    *, provider: str, operation: str, status: str, duration_ms: int
+) -> None:
+    """记录一次 Provider 调用，不携带查询、追踪或供应商原始标识。"""
+    safe_increment(TOOL_CALLS_TOTAL, provider=provider, operation=operation, status=status)
+    safe_observe(
+        TOOL_DURATION_SECONDS,
+        max(duration_ms, 0) / 1000,
+        provider=provider,
+        operation=operation,
+    )
+
+
+def record_evidence_snapshot(
+    *,
+    statuses: tuple[str, ...],
+    coverage: float,
+    freshness: float,
+    conflict_count: int,
+    missing_count: int,
+) -> None:
+    """记录 Evidence 快照质量信号，不把 fact type 或 evidence ID 作为标签。"""
+    safe_increment(EVIDENCE_SNAPSHOTS_TOTAL)
+    for status in statuses:
+        safe_increment(EVIDENCE_ITEMS_TOTAL, evidence_status=status)
+    safe_observe(EVIDENCE_SNAPSHOT_COVERAGE_RATIO, _bounded_ratio(coverage))
+    safe_observe(EVIDENCE_SNAPSHOT_FRESHNESS_RATIO, _bounded_ratio(freshness))
+    if conflict_count > 0:
+        safe_increment(EVIDENCE_CONFLICTS_TOTAL, amount=conflict_count)
+    if missing_count > 0:
+        safe_increment(EVIDENCE_MISSING_TOTAL, amount=missing_count)
+
+
+def record_candidate_pool(
+    *,
+    accepted_kinds: tuple[str, ...],
+    rejected_kinds: tuple[str, ...],
+    rejection_codes: tuple[str, ...],
+    deferred_constraint_count: int,
+) -> None:
+    """记录 Candidate Pool 聚合结果，拒绝使用候选 ID 和约束 ID。"""
+    for kind in accepted_kinds:
+        safe_increment(
+            CANDIDATE_POOL_CANDIDATES_TOTAL,
+            candidate_kind=kind,
+            candidate_outcome="accepted",
+        )
+    for kind in rejected_kinds:
+        safe_increment(
+            CANDIDATE_POOL_CANDIDATES_TOTAL,
+            candidate_kind=kind,
+            candidate_outcome="rejected",
+        )
+    for code in rejection_codes:
+        safe_increment(CANDIDATE_POOL_REJECTIONS_TOTAL, reject_code=code)
+    if deferred_constraint_count > 0:
+        safe_increment(
+            CANDIDATE_POOL_DEFERRED_CONSTRAINTS_TOTAL,
+            amount=deferred_constraint_count,
+        )
+
+
+def _bounded_ratio(value: float) -> float:
+    """将观测比例限制在 Prometheus 直方图契约范围内。"""
+    return min(max(float(value), 0.0), 1.0)

@@ -16,6 +16,7 @@ from src.domain.models.evidence import (
     EvidenceTtlPolicy,
 )
 from src.domain.models.value_objects import EvidenceId, StableId
+from src.obs.metric import record_evidence_snapshot
 from src.ports.clock import Clock
 
 
@@ -125,7 +126,7 @@ class InMemoryEvidenceRepository:
             for evidence in snapshot_items
             if evidence.evidence_id in conflict_ids
         )
-        return EvidenceSnapshot(
+        snapshot = EvidenceSnapshot(
             snapshot_id=_snapshot_id(
                 created_at=now,
                 query=query,
@@ -142,6 +143,14 @@ class InMemoryEvidenceRepository:
             conflict_refs=conflict_refs,
             missing_fact_types=missing_fact_types,
         )
+        record_evidence_snapshot(
+            statuses=tuple(item.status.value for item in snapshot.evidence_items),
+            coverage=float(snapshot.coverage),
+            freshness=float(snapshot.freshness),
+            conflict_count=len(snapshot.conflict_refs),
+            missing_count=len(snapshot.missing_fact_types),
+        )
+        return snapshot
 
     @staticmethod
     def _copy_evidence(evidence: EvidenceItem) -> EvidenceItem:
