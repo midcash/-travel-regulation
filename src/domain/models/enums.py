@@ -47,6 +47,15 @@ class EvidenceTtlCategory(str, Enum):
     EXCHANGE_RATE = "exchange_rate"
 
 
+class CandidateRejectCode(str, Enum):
+    """Candidate Pool 剪枝时使用的机器可读拒绝原因。"""
+
+    EVIDENCE_MISSING = "evidence_missing"
+    EVIDENCE_NOT_VERIFIED = "evidence_not_verified"
+    HARD_CONSTRAINT_VIOLATION = "hard_constraint_violation"
+    HARD_CONSTRAINT_DATA_MISSING = "hard_constraint_data_missing"
+
+
 class WorkflowStatus(str, Enum):
     """旅行规划工作流允许使用的状态。"""
 

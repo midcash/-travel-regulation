@@ -224,9 +224,132 @@
     },
     "Candidate": {
       "$defs": {
+        "CandidatePrice": {
+          "additionalProperties": false,
+          "description": "候选的统一总价、包含项和价格证据。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "inclusions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Inclusions",
+              "type": "array"
+            },
+            "total": {
+              "$ref": "#/$defs/Money"
+            }
+          },
+          "required": [
+            "total",
+            "evidence_refs"
+          ],
+          "title": "CandidatePrice",
+          "type": "object"
+        },
+        "CandidateProvenance": {
+          "additionalProperties": false,
+          "description": "候选的单一供应商来源，用于去重后的合并追溯。",
+          "properties": {
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "entity_id",
+            "source_ref"
+          ],
+          "title": "CandidateProvenance",
+          "type": "object"
+        },
+        "CandidateRating": {
+          "additionalProperties": false,
+          "description": "保留来源与量纲的候选评分，禁止跨来源直接比较。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "scale": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Scale"
+            },
+            "source": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "value",
+            "scale",
+            "source",
+            "evidence_refs"
+          ],
+          "title": "CandidateRating",
+          "type": "object"
+        },
         "ContextCandidate": {
           "additionalProperties": false,
-          "description": "不直接作为行程项目的环境上下文候选。",
+          "description": "只在适合进入规划时使用的环境上下文候选。",
           "properties": {
             "candidate_id": {
               "maxLength": 128,
@@ -242,13 +365,13 @@
               "type": "string"
             },
             "evidence_refs": {
-              "default": [],
               "items": {
                 "maxLength": 128,
                 "minLength": 1,
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
                 "type": "string"
               },
+              "minItems": 1,
               "title": "Evidence Refs",
               "type": "array"
             },
@@ -275,6 +398,36 @@
               "title": "Name",
               "type": "string"
             },
+            "price": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidatePrice"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "provenance": {
+              "items": {
+                "$ref": "#/$defs/CandidateProvenance"
+              },
+              "minItems": 1,
+              "title": "Provenance",
+              "type": "array"
+            },
+            "rating": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidateRating"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "scope": {
               "maxLength": 128,
               "minLength": 1,
@@ -289,11 +442,20 @@
               },
               "title": "Tags",
               "type": "array"
+            },
+            "timezone": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Timezone",
+              "type": "string"
             }
           },
           "required": [
             "candidate_id",
             "name",
+            "evidence_refs",
+            "provenance",
+            "timezone",
             "context_type",
             "scope"
           ],
@@ -386,13 +548,13 @@
               "type": "string"
             },
             "evidence_refs": {
-              "default": [],
               "items": {
                 "maxLength": 128,
                 "minLength": 1,
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
                 "type": "string"
               },
+              "minItems": 1,
               "title": "Evidence Refs",
               "type": "array"
             },
@@ -419,6 +581,36 @@
               "title": "Name",
               "type": "string"
             },
+            "price": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidatePrice"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "provenance": {
+              "items": {
+                "$ref": "#/$defs/CandidateProvenance"
+              },
+              "minItems": 1,
+              "title": "Provenance",
+              "type": "array"
+            },
+            "rating": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidateRating"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "tags": {
               "default": [],
               "items": {
@@ -426,11 +618,20 @@
               },
               "title": "Tags",
               "type": "array"
+            },
+            "timezone": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Timezone",
+              "type": "string"
             }
           },
           "required": [
             "candidate_id",
             "name",
+            "evidence_refs",
+            "provenance",
+            "timezone",
             "category"
           ],
           "title": "PlaceCandidate",
@@ -480,13 +681,13 @@
               "title": "Check Out"
             },
             "evidence_refs": {
-              "default": [],
               "items": {
                 "maxLength": 128,
                 "minLength": 1,
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
                 "type": "string"
               },
+              "minItems": 1,
               "title": "Evidence Refs",
               "type": "array"
             },
@@ -513,6 +714,36 @@
               "title": "Name",
               "type": "string"
             },
+            "price": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidatePrice"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "provenance": {
+              "items": {
+                "$ref": "#/$defs/CandidateProvenance"
+              },
+              "minItems": 1,
+              "title": "Provenance",
+              "type": "array"
+            },
+            "rating": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidateRating"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "tags": {
               "default": [],
               "items": {
@@ -521,21 +752,19 @@
               "title": "Tags",
               "type": "array"
             },
-            "total_price": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Money"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null
+            "timezone": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Timezone",
+              "type": "string"
             }
           },
           "required": [
             "candidate_id",
             "name",
+            "evidence_refs",
+            "provenance",
+            "timezone",
             "area"
           ],
           "title": "StayCandidate",
@@ -585,13 +814,13 @@
               "type": "string"
             },
             "evidence_refs": {
-              "default": [],
               "items": {
                 "maxLength": 128,
                 "minLength": 1,
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
                 "type": "string"
               },
+              "minItems": 1,
               "title": "Evidence Refs",
               "type": "array"
             },
@@ -630,6 +859,36 @@
               "title": "Origin",
               "type": "string"
             },
+            "price": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidatePrice"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "provenance": {
+              "items": {
+                "$ref": "#/$defs/CandidateProvenance"
+              },
+              "minItems": 1,
+              "title": "Provenance",
+              "type": "array"
+            },
+            "rating": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CandidateRating"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "tags": {
               "default": [],
               "items": {
@@ -637,11 +896,20 @@
               },
               "title": "Tags",
               "type": "array"
+            },
+            "timezone": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Timezone",
+              "type": "string"
             }
           },
           "required": [
             "candidate_id",
             "name",
+            "evidence_refs",
+            "provenance",
+            "timezone",
             "mode",
             "origin",
             "destination"
@@ -2191,6 +2459,129 @@
     },
     "ContextCandidate": {
       "$defs": {
+        "CandidatePrice": {
+          "additionalProperties": false,
+          "description": "候选的统一总价、包含项和价格证据。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "inclusions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Inclusions",
+              "type": "array"
+            },
+            "total": {
+              "$ref": "#/$defs/Money"
+            }
+          },
+          "required": [
+            "total",
+            "evidence_refs"
+          ],
+          "title": "CandidatePrice",
+          "type": "object"
+        },
+        "CandidateProvenance": {
+          "additionalProperties": false,
+          "description": "候选的单一供应商来源，用于去重后的合并追溯。",
+          "properties": {
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "entity_id",
+            "source_ref"
+          ],
+          "title": "CandidateProvenance",
+          "type": "object"
+        },
+        "CandidateRating": {
+          "additionalProperties": false,
+          "description": "保留来源与量纲的候选评分，禁止跨来源直接比较。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "scale": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Scale"
+            },
+            "source": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "value",
+            "scale",
+            "source",
+            "evidence_refs"
+          ],
+          "title": "CandidateRating",
+          "type": "object"
+        },
         "GeoPoint": {
           "additionalProperties": false,
           "description": "WGS84 地理坐标。",
@@ -2214,10 +2605,41 @@
           ],
           "title": "GeoPoint",
           "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
+          "type": "object"
         }
       },
       "additionalProperties": false,
-      "description": "不直接作为行程项目的环境上下文候选。",
+      "description": "只在适合进入规划时使用的环境上下文候选。",
       "properties": {
         "candidate_id": {
           "maxLength": 128,
@@ -2233,13 +2655,13 @@
           "type": "string"
         },
         "evidence_refs": {
-          "default": [],
           "items": {
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "type": "string"
           },
+          "minItems": 1,
           "title": "Evidence Refs",
           "type": "array"
         },
@@ -2266,6 +2688,36 @@
           "title": "Name",
           "type": "string"
         },
+        "price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidatePrice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/CandidateProvenance"
+          },
+          "minItems": 1,
+          "title": "Provenance",
+          "type": "array"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidateRating"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "scope": {
           "maxLength": 128,
           "minLength": 1,
@@ -2280,11 +2732,20 @@
           },
           "title": "Tags",
           "type": "array"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
         }
       },
       "required": [
         "candidate_id",
         "name",
+        "evidence_refs",
+        "provenance",
+        "timezone",
         "context_type",
         "scope"
       ],
@@ -3637,6 +4098,129 @@
     },
     "PlaceCandidate": {
       "$defs": {
+        "CandidatePrice": {
+          "additionalProperties": false,
+          "description": "候选的统一总价、包含项和价格证据。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "inclusions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Inclusions",
+              "type": "array"
+            },
+            "total": {
+              "$ref": "#/$defs/Money"
+            }
+          },
+          "required": [
+            "total",
+            "evidence_refs"
+          ],
+          "title": "CandidatePrice",
+          "type": "object"
+        },
+        "CandidateProvenance": {
+          "additionalProperties": false,
+          "description": "候选的单一供应商来源，用于去重后的合并追溯。",
+          "properties": {
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "entity_id",
+            "source_ref"
+          ],
+          "title": "CandidateProvenance",
+          "type": "object"
+        },
+        "CandidateRating": {
+          "additionalProperties": false,
+          "description": "保留来源与量纲的候选评分，禁止跨来源直接比较。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "scale": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Scale"
+            },
+            "source": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "value",
+            "scale",
+            "source",
+            "evidence_refs"
+          ],
+          "title": "CandidateRating",
+          "type": "object"
+        },
         "GeoPoint": {
           "additionalProperties": false,
           "description": "WGS84 地理坐标。",
@@ -3659,6 +4243,37 @@
             "longitude"
           ],
           "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
           "type": "object"
         }
       },
@@ -3692,13 +4307,13 @@
           "type": "string"
         },
         "evidence_refs": {
-          "default": [],
           "items": {
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "type": "string"
           },
+          "minItems": 1,
           "title": "Evidence Refs",
           "type": "array"
         },
@@ -3725,6 +4340,36 @@
           "title": "Name",
           "type": "string"
         },
+        "price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidatePrice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/CandidateProvenance"
+          },
+          "minItems": 1,
+          "title": "Provenance",
+          "type": "array"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidateRating"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "tags": {
           "default": [],
           "items": {
@@ -3732,11 +4377,20 @@
           },
           "title": "Tags",
           "type": "array"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
         }
       },
       "required": [
         "candidate_id",
         "name",
+        "evidence_refs",
+        "provenance",
+        "timezone",
         "category"
       ],
       "title": "PlaceCandidate",
@@ -3982,6 +4636,129 @@
     },
     "StayCandidate": {
       "$defs": {
+        "CandidatePrice": {
+          "additionalProperties": false,
+          "description": "候选的统一总价、包含项和价格证据。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "inclusions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Inclusions",
+              "type": "array"
+            },
+            "total": {
+              "$ref": "#/$defs/Money"
+            }
+          },
+          "required": [
+            "total",
+            "evidence_refs"
+          ],
+          "title": "CandidatePrice",
+          "type": "object"
+        },
+        "CandidateProvenance": {
+          "additionalProperties": false,
+          "description": "候选的单一供应商来源，用于去重后的合并追溯。",
+          "properties": {
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "entity_id",
+            "source_ref"
+          ],
+          "title": "CandidateProvenance",
+          "type": "object"
+        },
+        "CandidateRating": {
+          "additionalProperties": false,
+          "description": "保留来源与量纲的候选评分，禁止跨来源直接比较。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "scale": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Scale"
+            },
+            "source": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "value",
+            "scale",
+            "source",
+            "evidence_refs"
+          ],
+          "title": "CandidateRating",
+          "type": "object"
+        },
         "GeoPoint": {
           "additionalProperties": false,
           "description": "WGS84 地理坐标。",
@@ -4081,13 +4858,13 @@
           "title": "Check Out"
         },
         "evidence_refs": {
-          "default": [],
           "items": {
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "type": "string"
           },
+          "minItems": 1,
           "title": "Evidence Refs",
           "type": "array"
         },
@@ -4114,6 +4891,36 @@
           "title": "Name",
           "type": "string"
         },
+        "price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidatePrice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/CandidateProvenance"
+          },
+          "minItems": 1,
+          "title": "Provenance",
+          "type": "array"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidateRating"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "tags": {
           "default": [],
           "items": {
@@ -4122,21 +4929,19 @@
           "title": "Tags",
           "type": "array"
         },
-        "total_price": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Money"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
+        "timezone": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
         }
       },
       "required": [
         "candidate_id",
         "name",
+        "evidence_refs",
+        "provenance",
+        "timezone",
         "area"
       ],
       "title": "StayCandidate",
@@ -4144,6 +4949,129 @@
     },
     "TransportCandidate": {
       "$defs": {
+        "CandidatePrice": {
+          "additionalProperties": false,
+          "description": "候选的统一总价、包含项和价格证据。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "inclusions": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Inclusions",
+              "type": "array"
+            },
+            "total": {
+              "$ref": "#/$defs/Money"
+            }
+          },
+          "required": [
+            "total",
+            "evidence_refs"
+          ],
+          "title": "CandidatePrice",
+          "type": "object"
+        },
+        "CandidateProvenance": {
+          "additionalProperties": false,
+          "description": "候选的单一供应商来源，用于去重后的合并追溯。",
+          "properties": {
+            "entity_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Entity Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "source_ref": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Source Ref",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "entity_id",
+            "source_ref"
+          ],
+          "title": "CandidateProvenance",
+          "type": "object"
+        },
+        "CandidateRating": {
+          "additionalProperties": false,
+          "description": "保留来源与量纲的候选评分，禁止跨来源直接比较。",
+          "properties": {
+            "evidence_refs": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "Evidence Refs",
+              "type": "array"
+            },
+            "scale": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Scale"
+            },
+            "source": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Value"
+            }
+          },
+          "required": [
+            "value",
+            "scale",
+            "source",
+            "evidence_refs"
+          ],
+          "title": "CandidateRating",
+          "type": "object"
+        },
         "GeoPoint": {
           "additionalProperties": false,
           "description": "WGS84 地理坐标。",
@@ -4166,6 +5094,37 @@
             "longitude"
           ],
           "title": "GeoPoint",
+          "type": "object"
+        },
+        "Money": {
+          "additionalProperties": false,
+          "description": "使用 Decimal 表示的非负金额。",
+          "properties": {
+            "amount": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Amount"
+            },
+            "currency": {
+              "maxLength": 3,
+              "minLength": 3,
+              "title": "Currency",
+              "type": "string"
+            }
+          },
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "title": "Money",
           "type": "object"
         }
       },
@@ -4212,13 +5171,13 @@
           "type": "string"
         },
         "evidence_refs": {
-          "default": [],
           "items": {
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
             "type": "string"
           },
+          "minItems": 1,
           "title": "Evidence Refs",
           "type": "array"
         },
@@ -4257,6 +5216,36 @@
           "title": "Origin",
           "type": "string"
         },
+        "price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidatePrice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "provenance": {
+          "items": {
+            "$ref": "#/$defs/CandidateProvenance"
+          },
+          "minItems": 1,
+          "title": "Provenance",
+          "type": "array"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidateRating"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "tags": {
           "default": [],
           "items": {
@@ -4264,11 +5253,20 @@
           },
           "title": "Tags",
           "type": "array"
+        },
+        "timezone": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
         }
       },
       "required": [
         "candidate_id",
         "name",
+        "evidence_refs",
+        "provenance",
+        "timezone",
         "mode",
         "origin",
         "destination"
