@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -87,6 +87,7 @@ class GeoResultItem(BaseModel):
     location: GeoPoint
     address: str | None = Field(default=None, min_length=1, max_length=512)
     confidence: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    external_text_trust: Literal["untrusted"] = "untrusted"
 
 
 class GeoProviderResult(ProviderResultBase):
@@ -190,7 +191,11 @@ class StayResultItem(BaseModel):
         for value in (self.check_in, self.check_out):
             if value is not None and value.tzinfo is None:
                 raise ValueError("stay result times must be timezone-aware")
-        if self.check_in is not None and self.check_out is not None and self.check_out <= self.check_in:
+        if (
+            self.check_in is not None
+            and self.check_out is not None
+            and self.check_out <= self.check_in
+        ):
             raise ValueError("check_out must be later than check_in")
         return self
 
@@ -271,7 +276,11 @@ class ContextResultItem(BaseModel):
         for value in (self.valid_from, self.valid_until):
             if value is not None and value.tzinfo is None:
                 raise ValueError("context validity times must be timezone-aware")
-        if self.valid_from is not None and self.valid_until is not None and self.valid_until < self.valid_from:
+        if (
+            self.valid_from is not None
+            and self.valid_until is not None
+            and self.valid_until < self.valid_from
+        ):
             raise ValueError("valid_until must not be earlier than valid_from")
         return self
 
