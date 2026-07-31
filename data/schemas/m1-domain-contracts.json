@@ -954,7 +954,7 @@
         },
         "EvidenceItem": {
           "additionalProperties": false,
-          "description": "可被候选和方案引用的单条事实。",
+          "description": "可被候选和方案引用的单条已注册事实。",
           "properties": {
             "confidence": {
               "anyOf": [
@@ -1004,6 +1004,41 @@
             "observed_at": {
               "format": "date-time",
               "title": "Observed At",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "query_fingerprint": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Query Fingerprint",
+              "type": "string"
+            },
+            "raw_payload_ref": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Raw Payload Ref"
+            },
+            "schema_version": {
+              "default": "m3.evidence.v1",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Schema Version",
               "type": "string"
             },
             "source": {
@@ -1081,15 +1116,17 @@
             }
           },
           "required": [
-            "evidence_id",
             "entity_id",
             "fact_type",
             "value",
+            "provider",
             "source",
             "source_ref",
             "observed_at",
             "status",
-            "confidence"
+            "confidence",
+            "query_fingerprint",
+            "evidence_id"
           ],
           "title": "EvidenceItem",
           "type": "object"
@@ -2343,7 +2380,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "可被候选和方案引用的单条事实。",
+      "description": "可被候选和方案引用的单条已注册事实。",
       "properties": {
         "confidence": {
           "anyOf": [
@@ -2393,6 +2430,41 @@
         "observed_at": {
           "format": "date-time",
           "title": "Observed At",
+          "type": "string"
+        },
+        "provider": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "query_fingerprint": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "title": "Query Fingerprint",
+          "type": "string"
+        },
+        "raw_payload_ref": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Payload Ref"
+        },
+        "schema_version": {
+          "default": "m3.evidence.v1",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Schema Version",
           "type": "string"
         },
         "source": {
@@ -2470,15 +2542,17 @@
         }
       },
       "required": [
-        "evidence_id",
         "entity_id",
         "fact_type",
         "value",
+        "provider",
         "source",
         "source_ref",
         "observed_at",
         "status",
-        "confidence"
+        "confidence",
+        "query_fingerprint",
+        "evidence_id"
       ],
       "title": "EvidenceItem",
       "type": "object"
@@ -2509,7 +2583,7 @@
         },
         "EvidenceItem": {
           "additionalProperties": false,
-          "description": "可被候选和方案引用的单条事实。",
+          "description": "可被候选和方案引用的单条已注册事实。",
           "properties": {
             "confidence": {
               "anyOf": [
@@ -2559,6 +2633,41 @@
             "observed_at": {
               "format": "date-time",
               "title": "Observed At",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "query_fingerprint": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Query Fingerprint",
+              "type": "string"
+            },
+            "raw_payload_ref": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Raw Payload Ref"
+            },
+            "schema_version": {
+              "default": "m3.evidence.v1",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Schema Version",
               "type": "string"
             },
             "source": {
@@ -2636,15 +2745,17 @@
             }
           },
           "required": [
-            "evidence_id",
             "entity_id",
             "fact_type",
             "value",
+            "provider",
             "source",
             "source_ref",
             "observed_at",
             "status",
-            "confidence"
+            "confidence",
+            "query_fingerprint",
+            "evidence_id"
           ],
           "title": "EvidenceItem",
           "type": "object"
@@ -4714,7 +4825,7 @@
         },
         "EvidenceItem": {
           "additionalProperties": false,
-          "description": "可被候选和方案引用的单条事实。",
+          "description": "可被候选和方案引用的单条已注册事实。",
           "properties": {
             "confidence": {
               "anyOf": [
@@ -4764,6 +4875,41 @@
             "observed_at": {
               "format": "date-time",
               "title": "Observed At",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Provider",
+              "type": "string"
+            },
+            "query_fingerprint": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+              "title": "Query Fingerprint",
+              "type": "string"
+            },
+            "raw_payload_ref": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Raw Payload Ref"
+            },
+            "schema_version": {
+              "default": "m3.evidence.v1",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Schema Version",
               "type": "string"
             },
             "source": {
@@ -4841,15 +4987,17 @@
             }
           },
           "required": [
-            "evidence_id",
             "entity_id",
             "fact_type",
             "value",
+            "provider",
             "source",
             "source_ref",
             "observed_at",
             "status",
-            "confidence"
+            "confidence",
+            "query_fingerprint",
+            "evidence_id"
           ],
           "title": "EvidenceItem",
           "type": "object"

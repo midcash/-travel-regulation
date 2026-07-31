@@ -24,7 +24,12 @@ from src.domain.models.enums import (
     IssueSeverity,
     WorkflowStatus,
 )
-from src.domain.models.evidence import EvidenceItem, EvidenceSnapshot, EvidenceValue
+from src.domain.models.evidence import (
+    EvidenceItem,
+    EvidenceRegistration,
+    EvidenceSnapshot,
+    EvidenceValue,
+)
 from src.domain.models.itinerary import (
     BudgetBreakdown,
     BudgetLine,
@@ -80,6 +85,7 @@ __all__ = [
     "ErrorCategory",
     "EvidenceId",
     "EvidenceItem",
+    "EvidenceRegistration",
     "EvidenceSnapshot",
     "EvidenceStatus",
     "EvidenceValue",

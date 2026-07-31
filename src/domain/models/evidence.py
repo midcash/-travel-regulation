@@ -41,22 +41,36 @@ EvidenceValue: TypeAlias = (
 )
 
 
-class EvidenceItem(BaseModel):
-    """可被候选和方案引用的单条事实。"""
+_EVIDENCE_SCHEMA_VERSION = "m3.evidence.v1"
+
+
+class _EvidenceRegistrationFields(BaseModel):
+    """证据注册与已注册证据共享的不可变字段。"""
 
     model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
 
-    evidence_id: EvidenceId
     entity_id: StableId
     fact_type: str = Field(min_length=1, max_length=128)
     value: Annotated[EvidenceValue, Field(description="已标准化的事实值")]
+    provider: str = Field(min_length=1, max_length=64)
     source: str = Field(min_length=1, max_length=128)
     source_ref: str = Field(min_length=1, max_length=2048)
     observed_at: datetime
     valid_until: datetime | None = None
     status: EvidenceStatus
     confidence: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    raw_payload_ref: StableId | None = None
+    query_fingerprint: StableId
+    schema_version: str = Field(default=_EVIDENCE_SCHEMA_VERSION, min_length=1, max_length=64)
     constraint_refs: tuple[ConstraintId, ...] = ()
+
+    @field_validator("observed_at", "valid_until")
+    @classmethod
+    def validate_timezone(cls, value: datetime | None) -> datetime | None:
+        """要求动态证据时间携带时区。"""
+        if value is not None and value.tzinfo is None:
+            raise ValueError("evidence times must be timezone-aware")
+        return value
 
     @field_validator("constraint_refs")
     @classmethod
@@ -72,6 +86,20 @@ class EvidenceItem(BaseModel):
         if self.valid_until is not None and self.valid_until < self.observed_at:
             raise ValueError("valid_until must not be earlier than observed_at")
         return self
+
+
+class EvidenceRegistration(_EvidenceRegistrationFields):
+    """交由 EvidenceRepository 注册的、尚未分配 ID 的事实。"""
+
+    def to_item(self, evidence_id: EvidenceId) -> EvidenceItem:
+        """根据仓储分配的稳定 ID 构造已注册证据。"""
+        return EvidenceItem(evidence_id=evidence_id, **self.model_dump())
+
+
+class EvidenceItem(_EvidenceRegistrationFields):
+    """可被候选和方案引用的单条已注册事实。"""
+
+    evidence_id: EvidenceId
 
 
 class EvidenceSnapshot(BaseModel):
