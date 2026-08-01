@@ -7,7 +7,9 @@ param(
 
     [switch]$ValidateOnly,
 
-    [switch]$LiveSmoke
+    [switch]$LiveSmoke,
+
+    [switch]$LiveTool
 )
 
 Set-StrictMode -Version Latest
@@ -27,6 +29,12 @@ $allowedVariables = [System.Collections.Generic.HashSet[string]]::new(
     'DEEPSEEK_MAX_TOKENS'
     'AMAP_API_KEY'
     'TUNIU_API_KEY'
+    'AMAP_GEOCODE_URL'
+    'TUNIU_HOTEL_URL'
+    'TUNIU_FLIGHT_URL'
+    'TUNIU_TICKET_URL'
+    'AMAP_LIVE_EMPTY_TEXT'
+    'TUNIU_LIVE_EMPTY_DESTINATION'
     'STRICT_MODE'
     'RETRY_COUNT'
     'CACHE_READS'
@@ -112,22 +120,36 @@ foreach ($line in Get-Content -LiteralPath $EnvFile -Encoding utf8) {
     $loadedNames.Add($name)
 }
 
-$deepseekKey = [Environment]::GetEnvironmentVariable(
-    'DEEPSEEK_API_KEY',
-    'Process'
-)
-if ([string]::IsNullOrWhiteSpace($deepseekKey)) {
-    throw 'DEEPSEEK_API_KEY 未进入进程环境，拒绝启动。'
-}
-if (Test-PlaceholderValue -Value $deepseekKey) {
-    throw 'DEEPSEEK_API_KEY 仍是占位符，拒绝启动。'
+$deepseekKey = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY', 'Process')
+if (-not $LiveTool) {
+    if ([string]::IsNullOrWhiteSpace($deepseekKey)) {
+        throw 'DEEPSEEK_API_KEY 未进入进程环境，拒绝启动。'
+    }
+    if (Test-PlaceholderValue -Value $deepseekKey) {
+        throw 'DEEPSEEK_API_KEY 仍是占位符，拒绝启动。'
+    }
 }
 
-if ($ValidateOnly -and $LiveSmoke) {
-    throw '-ValidateOnly 与 -LiveSmoke 不能同时使用。'
+if ($ValidateOnly -and ($LiveSmoke -or $LiveTool)) {
+    throw '-ValidateOnly 不能与 Live 模式同时使用。'
 }
-if ($LiveSmoke -and $MainArgs.Count -gt 0) {
-    throw '-LiveSmoke 不接受主流程参数。'
+if ($LiveSmoke -and $LiveTool) {
+    throw '-LiveSmoke 与 -LiveTool 不能同时使用。'
+}
+if (($LiveSmoke -or $LiveTool) -and $MainArgs.Count -gt 0) {
+    throw 'Live 模式不接受主流程参数。'
+}
+
+if ($LiveTool) {
+    foreach ($toolName in @('AMAP_API_KEY', 'TUNIU_API_KEY')) {
+        $toolKey = [Environment]::GetEnvironmentVariable($toolName, 'Process')
+        if ([string]::IsNullOrWhiteSpace($toolKey)) {
+            throw "$toolName 未进入进程环境，拒绝启动。"
+        }
+        if (Test-PlaceholderValue -Value $toolKey) {
+            throw "$toolName 仍是占位符，拒绝启动。"
+        }
+    }
 }
 
 $loadedDisplay = ($loadedNames | Sort-Object -Unique) -join ', '
@@ -154,6 +176,17 @@ if ($LiveSmoke) {
     Push-Location $projectRoot
     try {
         & $pythonPath -m pytest -m 'slow and live_llm'
+        exit $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+}
+if ($LiveTool) {
+    Write-Host '已启用 Live Tool 模式：将在当前进程环境中运行真实高德/途牛合同测试。'
+    Push-Location $projectRoot
+    try {
+        & $pythonPath -m pytest -m 'slow and live_tool'
         exit $LASTEXITCODE
     }
     finally {

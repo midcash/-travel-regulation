@@ -15,11 +15,12 @@ from typing import cast
 import httpx
 from pydantic import ValidationError
 
-from src.config import Settings
+from src.config import DEFAULT_AMAP_GEOCODE_URL, Settings
 from src.domain.models.provider import GeoProviderResult, GeoQuery, GeoResultItem
 from src.domain.models.value_objects import GeoPoint
 from src.infrastructure.tools.assembly import ProviderBindings
 from src.obs.metric import record_tool_call
+from src.obs.trace import trace_named_span
 from src.ports.clock import Clock, SystemClock
 from src.ports.tool_errors import (
     ToolAuthenticationError,
@@ -32,7 +33,8 @@ from src.ports.tool_errors import (
     ToolTransportError,
 )
 
-AMAP_GEOCODE_URL = "https://restapi.amap.com/v3/geocode/geo"
+# Backward-compatible public alias; runtime calls use Settings.amap_geocode_url.
+AMAP_GEOCODE_URL = DEFAULT_AMAP_GEOCODE_URL
 MAX_RESPONSE_BYTES = 1_048_576
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1F\x7F]")
@@ -111,59 +113,73 @@ class AmapGeoProvider:
         Raises:
             ToolError: 高德调用或响应不能满足类型化契约时抛出。
         """
-        started = perf_counter()
-        try:
-            timeout = _timeout_as_float(timeout_seconds)
-            params = {"key": self._api_key, "address": query.text, "output": "JSON"}
-            if query.region is not None:
-                params["city"] = query.region
-
+        with trace_named_span(
+            "tool.amap.geo_search",
+            attributes={
+                "tool.provider": "amap",
+                "tool.operation": "geo_search",
+                "tool.status": "started",
+            },
+        ) as span:
+            started = perf_counter()
             try:
-                async with self._client.stream(
-                    "GET",
-                    AMAP_GEOCODE_URL,
-                    params=params,
-                    headers={"Accept": "application/json"},
-                    timeout=timeout,
-                ) as response:
-                    _raise_for_http_status(response.status_code, query)
-                    body = await _read_limited_body(response, query)
-            except httpx.TimeoutException as exc:
-                raise ToolTimeoutError(
-                    provider="amap",
-                    operation="geo_search",
-                    trace_id=query.trace_id,
-                    query_id=query.query_id,
-                    safe_message="provider request timed out",
-                ) from exc
-            except httpx.TransportError as exc:
-                raise ToolTransportError(
-                    provider="amap",
-                    operation="geo_search",
-                    trace_id=query.trace_id,
-                    query_id=query.query_id,
-                    safe_message="provider transport failed",
-                ) from exc
+                timeout = _timeout_as_float(timeout_seconds)
+                params = {"key": self._api_key, "address": query.text, "output": "JSON"}
+                if query.region is not None:
+                    params["city"] = query.region
 
-            payload = _decode_json_payload(body, query)
-            _raise_for_amap_business_status(payload, query)
-            result = self._normalize_result(payload, query)
-        except Exception:
+                try:
+                    async with self._client.stream(
+                        "GET",
+                        self._settings.amap_geocode_url,
+                        params=params,
+                        headers={"Accept": "application/json"},
+                        timeout=timeout,
+                    ) as response:
+                        _raise_for_http_status(response.status_code, query)
+                        body = await _read_limited_body(response, query)
+                except httpx.TimeoutException as exc:
+                    raise ToolTimeoutError(
+                        provider="amap",
+                        operation="geo_search",
+                        trace_id=query.trace_id,
+                        query_id=query.query_id,
+                        safe_message="provider request timed out",
+                    ) from exc
+                except httpx.TransportError as exc:
+                    raise ToolTransportError(
+                        provider="amap",
+                        operation="geo_search",
+                        trace_id=query.trace_id,
+                        query_id=query.query_id,
+                        safe_message="provider transport failed",
+                    ) from exc
+
+                payload = _decode_json_payload(body, query)
+                _raise_for_amap_business_status(payload, query)
+                result = self._normalize_result(payload, query)
+            except Exception:
+                duration_ms = _elapsed_ms(started)
+                span.set_attribute("tool.status", "failure")
+                span.set_attribute("tool.duration_ms", duration_ms)
+                record_tool_call(
+                    provider="amap",
+                    operation="geo_search",
+                    status="failure",
+                    duration_ms=duration_ms,
+                )
+                raise
+
+            duration_ms = _elapsed_ms(started)
+            span.set_attribute("tool.status", "success")
+            span.set_attribute("tool.duration_ms", duration_ms)
             record_tool_call(
                 provider="amap",
                 operation="geo_search",
-                status="failure",
-                duration_ms=_elapsed_ms(started),
+                status="success",
+                duration_ms=duration_ms,
             )
-            raise
-
-        record_tool_call(
-            provider="amap",
-            operation="geo_search",
-            status="success",
-            duration_ms=_elapsed_ms(started),
-        )
-        return result
+            return result
 
     def _normalize_result(
         self, payload: Mapping[str, object], query: GeoQuery
@@ -186,7 +202,7 @@ class AmapGeoProvider:
                 query_id=query.query_id,
                 provider="amap",
                 observed_at=self._clock.now(),
-                source_ref=AMAP_GEOCODE_URL,
+                source_ref=self._settings.amap_geocode_url,
                 items=items,
             )
         except (TypeError, ValueError, ValidationError) as exc:

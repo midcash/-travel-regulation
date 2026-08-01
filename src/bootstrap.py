@@ -10,11 +10,13 @@ from collections.abc import Mapping
 import httpx
 
 from src.config import Settings, load_settings
+from src.infrastructure.tools.amap import create_amap_bindings
 from src.infrastructure.tools.assembly import (
     AdapterFactory,
     ToolProviderAssembly,
     assemble_tool_providers,
 )
+from src.infrastructure.tools.tuniu import create_tuniu_bindings
 
 
 def bootstrap_settings(environ: Mapping[str, str] | None = None) -> Settings:
@@ -57,9 +59,11 @@ def bootstrap_tool_providers(
         ToolConfigurationError: If an enabled tool cannot be assembled.
     """
     settings = bootstrap_settings(environ)
+    resolved_amap_factory = amap_factory or create_amap_bindings
+    resolved_tuniu_factory = tuniu_factory or create_tuniu_bindings
     return assemble_tool_providers(
         settings,
-        amap_factory=amap_factory,
-        tuniu_factory=tuniu_factory,
+        amap_factory=resolved_amap_factory,
+        tuniu_factory=resolved_tuniu_factory,
         http_client=http_client,
     )

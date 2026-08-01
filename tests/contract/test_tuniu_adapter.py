@@ -9,6 +9,9 @@ from typing import Any
 
 import httpx
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from src.config import Settings
 from src.domain.models.provider import (
@@ -28,6 +31,7 @@ from src.infrastructure.tools.tuniu import (
     TuniuTravelProvider,
     create_tuniu_bindings,
 )
+from src.obs import trace as trace_module
 from src.ports.tool_errors import (
     ToolAuthenticationError,
     ToolBusinessError,
@@ -40,6 +44,7 @@ from src.ports.tool_errors import (
 )
 from src.ports.tool_provider import PlaceProvider, StayProvider, TransportProvider
 from tests.support.clock_fakes import FakeClock
+from tests.support.live_tool_contract import assert_provider_result_contract
 
 pytestmark = pytest.mark.contract
 
@@ -146,11 +151,15 @@ def _mcp_payload(payload: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _provider(handler: httpx.MockTransport) -> tuple[TuniuTravelProvider, FakeClock]:
+def _provider(
+    handler: httpx.MockTransport,
+    *,
+    settings: Settings | None = None,
+) -> tuple[TuniuTravelProvider, FakeClock]:
     clock = FakeClock(_OBSERVED_AT)
     client = httpx.AsyncClient(transport=handler)
-    settings = Settings(tuniu_api_key=_TEST_KEY, tuniu_enabled=True)
-    return TuniuTravelProvider(settings, client, clock), clock
+    resolved_settings = settings or Settings(tuniu_api_key=_TEST_KEY, tuniu_enabled=True)
+    return TuniuTravelProvider(resolved_settings, client, clock), clock
 
 
 def _run(coroutine: Any) -> Any:
@@ -185,6 +194,27 @@ def test_tuniu_adapter_normalizes_all_supported_capabilities_once() -> None:
     assert isinstance(transport, TransportProviderResult)
     assert isinstance(stay, StayProviderResult)
     assert isinstance(place, PlaceProviderResult)
+    assert_provider_result_contract(
+        transport,
+        provider="tuniu",
+        operation="transport_search",
+        source_ref=TUNIU_FLIGHT_URL,
+        api_key=_TEST_KEY,
+    )
+    assert_provider_result_contract(
+        stay,
+        provider="tuniu",
+        operation="stay_search",
+        source_ref=TUNIU_HOTEL_URL,
+        api_key=_TEST_KEY,
+    )
+    assert_provider_result_contract(
+        place,
+        provider="tuniu",
+        operation="place_search",
+        source_ref=TUNIU_TICKET_URL,
+        api_key=_TEST_KEY,
+    )
     assert transport.provider == "tuniu"
     assert transport.operation == "transport_search"
     assert transport.observed_at == _OBSERVED_AT
@@ -241,6 +271,39 @@ def test_tuniu_adapter_normalizes_all_supported_capabilities_once() -> None:
         "name": "query_cheapest_tickets",
         "arguments": {"scenic_name": "Summer Palace"},
     }
+
+
+def test_tuniu_adapter_uses_settings_endpoint_and_emits_tool_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(trace_module, "_tracer", provider.get_tracer("m3-tuniu-test"))
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=_mcp_payload(_hotel_payload()))
+
+    custom_url = "https://mock.example/tuniu-hotel"
+    adapter, _ = _provider(
+        httpx.MockTransport(handler),
+        settings=Settings(
+            tuniu_api_key=_TEST_KEY,
+            tuniu_enabled=True,
+            tuniu_hotel_url=custom_url,
+        ),
+    )
+    _run(adapter.search(_stay_query(), timeout_seconds=Decimal("1")))
+
+    span = exporter.get_finished_spans()[0]
+    assert str(requests[0].url) == custom_url
+    assert span.name == "tool.tuniu.stay_search"
+    assert span.attributes["tool.provider"] == "tuniu"
+    assert span.attributes["tool.operation"] == "stay_search"
+    assert span.attributes["tool.status"] == "success"
+    assert span.attributes["tool.duration_ms"] >= 0
 
 
 def test_tuniu_adapter_factory_exposes_only_supported_capabilities() -> None:

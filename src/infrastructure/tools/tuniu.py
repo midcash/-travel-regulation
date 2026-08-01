@@ -16,7 +16,12 @@ from typing import cast, overload
 import httpx
 from pydantic import ValidationError
 
-from src.config import Settings
+from src.config import (
+    DEFAULT_TUNIU_FLIGHT_URL,
+    DEFAULT_TUNIU_HOTEL_URL,
+    DEFAULT_TUNIU_TICKET_URL,
+    Settings,
+)
 from src.domain.models.provider import (
     PlaceProviderResult,
     PlaceQuery,
@@ -32,6 +37,7 @@ from src.domain.models.provider import (
 from src.domain.models.value_objects import Money
 from src.infrastructure.tools.assembly import ProviderBindings
 from src.obs.metric import record_tool_call
+from src.obs.trace import trace_named_span
 from src.ports.clock import Clock, SystemClock
 from src.ports.tool_errors import (
     ToolAuthenticationError,
@@ -44,9 +50,10 @@ from src.ports.tool_errors import (
     ToolTransportError,
 )
 
-TUNIU_HOTEL_URL = "https://openapi.tuniu.cn/mcp/hotel"
-TUNIU_FLIGHT_URL = "https://openapi.tuniu.cn/mcp/flight"
-TUNIU_TICKET_URL = "https://openapi.tuniu.cn/mcp/ticket"
+# Backward-compatible public aliases; runtime calls use the Settings snapshot.
+TUNIU_HOTEL_URL = DEFAULT_TUNIU_HOTEL_URL
+TUNIU_FLIGHT_URL = DEFAULT_TUNIU_FLIGHT_URL
+TUNIU_TICKET_URL = DEFAULT_TUNIU_TICKET_URL
 MAX_RESPONSE_BYTES = 1_048_576
 
 _CHINA_TIMEZONE = timezone(timedelta(hours=8))
@@ -72,6 +79,7 @@ class TuniuTravelProvider:
                 safe_message="provider credential is required for this adapter",
             )
 
+        self._settings = settings
         self._client = client
         self._clock = clock
         self._api_key = settings.tuniu_api_key
@@ -106,37 +114,51 @@ class TuniuTravelProvider:
         else:
             raise TypeError("query must be a Tuniu-supported provider query")
 
-        started = perf_counter()
-        result: TransportProviderResult | StayProviderResult | PlaceProviderResult
-        try:
-            if operation == "transport_search":
-                result = await self._search_transport(
-                    cast(TransportQuery, query), timeout_seconds=timeout_seconds
+        with trace_named_span(
+            f"tool.tuniu.{operation}",
+            attributes={
+                "tool.provider": "tuniu",
+                "tool.operation": operation,
+                "tool.status": "started",
+            },
+        ) as span:
+            started = perf_counter()
+            result: TransportProviderResult | StayProviderResult | PlaceProviderResult
+            try:
+                if operation == "transport_search":
+                    result = await self._search_transport(
+                        cast(TransportQuery, query), timeout_seconds=timeout_seconds
+                    )
+                elif operation == "stay_search":
+                    result = await self._search_stay(
+                        cast(StayQuery, query), timeout_seconds=timeout_seconds
+                    )
+                else:
+                    result = await self._search_place(
+                        cast(PlaceQuery, query), timeout_seconds=timeout_seconds
+                    )
+            except Exception:
+                duration_ms = _elapsed_ms(started)
+                span.set_attribute("tool.status", "failure")
+                span.set_attribute("tool.duration_ms", duration_ms)
+                record_tool_call(
+                    provider="tuniu",
+                    operation=operation,
+                    status="failure",
+                    duration_ms=duration_ms,
                 )
-            elif operation == "stay_search":
-                result = await self._search_stay(
-                    cast(StayQuery, query), timeout_seconds=timeout_seconds
-                )
-            else:
-                result = await self._search_place(
-                    cast(PlaceQuery, query), timeout_seconds=timeout_seconds
-                )
-        except Exception:
+                raise
+
+            duration_ms = _elapsed_ms(started)
+            span.set_attribute("tool.status", "success")
+            span.set_attribute("tool.duration_ms", duration_ms)
             record_tool_call(
                 provider="tuniu",
                 operation=operation,
-                status="failure",
-                duration_ms=_elapsed_ms(started),
+                status="success",
+                duration_ms=duration_ms,
             )
-            raise
-
-        record_tool_call(
-            provider="tuniu",
-            operation=operation,
-            status="success",
-            duration_ms=_elapsed_ms(started),
-        )
-        return result
+            return result
 
     async def _search_transport(
         self, query: TransportQuery, *, timeout_seconds: Decimal
@@ -148,7 +170,7 @@ class TuniuTravelProvider:
                 safe_message="provider requires a departure date",
             )
         payload = await self._call_tool(
-            endpoint=TUNIU_FLIGHT_URL,
+            endpoint=self._settings.tuniu_flight_url,
             tool_name="searchLowestPriceFlight",
             operation="transport_search",
             query=query,
@@ -172,7 +194,7 @@ class TuniuTravelProvider:
                 query_id=query.query_id,
                 provider="tuniu",
                 observed_at=self._clock.now(),
-                source_ref=TUNIU_FLIGHT_URL,
+                source_ref=self._settings.tuniu_flight_url,
                 items=items,
             )
         except (TypeError, ValueError, ValidationError, InvalidOperation) as exc:
@@ -198,7 +220,7 @@ class TuniuTravelProvider:
             arguments["prices"] = f"0-{query.max_total_price.amount}"
 
         payload = await self._call_tool(
-            endpoint=TUNIU_HOTEL_URL,
+            endpoint=self._settings.tuniu_hotel_url,
             tool_name="tuniuHotelSearch",
             operation="stay_search",
             query=query,
@@ -218,7 +240,7 @@ class TuniuTravelProvider:
                 query_id=query.query_id,
                 provider="tuniu",
                 observed_at=self._clock.now(),
-                source_ref=TUNIU_HOTEL_URL,
+                source_ref=self._settings.tuniu_hotel_url,
                 items=items,
             )
         except (TypeError, ValueError, ValidationError, InvalidOperation) as exc:
@@ -238,7 +260,7 @@ class TuniuTravelProvider:
                 safe_message="provider supports only ticket place searches",
             )
         payload = await self._call_tool(
-            endpoint=TUNIU_TICKET_URL,
+            endpoint=self._settings.tuniu_ticket_url,
             tool_name="query_cheapest_tickets",
             operation="place_search",
             query=query,
@@ -259,7 +281,7 @@ class TuniuTravelProvider:
                 query_id=query.query_id,
                 provider="tuniu",
                 observed_at=self._clock.now(),
-                source_ref=TUNIU_TICKET_URL,
+                source_ref=self._settings.tuniu_ticket_url,
                 items=items,
             )
         except (TypeError, ValueError, ValidationError, InvalidOperation) as exc:

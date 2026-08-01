@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date
+from datetime import date
 from time import perf_counter
 from typing import Protocol
 

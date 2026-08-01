@@ -7,6 +7,7 @@ import pytest
 
 from src.bootstrap import bootstrap_tool_providers
 from src.config import ConfigurationError, Settings, load_settings
+from src.infrastructure.tools.amap import AmapGeoProvider
 from src.infrastructure.tools.assembly import (
     ProviderBindings,
     ToolProviderAssembly,
@@ -133,6 +134,25 @@ def test_bootstrap_tool_providers_loads_settings_before_assembly() -> None:
     assert assembly.settings.amap_enabled is True
     assert seen[0][0] is assembly.settings
     assert seen[0][1] is client
+
+
+def test_bootstrap_tool_providers_defaults_to_real_enabled_adapter_factory() -> None:
+    client = httpx.AsyncClient(transport=httpx.MockTransport(_unexpected_request))
+    assembly = bootstrap_tool_providers(
+        {
+            "DEEPSEEK_API_KEY": "llm-key",
+            "AMAP_API_KEY": "amap-key",
+            "AMAP_ENABLED": "true",
+        },
+        http_client=client,
+    )
+
+    assert isinstance(assembly.geo, AmapGeoProvider)
+    assert assembly.settings.amap_geocode_url.startswith("https://")
+
+
+async def _unexpected_request(_: httpx.Request) -> httpx.Response:
+    raise AssertionError("default adapter factory test must not issue a network request")
 
 
 def test_settings_infers_provider_enablement_from_key_unless_explicitly_disabled() -> None:

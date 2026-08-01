@@ -8,6 +8,9 @@ from typing import Any
 
 import httpx
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from src.config import Settings
 from src.domain.models.provider import GeoProviderResult, GeoQuery
@@ -17,6 +20,7 @@ from src.infrastructure.tools.amap import (
     AmapGeoProvider,
     create_amap_bindings,
 )
+from src.obs import trace as trace_module
 from src.ports.tool_errors import (
     ToolAuthenticationError,
     ToolBusinessError,
@@ -29,6 +33,7 @@ from src.ports.tool_errors import (
 )
 from src.ports.tool_provider import GeoProvider
 from tests.support.clock_fakes import FakeClock
+from tests.support.live_tool_contract import assert_provider_result_contract
 
 pytestmark = pytest.mark.contract
 
@@ -60,11 +65,15 @@ def _success_payload(**geocode: object) -> dict[str, object]:
     }
 
 
-def _provider(handler: httpx.MockTransport) -> tuple[AmapGeoProvider, FakeClock]:
+def _provider(
+    handler: httpx.MockTransport,
+    *,
+    settings: Settings | None = None,
+) -> tuple[AmapGeoProvider, FakeClock]:
     clock = FakeClock(datetime(2026, 7, 31, 9, tzinfo=UTC))
     client = httpx.AsyncClient(transport=handler)
-    settings = Settings(amap_api_key=_TEST_KEY, amap_enabled=True)
-    return AmapGeoProvider(settings, client, clock), clock
+    resolved_settings = settings or Settings(amap_api_key=_TEST_KEY, amap_enabled=True)
+    return AmapGeoProvider(resolved_settings, client, clock), clock
 
 
 def _run(coroutine: Any) -> Any:
@@ -88,6 +97,13 @@ def test_amap_geo_adapter_normalizes_success_and_uses_injected_dependencies() ->
 
     assert isinstance(provider, GeoProvider)
     assert isinstance(result, GeoProviderResult)
+    assert_provider_result_contract(
+        result,
+        provider="amap",
+        operation="geo_search",
+        source_ref=AMAP_GEOCODE_URL,
+        api_key=_TEST_KEY,
+    )
     assert result.query_id == "geo-query-1"
     assert result.provider == "amap"
     assert result.operation == "geo_search"
@@ -107,6 +123,39 @@ def test_amap_geo_adapter_normalizes_success_and_uses_injected_dependencies() ->
     assert requests[0].url.params["address"] == "深圳市南山区科技园"
     assert requests[0].url.params["city"] == "深圳"
     assert requests[0].extensions["timeout"]["read"] == 3.5
+
+
+def test_amap_geo_adapter_uses_settings_endpoint_and_emits_tool_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(trace_module, "_tracer", provider.get_tracer("m3-amap-test"))
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=_success_payload())
+
+    custom_url = "https://mock.example/amap-geocode"
+    adapter, _ = _provider(
+        httpx.MockTransport(handler),
+        settings=Settings(
+            amap_api_key=_TEST_KEY,
+            amap_enabled=True,
+            amap_geocode_url=custom_url,
+        ),
+    )
+    _run(adapter.search(_query(), timeout_seconds=Decimal("1")))
+
+    span = exporter.get_finished_spans()[0]
+    assert str(requests[0].url).split("?")[0] == custom_url
+    assert span.name == "tool.amap.geo_search"
+    assert span.attributes["tool.provider"] == "amap"
+    assert span.attributes["tool.operation"] == "geo_search"
+    assert span.attributes["tool.status"] == "success"
+    assert span.attributes["tool.duration_ms"] >= 0
 
 
 def test_amap_geo_adapter_factory_exposes_only_geo_capability() -> None:

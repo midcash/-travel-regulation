@@ -14,6 +14,8 @@ def test_load_settings_defaults_to_strict_fail_fast() -> None:
     assert settings.fallbacks is False
     assert settings.partial_success is False
     assert settings.max_revision_rounds == 2
+    assert settings.amap_geocode_url.startswith('https://')
+    assert settings.tuniu_hotel_url.startswith('https://')
 
 
 @pytest.mark.parametrize(
@@ -48,6 +50,8 @@ def test_settings_rejects_non_strict_features(field: str) -> None:
         {'MAX_REVISION_ROUNDS': '-1'},
         {'DEEPSEEK_MAX_TOKENS': '0'},
         {'DEEPSEEK_MODEL': '   '},
+        {'AMAP_GEOCODE_URL': 'not-an-url'},
+        {'TUNIU_HOTEL_URL': 'ftp://provider.example/hotel'},
     ],
 )
 def test_load_settings_rejects_invalid_numeric_or_model_values(
@@ -69,3 +73,19 @@ def test_load_settings_strips_optional_secrets_without_logging_them() -> None:
     assert settings.deepseek_api_key == 'secret-value'
     assert settings.amap_api_key is None
     assert settings.deepseek_model == 'deepseek-test'
+
+
+def test_load_settings_injects_tool_endpoints_from_one_snapshot() -> None:
+    settings = load_settings(
+        {
+            'AMAP_GEOCODE_URL': 'https://mock.example/amap',
+            'TUNIU_HOTEL_URL': 'https://mock.example/hotel',
+            'TUNIU_FLIGHT_URL': 'https://mock.example/flight',
+            'TUNIU_TICKET_URL': 'https://mock.example/ticket',
+        }
+    )
+
+    assert settings.amap_geocode_url == 'https://mock.example/amap'
+    assert settings.tuniu_hotel_url == 'https://mock.example/hotel'
+    assert settings.tuniu_flight_url == 'https://mock.example/flight'
+    assert settings.tuniu_ticket_url == 'https://mock.example/ticket'

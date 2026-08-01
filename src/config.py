@@ -6,8 +6,13 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from math import isfinite
+from urllib.parse import urlparse
 
 _LOG_LEVELS = frozenset({'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'})
+DEFAULT_AMAP_GEOCODE_URL = 'https://restapi.amap.com/v3/geocode/geo'
+DEFAULT_TUNIU_HOTEL_URL = 'https://openapi.tuniu.cn/mcp/hotel'
+DEFAULT_TUNIU_FLIGHT_URL = 'https://openapi.tuniu.cn/mcp/flight'
+DEFAULT_TUNIU_TICKET_URL = 'https://openapi.tuniu.cn/mcp/ticket'
 
 
 class ConfigurationError(ValueError):
@@ -33,6 +38,10 @@ class Settings:
     tuniu_api_key: str | None = field(default=None, repr=False)
     amap_enabled: bool | None = None
     tuniu_enabled: bool | None = None
+    amap_geocode_url: str = DEFAULT_AMAP_GEOCODE_URL
+    tuniu_hotel_url: str = DEFAULT_TUNIU_HOTEL_URL
+    tuniu_flight_url: str = DEFAULT_TUNIU_FLIGHT_URL
+    tuniu_ticket_url: str = DEFAULT_TUNIU_TICKET_URL
     log_level: str = 'INFO'
     console_span_exporter: bool = False
 
@@ -63,6 +72,13 @@ class Settings:
             raise ConfigurationError('DEEPSEEK_MAX_TOKENS must be positive')
         if not self.deepseek_model.strip():
             raise ConfigurationError('DEEPSEEK_MODEL must not be empty')
+        for field_name in (
+            'amap_geocode_url',
+            'tuniu_hotel_url',
+            'tuniu_flight_url',
+            'tuniu_ticket_url',
+        ):
+            _validate_endpoint(field_name, getattr(self, field_name))
         if self.amap_enabled is None:
             object.__setattr__(self, 'amap_enabled', _has_value(self.amap_api_key))
         if self.tuniu_enabled is None:
@@ -110,6 +126,10 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         tuniu_api_key=_optional(values.get('TUNIU_API_KEY')),
         amap_enabled=_parse_optional_bool(values.get('AMAP_ENABLED'), 'AMAP_ENABLED'),
         tuniu_enabled=_parse_optional_bool(values.get('TUNIU_ENABLED'), 'TUNIU_ENABLED'),
+        amap_geocode_url=values.get('AMAP_GEOCODE_URL', DEFAULT_AMAP_GEOCODE_URL).strip(),
+        tuniu_hotel_url=values.get('TUNIU_HOTEL_URL', DEFAULT_TUNIU_HOTEL_URL).strip(),
+        tuniu_flight_url=values.get('TUNIU_FLIGHT_URL', DEFAULT_TUNIU_FLIGHT_URL).strip(),
+        tuniu_ticket_url=values.get('TUNIU_TICKET_URL', DEFAULT_TUNIU_TICKET_URL).strip(),
         log_level=values.get('LOG_LEVEL', 'INFO').strip().upper(),
         console_span_exporter=_parse_bool(
             values.get('CONSOLE_SPAN_EXPORTER', 'false'),
@@ -158,3 +178,10 @@ def _optional(raw: str | None) -> str | None:
 
 def _has_value(value: str | None) -> bool:
     return value is not None and bool(value.strip())
+
+
+def _validate_endpoint(field_name: str, value: str) -> None:
+    """Require an explicit HTTP(S) endpoint in the immutable Settings snapshot."""
+    parsed = urlparse(value)
+    if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+        raise ConfigurationError(f'{field_name} must be an absolute HTTP(S) URL')
