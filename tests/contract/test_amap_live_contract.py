@@ -13,7 +13,7 @@ from src.config import Settings, load_settings
 from src.domain.models.provider import GeoProviderResult, GeoQuery
 from src.infrastructure.tools.amap import AmapGeoProvider
 from src.ports.clock import SystemClock
-from src.ports.tool_errors import ToolEmptyResultError
+from src.ports.tool_errors import ToolBusinessError
 from tests.support.live_tool_contract import (
     assert_provider_result_contract,
     execute_live_call,
@@ -53,7 +53,14 @@ def test_amap_geo_adapter_live_contract() -> None:
 
 
 def test_amap_geo_adapter_live_empty_result_contract() -> None:
-    """Verify a real no-result query stays an explicit typed failure."""
+    """Verify a real no-match probe stays an explicit typed provider failure.
+
+    The Amap geocoder currently reports synthetic no-match probes as
+    ``ENGINE_RESPONSE_DATA_ERROR`` (30001) instead of returning an empty
+    ``geocodes`` list.  The adapter must preserve that provider-level failure;
+    the offline contract separately verifies ``ToolEmptyResultError`` for a
+    successful empty response.
+    """
     api_key = os.environ.get("AMAP_API_KEY")
     if not api_key:
         pytest.skip("AMAP_API_KEY is required for the live_tool contract")
@@ -75,7 +82,7 @@ def test_amap_geo_adapter_live_empty_result_contract() -> None:
             )
         ),
         request_count=lambda: len(requests),
-        expected_exception=ToolEmptyResultError,
+        expected_exception=ToolBusinessError,
     )
 
     assert result is None, "configured empty query returned usable results"
