@@ -65,11 +65,17 @@ class PlanTripUseCase:
         self._settings = settings
         self._planner = planner
 
-    def execute(self, request: TripRequest) -> PlanTripResult:
+    def execute(
+        self,
+        request: TripRequest,
+        *,
+        raw_input: str | None = None,
+    ) -> PlanTripResult:
         """执行一次规划并返回严格类型化结果。
 
         Args:
             request: 已完成 Schema 校验的旅行请求。
+            raw_input: 本轮用户原始文本；未提供时使用结构化请求渲染的兼容文本。
 
         Returns:
             PlanTripResult: 带请求身份和 legacy 结果的类型化结果。
@@ -77,7 +83,20 @@ class PlanTripUseCase:
         Raises:
             WorkflowError: legacy 流程失败或返回结果不符合契约。
         """
-        legacy_input = render_legacy_request(request)
+        legacy_input = (
+            raw_input.strip()
+            if raw_input is not None
+            else render_legacy_request(request)
+        )
+        if not legacy_input:
+            raise WorkflowError(
+                _facade_trace_id(request),
+                "mapping",
+                ErrorCategory.VALIDATION,
+                "legacy_input_empty",
+                "planning input must not be empty",
+                retryable=False,
+            )
         try:
             raw_result = self._planner(legacy_input, settings=self._settings)
             legacy_result = map_legacy_plan_result(raw_result)
@@ -102,6 +121,14 @@ class PlanTripUseCase:
                 cause=exc,
             ) from exc
         return PlanTripResult.from_legacy(request, legacy_result)
+
+    def execute_with_raw_input(
+        self,
+        request: TripRequest,
+        raw_input: str,
+    ) -> PlanTripResult:
+        """Execute the compatibility planner with validated transient user text."""
+        return self.execute(request, raw_input=raw_input)
 
 
 def render_legacy_request(request: TripRequest) -> str:

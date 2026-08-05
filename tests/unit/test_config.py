@@ -14,6 +14,7 @@ def test_load_settings_defaults_to_strict_fail_fast() -> None:
     assert settings.fallbacks is False
     assert settings.partial_success is False
     assert settings.max_revision_rounds == 2
+    assert settings.deepseek_max_tokens == 2048
     assert settings.amap_geocode_url.startswith('https://')
     assert settings.tuniu_hotel_url.startswith('https://')
 

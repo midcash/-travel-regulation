@@ -78,6 +78,23 @@ def test_ask_llm_configures_non_thinking_json_for_structured_output(
     }
 
 
+def test_ask_llm_disables_thinking_for_v4_text_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _patch_client(monkeypatch, _response('plan'))
+    settings = Settings(
+        deepseek_api_key='secret-key',
+        deepseek_model='deepseek-v4-flash',
+    )
+
+    assert deepseek.ask_llm('return a concise plan', settings) == 'plan'
+    assert client.create_kwargs is not None
+    assert client.create_kwargs['extra_body'] == {
+        'thinking': {'type': 'disabled'},
+    }
+    assert client.create_kwargs['temperature'] == 0
+
+
 def test_ask_llm_fails_before_sdk_when_key_is_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

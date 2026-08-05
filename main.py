@@ -40,11 +40,11 @@ def _print_result(result: PlanTripResult | TripInteractionResult) -> None:
     )
 
     if issues:
-        print(f'\n⚠ 评审发现 {len(issues)} 个问题（已尝试修正）:')
+        print(f'\n[WARN] 评审发现 {len(issues)} 个问题（已尝试修正）:')
         for issue in issues[:5]:
             print(f'  - {issue[:120]}')
     else:
-        print('\n✅ 方案通过评审')
+        print('\n[PASS] 方案通过评审')
 
 
 

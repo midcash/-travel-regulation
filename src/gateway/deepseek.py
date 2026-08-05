@@ -17,6 +17,8 @@ from src.ports.llm_gateway import LLMOutputMode
 
 logger = get_logger(__name__)
 
+_V4_THINKING_MODELS = frozenset({'deepseek-v4-flash', 'deepseek-v4-pro'})
+
 
 @dataclass(frozen=True, slots=True)
 class LLMCallRecord:
@@ -78,6 +80,10 @@ def ask_llm(
     if output_mode is LLMOutputMode.JSON_OBJECT:
         kwargs["response_format"] = {"type": "json_object"}
         kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+    if current.deepseek_model.casefold() in _V4_THINKING_MODELS:
+        # Keep the output budget available for the final plan or review text.
+        kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+        kwargs["temperature"] = 0
 
     logger.info(
         "llm_call_started",

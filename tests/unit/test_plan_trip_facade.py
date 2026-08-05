@@ -51,6 +51,22 @@ def test_facade_calls_legacy_and_returns_typed_result() -> None:
     assert calls == [(render_legacy_request(_request()), settings)]
 
 
+def test_facade_can_pass_transient_raw_input_to_legacy_planner() -> None:
+    calls: list[str] = []
+
+    def fake_planner(user_input: str, *, settings: Settings) -> dict[str, object]:
+        calls.append(user_input)
+        return {'plan': 'compatibility plan', 'rounds': 1, 'issues_found': []}
+
+    result = PlanTripUseCase(Settings(deepseek_api_key='test-key'), planner=fake_planner).execute(
+        _request(),
+        raw_input='plan a three-day trip from Shanghai to Hangzhou',
+    )
+
+    assert result.plan == 'compatibility plan'
+    assert calls == ['plan a three-day trip from Shanghai to Hangzhou']
+
+
 def test_render_legacy_request_preserves_structured_request_facts() -> None:
     rendered = render_legacy_request(_request())
 

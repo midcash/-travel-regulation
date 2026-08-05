@@ -13,6 +13,7 @@ DEFAULT_AMAP_GEOCODE_URL = 'https://restapi.amap.com/v3/geocode/geo'
 DEFAULT_TUNIU_HOTEL_URL = 'https://openapi.tuniu.cn/mcp/hotel'
 DEFAULT_TUNIU_FLIGHT_URL = 'https://openapi.tuniu.cn/mcp/flight'
 DEFAULT_TUNIU_TICKET_URL = 'https://openapi.tuniu.cn/mcp/ticket'
+DEFAULT_DEEPSEEK_MAX_TOKENS = 2048
 
 
 class ConfigurationError(ValueError):
@@ -33,7 +34,7 @@ class Settings:
     max_revision_rounds: int = 2
     deepseek_api_key: str | None = field(default=None, repr=False)
     deepseek_model: str = 'deepseek-chat'
-    deepseek_max_tokens: int | None = None
+    deepseek_max_tokens: int | None = DEFAULT_DEEPSEEK_MAX_TOKENS
     amap_api_key: str | None = field(default=None, repr=False)
     tuniu_api_key: str | None = field(default=None, repr=False)
     amap_enabled: bool | None = None
@@ -120,7 +121,8 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         deepseek_api_key=_optional(values.get('DEEPSEEK_API_KEY')),
         deepseek_model=values.get('DEEPSEEK_MODEL', 'deepseek-chat').strip(),
         deepseek_max_tokens=_parse_optional_int(
-            values.get('DEEPSEEK_MAX_TOKENS'), 'DEEPSEEK_MAX_TOKENS'
+            values.get('DEEPSEEK_MAX_TOKENS', str(DEFAULT_DEEPSEEK_MAX_TOKENS)),
+            'DEEPSEEK_MAX_TOKENS',
         ),
         amap_api_key=_optional(values.get('AMAP_API_KEY')),
         tuniu_api_key=_optional(values.get('TUNIU_API_KEY')),

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 from time import perf_counter
-from typing import Protocol
+from collections.abc import Callable
+from typing import Protocol, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -310,7 +311,7 @@ class TripInteractionFacade:
                 )
                 plan_result = None
                 if decision.mode == InteractionMode.PLAN.value:
-                    plan_result = self._planner.execute(request)
+                    plan_result = _execute_plan(self._planner, request, raw_input)
                 record_workflow_result("success")
                 logger.info(
                     "workflow_completed",
@@ -426,6 +427,22 @@ def _default_cli_security_context() -> G0SecurityContext:
         authenticated=True,
         authorized=True,
     )
+
+
+def _execute_plan(
+    planner: PlanExecutor,
+    request: TripRequest,
+    raw_input: str,
+) -> PlanTripResult:
+    """Pass validated transient text to planners that support the CLI bridge."""
+    execute_with_raw_input = getattr(planner, "execute_with_raw_input", None)
+    if callable(execute_with_raw_input):
+        typed_executor = cast(
+            Callable[[TripRequest, str], PlanTripResult],
+            execute_with_raw_input,
+        )
+        return typed_executor(request, raw_input)
+    return planner.execute(request)
 
 
 def _readiness_context(

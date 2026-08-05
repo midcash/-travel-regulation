@@ -1,24 +1,64 @@
-"""
-L2 对抗评审器 — LLM-B。
+"""Structured legacy L2 review for the compatibility planner."""
 
-职责：同时读取用户输入 + LLM-A 的方案，查逻辑、事实、约束、安全。
-不碰 L1 的活（预算算数、关键词扫描）。
-"""
 from __future__ import annotations
 
-import re
 from typing import TypedDict
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 from src.config import Settings
 from src.engine.prompts import build_review_prompt
 from src.gateway.deepseek import ask_llm
+from src.gateway.json_utils import JsonResponseError, parse_json_object
 from src.obs.log import get_logger
+from src.ports.llm_gateway import LLMOutputMode
 
 logger = get_logger(__name__)
 
+
+class L2ReviewError(RuntimeError):
+    """Raised when the L2 response violates the structured review contract."""
+
+
+class _L2ReviewPayload(BaseModel):
+    """Validate the only review result shape accepted by the legacy loop."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, str_strip_whitespace=True)
+
+    passed: StrictBool = Field(alias="pass")
+    issues: tuple[StrictStr, ...] = Field(max_length=5)
+
+    @field_validator("issues")
+    @classmethod
+    def validate_issue_text(cls, value: tuple[StrictStr, ...]) -> tuple[StrictStr, ...]:
+        """Reject empty or duplicate review issues."""
+        if any(not issue for issue in value):
+            raise ValueError("review issues must not be empty")
+        if len(value) != len(set(value)):
+            raise ValueError("review issues must be unique")
+        return value
+
+    @model_validator(mode="after")
+    def validate_pass_shape(self) -> _L2ReviewPayload:
+        """Require one unambiguous success or failure representation."""
+        if self.passed and self.issues:
+            raise ValueError("a passing review must not contain issues")
+        if not self.passed and not self.issues:
+            raise ValueError("a failing review must contain issues")
+        return self
+
+
 L2ReviewResult = TypedDict(
-    'L2ReviewResult',
-    {'pass': bool, 'issues': list[str]},
+    "L2ReviewResult",
+    {"pass": bool, "issues": list[str]},
 )
 
 
@@ -29,78 +69,38 @@ def run_l2_review(
     *,
     settings: Settings,
 ) -> L2ReviewResult:
-    """LLM-B 对抗评审。
+    """Run one strict structured L2 review without retries or fallback.
 
     Args:
-        user_input: 用户原始需求。
-        plan_text: LLM-A 生成的方案文本。
-        constraints: 否定约束列表（已注入 prompt）。
+        user_input: User request data supplied to the planner.
+        plan_text: Candidate itinerary text to review.
+        constraints: Explicit exclusions extracted from the user request.
+        settings: Validated runtime settings shared by the planner and gateway.
 
     Returns:
-        {"pass": bool, "issues": list[str]}
-        pass=True 表示方案通过评审，无需修改。
+        L2ReviewResult: Explicit pass/fail decision and bounded issue list.
+
+    Raises:
+        L2ReviewError: The model response is not the required JSON contract.
+        Exception: Upstream LLM failures propagate unchanged.
     """
     prompt = build_review_prompt(user_input, plan_text, constraints)
-    response = ask_llm(prompt, settings=settings)
-
-    # 判断结果
-    passed = "PASS" in response.upper().split("\n")[0] or (
-        "未发现" in response and "问题" in response
+    response = ask_llm(
+        prompt,
+        settings=settings,
+        output_mode=LLMOutputMode.JSON_OBJECT,
     )
+    try:
+        payload = _L2ReviewPayload.model_validate(parse_json_object(response))
+    except (JsonResponseError, TypeError, ValueError) as exc:
+        raise L2ReviewError("L2 review response does not match the JSON contract") from exc
 
-    if passed and len(response.strip()) < 20:
-        # 简洁的 PASS 回复
+    result: L2ReviewResult = {
+        "pass": payload.passed,
+        "issues": list(payload.issues),
+    }
+    if payload.passed:
         logger.info("l2_review_pass")
-        return {"pass": True, "issues": []}
-
-    # 检查是否实质上是 PASS（评审意见中没有具体问题）
-    issues = _parse_issues(response)
-
-    if not issues:
-        logger.info("l2_review_pass")
-        return {"pass": True, "issues": []}
-
-    logger.info("l2_review_fail", issue_count=len(issues))
-    return {"pass": False, "issues": issues}
-
-
-def _parse_issues(response: str) -> list[str]:
-    """从 LLM-B 的自由文本回复中提取问题列表。
-
-    尝试多种启发式：
-    1. 编号列表 (1. 2. 3. 或 - 或 •)
-    2. 如果都不匹配，将整个响应作为一条 issue
-    """
-    # 如果明确说没问题
-    if any(
-        phrase in response
-        for phrase in ["未发现逻辑问题", "未发现问题", "没有逻辑问题", "方案合理"]
-    ):
-        return []
-
-    # 尝试按编号拆分
-    lines = response.strip().split("\n")
-    numbered = [
-        re.sub(r'^[\d]+[\.\)、]\s*', '', line).strip()
-        for line in lines
-        if re.match(r'^[\d]+[\.\)、]', line.strip()) and len(line.strip()) > 5
-    ]
-
-    if numbered:
-        return numbered
-
-    # 尝试按 - 或 • 拆分
-    dashed = [
-        re.sub(r'^[-•]\s*', '', line).strip()
-        for line in lines
-        if line.strip().startswith(('-', '•')) and len(line.strip()) > 5
-    ]
-
-    if dashed:
-        return dashed
-
-    # Fallback: 整个响应
-    if len(response.strip()) > 20:
-        return [response.strip()]
-
-    return []
+    else:
+        logger.info("l2_review_fail", issue_count=len(payload.issues))
+    return result

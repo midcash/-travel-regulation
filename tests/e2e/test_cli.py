@@ -67,6 +67,18 @@ def test_cli_with_arguments_joins_user_input_into_structured_request(
     assert seen[0].duration_days == 1
 
 
+def test_cli_prints_ascii_success_marker_for_windows_console(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    request = main._build_cli_request('上海到杭州')
+
+    main._print_result(_result(request))
+
+    captured = capsys.readouterr()
+    assert '[PASS] 方案通过评审' in captured.out
+    assert '✅' not in captured.out
+
+
 def test_cli_internal_exception_returns_failure_without_traceback(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
