@@ -63,6 +63,17 @@ _CONFIDENCE_BY_LEVEL: dict[str, Decimal] = {
     "商圈": Decimal("0.80"),
     "门牌号": Decimal("0.95"),
     "兴趣点": Decimal("0.95"),
+    "开发区": Decimal("0.70"),
+    "道路": Decimal("0.80"),
+    "道路交叉路口": Decimal("0.80"),
+    "单元号": Decimal("0.92"),
+    "楼层": Decimal("0.90"),
+    "房间": Decimal("0.90"),
+    "公交地铁站点": Decimal("0.95"),
+    "门址": Decimal("0.95"),
+    "小巷": Decimal("0.80"),
+    "住宅区": Decimal("0.90"),
+    "未知": Decimal("0.20"),
 }
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.config import Settings
+from src.ports.llm_gateway import LLMOutputMode
 
 
 class FakeNotConfiguredError(RuntimeError):
@@ -14,11 +15,17 @@ class FakeLLMGateway:
 
     def __init__(self, responses: list[str | BaseException] | None = None) -> None:
         self._responses = list(responses or [])
-        self.calls: list[tuple[str, Settings]] = []
+        self.calls: list[tuple[str, Settings, LLMOutputMode]] = []
 
-    def complete(self, prompt: str, *, settings: Settings) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        settings: Settings,
+        output_mode: LLMOutputMode = LLMOutputMode.TEXT,
+    ) -> str:
         """返回下一个显式响应，或传播显式注入的异常。"""
-        self.calls.append((prompt, settings))
+        self.calls.append((prompt, settings, output_mode))
         if not self._responses:
             raise FakeNotConfiguredError("Fake LLM 未配置响应")
         response = self._responses.pop(0)

@@ -75,7 +75,7 @@ LABEL_ALLOWLIST: dict[str, frozenset[str]] = {
     "mode": frozenset(
         {"answer", "clarify", "plan", "refine", "compare", "replan", "action", "unsupported"}
     ),
-    "model": frozenset({"deepseek-chat", "deepseek-reasoner"}),
+    "model": frozenset({"deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash"}),
     "operation": frozenset({"geo_search", "transport_search", "stay_search", "place_search"}),
     "phase": frozenset({"generation", "review", "revision"}),
     "provider": frozenset({"amap", "tuniu"}),

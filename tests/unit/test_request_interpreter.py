@@ -11,6 +11,7 @@ from src.domain.errors import WorkflowError
 from src.domain.models.enums import ConstraintHardness, InteractionMode
 from src.domain.models.interpretation import SafetyFlag
 from src.guard.g0 import G0SecurityContext, G0Validator
+from src.ports.llm_gateway import LLMOutputMode
 from tests.support.llm_fakes import FakeLLMGateway, FakeNotConfiguredError
 
 
@@ -59,6 +60,7 @@ def test_interpret_returns_schema_validated_result_and_passes_explicit_settings(
     assert result.mode_hint is InteractionMode.PLAN
     assert result.constraint_candidates[0].hardness is ConstraintHardness.HARD
     assert gateway.calls[0][1] == Settings()
+    assert gateway.calls[0][2] is LLMOutputMode.JSON_OBJECT
 
 
 def test_interpret_delimits_user_data_and_current_context_in_prompt() -> None:

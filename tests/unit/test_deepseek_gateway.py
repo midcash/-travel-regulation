@@ -6,6 +6,7 @@ import pytest
 
 from src.config import Settings
 from src.gateway import deepseek
+from src.ports.llm_gateway import LLMOutputMode
 from tests.support.fakes import FakeOpenAIClient
 
 
@@ -56,6 +57,25 @@ def test_ask_llm_passes_timeout_and_zero_retries_to_sdk(
     assert client.create_kwargs is not None
     assert client.create_kwargs['model'] == 'fake-model'
     assert client.create_kwargs['max_tokens'] == 128
+    assert 'response_format' not in client.create_kwargs
+    assert 'extra_body' not in client.create_kwargs
+
+
+def test_ask_llm_configures_non_thinking_json_for_structured_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _patch_client(monkeypatch, _response('{}'))
+
+    assert deepseek.ask_llm(
+        'return json',
+        Settings(deepseek_api_key='secret-key'),
+        output_mode=LLMOutputMode.JSON_OBJECT,
+    ) == '{}'
+    assert client.create_kwargs is not None
+    assert client.create_kwargs['response_format'] == {'type': 'json_object'}
+    assert client.create_kwargs['extra_body'] == {
+        'thinking': {'type': 'disabled'},
+    }
 
 
 def test_ask_llm_fails_before_sdk_when_key_is_missing(

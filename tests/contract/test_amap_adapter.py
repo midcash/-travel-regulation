@@ -299,6 +299,32 @@ def test_amap_geo_adapter_rejects_empty_results_without_success_fallback() -> No
         _run(provider.search(_query(), timeout_seconds=Decimal("1")))
 
 
+@pytest.mark.parametrize(
+    "level",
+    [
+        "开发区",
+        "道路",
+        "道路交叉路口",
+        "单元号",
+        "楼层",
+        "房间",
+        "公交地铁站点",
+        "门址",
+        "小巷",
+        "住宅区",
+        "未知",
+    ],
+)
+def test_amap_geo_adapter_accepts_documented_match_levels(level: str) -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_success_payload(level=level))
+
+    provider, _ = _provider(httpx.MockTransport(handler))
+    result = _run(provider.search(_query(), timeout_seconds=Decimal("1")))
+
+    assert result.items[0].confidence > Decimal("0")
+
+
 def test_amap_geo_adapter_rejects_oversized_response_before_json_parsing() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=b"{" + (b" " * MAX_RESPONSE_BYTES))

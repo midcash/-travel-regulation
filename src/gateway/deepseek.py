@@ -13,6 +13,7 @@ from src.config import Settings
 from src.obs.log import get_logger
 from src.obs.metric import record_llm_call
 from src.obs.trace import trace_llm_call
+from src.ports.llm_gateway import LLMOutputMode
 
 logger = get_logger(__name__)
 
@@ -37,6 +38,7 @@ def ask_llm(
     prompt: str,
     settings: Settings | None = None,
     *,
+    output_mode: LLMOutputMode = LLMOutputMode.TEXT,
     observer: Callable[[LLMCallRecord], None] | None = None,
 ) -> str:
     """调用 DeepSeek LLM 并返回非空文本。
@@ -44,6 +46,8 @@ def ask_llm(
     Args:
         prompt: 发给模型的 Prompt。
         settings: 由组合根创建并校验的配置。
+        output_mode: 文本或结构化 JSON 输出契约。
+        observer: 可选的脱敏调用摘要观察器。
 
     Returns:
         str: 非空响应文本。
@@ -71,10 +75,14 @@ def ask_llm(
     }
     if current.deepseek_max_tokens is not None:
         kwargs["max_tokens"] = current.deepseek_max_tokens
+    if output_mode is LLMOutputMode.JSON_OBJECT:
+        kwargs["response_format"] = {"type": "json_object"}
+        kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
 
     logger.info(
         "llm_call_started",
         model=current.deepseek_model,
+        output_mode=output_mode.value,
         prompt_chars=len(prompt),
     )
 

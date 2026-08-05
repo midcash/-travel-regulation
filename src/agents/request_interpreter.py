@@ -18,7 +18,7 @@ from src.gateway.json_utils import JsonResponseError, parse_json_object
 from src.guard.g0 import G0SecurityContext, G0ValidationResult, G0Validator
 from src.obs.metric import record_interpreter_failure
 from src.obs.trace import trace_agent
-from src.ports.llm_gateway import LLMGateway
+from src.ports.llm_gateway import LLMGateway, LLMOutputMode
 
 REQUEST_INTERPRETER_PROMPT_VERSION: Final[str] = "m2-request-interpreter-v2"
 INTERPRETATION_SCHEMA_VERSION: Final[str] = "1.0"
@@ -100,7 +100,11 @@ class RequestInterpreter:
         try:
             session_id = current_state.session_id if current_state is not None else "unknown"
             with trace_agent("request_interpreter", session_id, trace_id=str(trace_id)):
-                raw_response = self._gateway.complete(prompt, settings=self._settings)
+                raw_response = self._gateway.complete(
+                    prompt,
+                    settings=self._settings,
+                    output_mode=LLMOutputMode.JSON_OBJECT,
+                )
         except ConfigurationError as exc:
             self._raise_workflow_error(
                 trace_id,

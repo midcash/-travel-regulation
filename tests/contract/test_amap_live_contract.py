@@ -21,6 +21,9 @@ from tests.support.live_tool_contract import (
 
 pytestmark = [pytest.mark.contract, pytest.mark.slow, pytest.mark.live_tool]
 
+_DEFAULT_AMAP_LIVE_EMPTY_TEXT = "M3NORESULTX9Q7V5K3J1"
+_DEFAULT_AMAP_LIVE_EMPTY_REGION = "北京"
+
 
 def test_amap_geo_adapter_live_contract() -> None:
     """Use one controlled request; this test requires explicit manual execution."""
@@ -57,6 +60,8 @@ def test_amap_geo_adapter_live_empty_result_contract() -> None:
 
     requests: list[httpx.Request] = []
     settings = load_settings()
+    empty_text = os.environ.get("AMAP_LIVE_EMPTY_TEXT", _DEFAULT_AMAP_LIVE_EMPTY_TEXT)
+    empty_region = os.environ.get("AMAP_LIVE_EMPTY_REGION", _DEFAULT_AMAP_LIVE_EMPTY_REGION)
     result = execute_live_call(
         provider="amap",
         operation="geo_search",
@@ -65,8 +70,8 @@ def test_amap_geo_adapter_live_empty_result_contract() -> None:
             _query_live_amap(
                 settings,
                 requests,
-                text=os.environ.get("AMAP_LIVE_EMPTY_TEXT", "__M3_NO_MATCH_ADDRESS__"),
-                region=None,
+                text=empty_text,
+                region=empty_region,
             )
         ),
         request_count=lambda: len(requests),

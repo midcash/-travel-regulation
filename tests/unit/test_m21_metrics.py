@@ -94,6 +94,10 @@ def test_metric_label_allowlist_rejects_high_cardinality_values() -> None:
     ) is None
 
 
+def test_metric_label_allowlist_accepts_the_m2_live_model() -> None:
+    validate_metric_labels({"model": "deepseek-v4-flash", "status": "success"})
+
+
 def test_metric_emission_failure_is_isolated_from_business_code() -> None:
     class BrokenCollector:
         _name = "broken_metric"

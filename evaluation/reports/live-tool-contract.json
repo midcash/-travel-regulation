@@ -1,0 +1,70 @@
+{
+  "stage": "M3",
+  "status": "FAILED",
+  "contract": "live_tool",
+  "required_providers": [
+    "amap",
+    "tuniu"
+  ],
+  "missing_provider_keys": [],
+  "network_calls": 4,
+  "calls": [
+    {
+      "provider": "amap",
+      "operation": "geo_search",
+      "scenario": "normal",
+      "status": "success",
+      "outcome": "success",
+      "schema_version": "m3.provider.v1",
+      "latency_ms": 3088,
+      "cost": null,
+      "cost_status": "not_exposed_by_provider_contract",
+      "call_count": 1,
+      "failure_type": null
+    },
+    {
+      "provider": "amap",
+      "operation": "geo_search",
+      "scenario": "empty",
+      "status": "failure",
+      "outcome": "unexpected_failure",
+      "schema_version": null,
+      "latency_ms": 2765,
+      "cost": null,
+      "cost_status": "not_exposed_by_provider_contract",
+      "call_count": 1,
+      "failure_type": "ToolBusinessError"
+    },
+    {
+      "provider": "tuniu",
+      "operation": "stay_search",
+      "scenario": "normal",
+      "status": "success",
+      "outcome": "success",
+      "schema_version": "m3.provider.v1",
+      "latency_ms": 3606,
+      "cost": null,
+      "cost_status": "not_exposed_by_provider_contract",
+      "call_count": 1,
+      "failure_type": null
+    },
+    {
+      "provider": "tuniu",
+      "operation": "stay_search",
+      "scenario": "empty",
+      "status": "success",
+      "outcome": "expected_failure",
+      "schema_version": null,
+      "latency_ms": 3014,
+      "cost": null,
+      "cost_status": "not_exposed_by_provider_contract",
+      "call_count": 1,
+      "failure_type": "ToolEmptyResultError"
+    }
+  ],
+  "redaction": {
+    "raw_payloads": false,
+    "credentials": false,
+    "failure_summary": "exception type only"
+  }
+}

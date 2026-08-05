@@ -26,10 +26,10 @@ from src.domain.services.readiness_evaluator import (
 )
 from src.gateway.deepseek import LLMCallRecord, ask_llm
 from src.guard.g0 import G0SecurityContext, G0Validator
-from src.ports.llm_gateway import LLMGateway
+from src.ports.llm_gateway import LLMGateway, LLMOutputMode
 
 M2_LIVE_MODEL = "deepseek-v4-flash"
-M2_LIVE_TIMEOUT_SECONDS = 30.0
+M2_LIVE_TIMEOUT_SECONDS = 60.0
 M2_LIVE_MAX_TOKENS = 4096
 M2_LIVE_RUNS_PER_CASE = 2
 M2_LIVE_DATASET_VERSION = "m2-interpreter-v1"
@@ -75,8 +75,19 @@ class _ObservedGateway(LLMGateway):
     def __init__(self, records: list[LLMCallRecord]) -> None:
         self._records = records
 
-    def complete(self, prompt: str, *, settings: Settings) -> str:
-        return ask_llm(prompt, settings=settings, observer=self._records.append)
+    def complete(
+        self,
+        prompt: str,
+        *,
+        settings: Settings,
+        output_mode: LLMOutputMode = LLMOutputMode.TEXT,
+    ) -> str:
+        return ask_llm(
+            prompt,
+            settings=settings,
+            output_mode=output_mode,
+            observer=self._records.append,
+        )
 
 
 LIVE_CASES: tuple[LiveCase, ...] = (
@@ -141,16 +152,7 @@ LIVE_CASES: tuple[LiveCase, ...] = (
 def run_m2_live_gate(settings: Settings | None = None) -> dict[str, Any]:
     """运行固定的 M2 真实 LLM Gate，并返回脱敏报告。"""
     source_settings = settings or bootstrap_settings()
-    live_settings = replace(
-        source_settings,
-        deepseek_model=M2_LIVE_MODEL,
-        llm_timeout_seconds=M2_LIVE_TIMEOUT_SECONDS,
-        deepseek_max_tokens=M2_LIVE_MAX_TOKENS,
-        retry_count=0,
-        cache_reads=False,
-        fallbacks=False,
-        partial_success=False,
-    )
+    live_settings = _build_live_settings(source_settings)
     live_settings.validate_runtime(require_llm=True)
     records: list[LLMCallRecord] = []
     interpreter = RequestInterpreter(_ObservedGateway(records), live_settings)
@@ -160,6 +162,23 @@ def run_m2_live_gate(settings: Settings | None = None) -> dict[str, Any]:
         for index in range(1, M2_LIVE_RUNS_PER_CASE + 1)
     ]
     return _report(live_settings, records, results)
+
+
+def _build_live_settings(source_settings: Settings) -> Settings:
+    """Build fixed M2 gate settings while honoring the configured timeout budget."""
+    return replace(
+        source_settings,
+        deepseek_model=M2_LIVE_MODEL,
+        llm_timeout_seconds=max(
+            source_settings.llm_timeout_seconds,
+            M2_LIVE_TIMEOUT_SECONDS,
+        ),
+        deepseek_max_tokens=M2_LIVE_MAX_TOKENS,
+        retry_count=0,
+        cache_reads=False,
+        fallbacks=False,
+        partial_success=False,
+    )
 
 
 def _run_case(case: LiveCase, index: int, interpreter: RequestInterpreter) -> LiveRunResult:
@@ -305,7 +324,7 @@ def _report(
     }
     failures = [item for item in results if item.status != "success"]
     passed = not failures and all(
-        metrics[name] is not None and metrics[name] >= threshold
+        _meets_threshold(metrics.get(name), threshold)
         for name, threshold in thresholds.items()
     )
     return {
@@ -436,3 +455,8 @@ def _rate(values: Any) -> float | None:
 def _average(values: Any) -> float | None:
     materialized = tuple(value for value in values if value is not None)
     return round(sum(materialized) / len(materialized), 4) if materialized else None
+
+
+def _meets_threshold(value: float | None, threshold: float) -> bool:
+    """Return whether an optional metric is present and reaches its gate threshold."""
+    return value is not None and value >= threshold

@@ -34,6 +34,7 @@ $allowedVariables = [System.Collections.Generic.HashSet[string]]::new(
     'TUNIU_FLIGHT_URL'
     'TUNIU_TICKET_URL'
     'AMAP_LIVE_EMPTY_TEXT'
+    'AMAP_LIVE_EMPTY_REGION'
     'TUNIU_LIVE_EMPTY_DESTINATION'
     'STRICT_MODE'
     'RETRY_COUNT'

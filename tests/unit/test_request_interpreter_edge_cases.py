@@ -7,6 +7,7 @@ from src.config import ConfigurationError, Settings
 from src.domain.errors import WorkflowError
 from src.domain.models.interpretation import SafetyFlag
 from src.guard.g0 import G0SecurityContext, G0ValidationResult
+from src.ports.llm_gateway import LLMOutputMode
 from tests.support.llm_fakes import FakeLLMGateway
 
 
@@ -70,7 +71,13 @@ def test_interpreter_maps_configuration_error_and_non_text_response() -> None:
     assert configured.value.payload.category.value == "configuration"
 
     class NonTextGateway:
-        def complete(self, prompt: str, *, settings: Settings) -> str:
+        def complete(
+            self,
+            prompt: str,
+            *,
+            settings: Settings,
+            output_mode: LLMOutputMode = LLMOutputMode.TEXT,
+        ) -> str:
             return 42  # type: ignore[return-value]
 
     non_text = RequestInterpreter(NonTextGateway(), Settings())

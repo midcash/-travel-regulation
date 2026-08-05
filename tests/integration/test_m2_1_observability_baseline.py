@@ -24,6 +24,7 @@ from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.domain.models.value_objects import DateRange
 from src.engine import loop
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
+from src.ports.llm_gateway import LLMOutputMode
 from tests.support.clock_fakes import FakeClock
 from tests.support.fakes import FakeLLM
 from tests.support.llm_fakes import FakeLLMGateway
@@ -69,9 +70,19 @@ class ObservingFakeLLMGateway(FakeLLMGateway):
         self._observation_enabled = observation_enabled
         self.records: list[ObservationRecord] = []
 
-    def complete(self, prompt: str, *, settings: Settings) -> str:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        settings: Settings,
+        output_mode: LLMOutputMode = LLMOutputMode.TEXT,
+    ) -> str:
         """转发 Fake 调用，并仅在测试内收集安全长度摘要。"""
-        response = super().complete(prompt, settings=settings)
+        response = super().complete(
+            prompt,
+            settings=settings,
+            output_mode=output_mode,
+        )
         if self._observation_enabled:
             self.records.append(ObservationRecord(output_chars=len(response)))
         return response
