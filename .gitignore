@@ -17,6 +17,9 @@ venv/
 .claude
 .codex
 .agents
+.codex-temp
+data
+docs
 
 # OS
 Thumbs.db
