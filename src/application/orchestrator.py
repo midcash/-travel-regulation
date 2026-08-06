@@ -1,6 +1,7 @@
-"""M4 step four: controlled Task Graph orchestration.
+"""M4 steps four and five: controlled Task Graph orchestration.
 
-This module owns deterministic scheduling and failure propagation.
+This module owns deterministic scheduling, cancellation, version checks, and
+failure propagation.
 Evidence, candidates, and Research Agent contracts remain for later M4 steps.
 """
 
@@ -30,6 +31,7 @@ from src.domain.models.routing import RouteDecision
 from src.domain.models.state import TripState
 from src.domain.models.value_objects import StableId, TraceId
 from src.domain.state_repository_errors import StateConflictError, StateNotFoundError
+from src.obs.trace import trace_named_span
 from src.ports.state_repository import StateRepository
 
 
@@ -130,6 +132,7 @@ class FakeTaskRunner:
         self._release_events = dict(release_events or {})
         self.started_task_ids: list[StableId] = []
         self.finished_task_ids: list[StableId] = []
+        self.cancelled_task_ids: list[StableId] = []
         self.contexts: list[TaskRunContext] = []
 
     async def run(self, context: TaskRunContext) -> TaskResult:
@@ -139,22 +142,26 @@ class FakeTaskRunner:
         task_id = context.task_spec.task_id
         self.started_task_ids.append(task_id)
         self.contexts.append(context)
-        started_event = self._started_events.get(task_id)
-        if started_event is not None:
-            started_event.set()
-        release_event = self._release_events.get(task_id)
-        if release_event is not None:
-            await release_event.wait()
+        try:
+            started_event = self._started_events.get(task_id)
+            if started_event is not None:
+                started_event.set()
+            release_event = self._release_events.get(task_id)
+            if release_event is not None:
+                await release_event.wait()
 
-        result = self._task_results.get(task_id)
-        if result is None:
-            return TaskResult(
-                task_id=task_id,
-                status=TaskStatus.FAILED,
-                error_ref=f"fake-missing-result:{task_id}",
-            )
-        self.finished_task_ids.append(task_id)
-        return result
+            result = self._task_results.get(task_id)
+            if result is None:
+                return TaskResult(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    error_ref=f"fake-missing-result:{task_id}",
+                )
+            self.finished_task_ids.append(task_id)
+            return result
+        except asyncio.CancelledError:
+            self.cancelled_task_ids.append(task_id)
+            raise
 
 
 class Orchestrator:
@@ -214,42 +221,66 @@ class Orchestrator:
             WorkflowError: Graph, budget, task, timeout, or persistence failure.
         """
         self._validate_inputs(state, route_decision, trace_id)
-        authoritative_state = self._load_authoritative_state(state, trace_id)
-        active_state = authoritative_state
+        with trace_named_span(
+            "orchestrator.run",
+            attributes={
+                "workflow.trace_id": trace_id,
+                "workflow.trip_id": state.trip_id,
+                "workflow.state_version": state.version,
+                "workflow.route_mode": str(route_decision.mode),
+            },
+        ) as workflow_span:
+            authoritative_state = self._load_authoritative_state(state, trace_id)
+            active_state = authoritative_state
 
-        try:
-            snapshot = self._resolve_snapshot(
-                authoritative_state,
-                constraint_snapshot,
-            )
-            graph = self._task_graph_builder.build(
-                route_decision,
-                snapshot,
-                trip_id=authoritative_state.trip_id,
-            )
-            if graph is None:
-                raise TaskGraphBuildError("orchestrator requires a planning route")
-            allocation = self._budget_policy.preflight(graph)
-            active_state = self._prepare_research_state(active_state, route_decision)
-            started_at = monotonic()
-            async with asyncio.timeout(self._budget_policy.workflow_timeout_seconds):
-                task_results = await self._execute_graph(
-                    graph,
-                    trace_id=trace_id,
-                    started_at=started_at,
+            try:
+                snapshot = self._resolve_snapshot(
+                    authoritative_state,
+                    constraint_snapshot,
                 )
-            final_state = self._save_drafting_state(active_state)
-            return OrchestratorResult(
-                trace_id=trace_id,
-                graph=graph,
-                budget=allocation,
-                task_results=task_results,
-                state=final_state,
-            )
-        except Exception as exc:
-            failure = _workflow_error(exc, trace_id=trace_id)
-            self._persist_failure(active_state, failure)
-            raise failure from exc
+                graph = self._task_graph_builder.build(
+                    route_decision,
+                    snapshot,
+                    trip_id=authoritative_state.trip_id,
+                )
+                if graph is None:
+                    raise TaskGraphBuildError("orchestrator requires a planning route")
+                workflow_span.set_attribute("workflow.graph_id", graph.graph_id)
+                workflow_span.set_attribute("workflow.graph_version", graph.graph_version)
+                workflow_span.set_attribute("workflow.task_count", len(graph.tasks))
+                allocation = self._budget_policy.preflight(graph)
+                active_state = self._prepare_research_state(active_state, route_decision)
+                started_at = monotonic()
+                async with asyncio.timeout(self._budget_policy.workflow_timeout_seconds):
+                    task_results = await self._execute_graph(
+                        graph,
+                        trace_id=trace_id,
+                        started_at=started_at,
+                    )
+                final_state = self._save_drafting_state(active_state)
+                workflow_span.set_attribute("workflow.status", WorkflowStatus.DRAFTING.value)
+                workflow_span.set_attribute("workflow.completed_task_count", len(task_results))
+                return OrchestratorResult(
+                    trace_id=trace_id,
+                    graph=graph,
+                    budget=allocation,
+                    task_results=task_results,
+                    state=final_state,
+                )
+            except Exception as exc:
+                failure = _workflow_error(exc, trace_id=trace_id)
+                workflow_span.set_attribute("workflow.status", WorkflowStatus.FAILED.value)
+                workflow_span.set_attribute("workflow.failure_stage", failure.stage)
+                workflow_span.set_attribute(
+                    "workflow.failure_category",
+                    failure.category.value,
+                )
+                workflow_span.set_attribute(
+                    "workflow.failure_code",
+                    failure.public_payload().code,
+                )
+                self._persist_failure(active_state, failure)
+                raise failure from exc
 
     def _load_authoritative_state(self, state: TripState, trace_id: TraceId) -> TripState:
         """Internal contract."""
@@ -379,70 +410,86 @@ class Orchestrator:
         return tuple(results[task_id] for task_id in sorted(results))
 
     async def _run_task(self, context: TaskRunContext) -> TaskResult:
-        """Internal contract."""
+        """Execute one task with a bounded timeout and diagnostic span."""
         task = context.task_spec
-        try:
-            async with asyncio.timeout(task.timeout):
-                outcome = self._task_runner.run(context)
-                result = await outcome if inspect.isawaitable(outcome) else outcome
-        except asyncio.CancelledError:
-            raise
-        except TimeoutError as exc:
-            raise TaskExecutionError(
-                task_id=task.task_id,
-                task_result=_failed_result(task.task_id, "task-timeout"),
-                category=ErrorCategory.TIMEOUT,
-                code="TASK_TIMEOUT",
-                safe_message="task execution timed out",
-                cause=exc,
-            ) from exc
-        except WorkflowError as exc:
-            raise TaskExecutionError(
-                task_id=task.task_id,
-                task_result=_failed_result(task.task_id, "task-workflow-error"),
-                category=exc.category,
-                code=exc.public_payload().code,
-                safe_message=exc.public_payload().safe_message,
-                retryable=exc.retryable,
-                cause=exc,
-            ) from exc
-        except Exception as exc:
-            raise TaskExecutionError(
-                task_id=task.task_id,
-                task_result=_failed_result(task.task_id, "task-runner-error"),
-                category=ErrorCategory.INTERNAL,
-                code="TASK_RUNNER_FAILED",
-                safe_message="task runner failed",
-                cause=exc,
-            ) from exc
+        with trace_named_span(
+            "orchestrator.task",
+            attributes={
+                "workflow.trace_id": context.trace_id,
+                "workflow.graph_id": context.graph_id,
+                "workflow.trip_id": context.trip_id,
+                "workflow.task_id": task.task_id,
+                "workflow.task_type": task.task_type,
+                "workflow.task_capability": task.capability,
+            },
+        ) as task_span:
+            try:
+                async with asyncio.timeout(task.timeout):
+                    outcome = self._task_runner.run(context)
+                    result = await outcome if inspect.isawaitable(outcome) else outcome
+            except asyncio.CancelledError:
+                task_span.set_attribute("workflow.task.status", TaskStatus.CANCELLED.value)
+                task_span.set_attribute("workflow.task.cancelled", True)
+                raise
+            except TimeoutError as exc:
+                raise TaskExecutionError(
+                    task_id=task.task_id,
+                    task_result=_failed_result(task.task_id, "task-timeout"),
+                    category=ErrorCategory.TIMEOUT,
+                    code="TASK_TIMEOUT",
+                    safe_message="task execution timed out",
+                    cause=exc,
+                ) from exc
+            except WorkflowError as exc:
+                raise TaskExecutionError(
+                    task_id=task.task_id,
+                    task_result=_failed_result(task.task_id, "task-workflow-error"),
+                    category=exc.category,
+                    code=exc.public_payload().code,
+                    safe_message=exc.public_payload().safe_message,
+                    retryable=exc.retryable,
+                    cause=exc,
+                ) from exc
+            except Exception as exc:
+                raise TaskExecutionError(
+                    task_id=task.task_id,
+                    task_result=_failed_result(task.task_id, "task-runner-error"),
+                    category=ErrorCategory.INTERNAL,
+                    code="TASK_RUNNER_FAILED",
+                    safe_message="task runner failed",
+                    cause=exc,
+                ) from exc
 
-        if not isinstance(result, TaskResult):
-            raise TaskExecutionError(
-                task_id=task.task_id,
-                task_result=_failed_result(task.task_id, "task-invalid-result"),
-                category=ErrorCategory.VALIDATION,
-                code="TASK_RESULT_INVALID",
-                safe_message="task runner returned an invalid result",
-            )
-        if result.task_id != task.task_id:
-            raise TaskExecutionError(
-                task_id=task.task_id,
-                task_result=_failed_result(task.task_id, "task-id-mismatch"),
-                category=ErrorCategory.VALIDATION,
-                code="TASK_RESULT_ID_MISMATCH",
-                safe_message="task runner returned a result for another task",
-            )
-        if result.status is not TaskStatus.SUCCEEDED:
-            raise TaskExecutionError(
-                task_id=task.task_id,
-                task_result=result
-                if result.status is TaskStatus.FAILED
-                else _failed_result(task.task_id, "task-not-succeeded"),
-                category=ErrorCategory.INTERNAL,
-                code="TASK_FAILED",
-                safe_message="task execution failed",
-            )
-        return result
+            if not isinstance(result, TaskResult):
+                raise TaskExecutionError(
+                    task_id=task.task_id,
+                    task_result=_failed_result(task.task_id, "task-invalid-result"),
+                    category=ErrorCategory.VALIDATION,
+                    code="TASK_RESULT_INVALID",
+                    safe_message="task runner returned an invalid result",
+                )
+            if result.task_id != task.task_id:
+                raise TaskExecutionError(
+                    task_id=task.task_id,
+                    task_result=_failed_result(task.task_id, "task-id-mismatch"),
+                    category=ErrorCategory.VALIDATION,
+                    code="TASK_RESULT_ID_MISMATCH",
+                    safe_message="task runner returned a result for another task",
+                )
+            if result.status is not TaskStatus.SUCCEEDED:
+                raise TaskExecutionError(
+                    task_id=task.task_id,
+                    task_result=result
+                    if result.status is TaskStatus.FAILED
+                    else _failed_result(task.task_id, "task-not-succeeded"),
+                    category=ErrorCategory.INTERNAL,
+                    code="TASK_FAILED",
+                    safe_message="task execution failed",
+                )
+            task_span.set_attribute("workflow.task.status", TaskStatus.SUCCEEDED.value)
+            if result.output_ref is not None:
+                task_span.set_attribute("workflow.task.output_ref", result.output_ref)
+            return result
 
     def _prepare_research_state(
         self,
@@ -490,6 +537,10 @@ class Orchestrator:
         )
         try:
             self._state_repository.save(failed, expected_version=state.version)
+        except StateConflictError:
+            # A newer writer owns the state now. Preserve the original failure
+            # and never overwrite the newer state with a stale FAILED snapshot.
+            return
         except Exception as exc:
             raise WorkflowError(
                 trace_id=failure.trace_id,
