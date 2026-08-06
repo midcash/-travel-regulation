@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -61,6 +62,22 @@ def test_interpret_returns_schema_validated_result_and_passes_explicit_settings(
     assert result.constraint_candidates[0].hardness is ConstraintHardness.HARD
     assert gateway.calls[0][1] == Settings()
     assert gateway.calls[0][2] is LLMOutputMode.JSON_OBJECT
+
+def test_interpret_prompt_provides_reference_date_for_relative_dates() -> None:
+    interpreter, gateway = _interpreter(_payload())
+
+    interpreter.interpret(
+        "下周一去杭州",
+        context=_context(),
+        trace_id="trace:interpret-relative-date",
+        reference_date=date(2026, 7, 30),
+    )
+
+    prompt = gateway.calls[0][0]
+    assert "<REFERENCE_DATE_DATA>\n2026-07-30\n</REFERENCE_DATE_DATA>" in prompt
+    assert "下周一" in prompt
+    assert "Never append weekday names" in prompt
+
 
 
 def test_interpret_delimits_user_data_and_current_context_in_prompt() -> None:

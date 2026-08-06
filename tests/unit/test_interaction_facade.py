@@ -121,6 +121,30 @@ def test_facade_routes_ready_plan_and_preserves_legacy_plan_call() -> None:
     assert repository.get("trip-facade").status is WorkflowStatus.RESEARCHING
 
 
+def test_facade_resolves_relative_date_with_one_reference_date() -> None:
+    relative_date_interpretation = _interpretation(InteractionMode.PLAN, ready=True).replace(
+        "2026-08-01/2026-08-03",
+        "下周一",
+    )
+    facade, planner, repository = _facade(relative_date_interpretation)
+
+    result = facade.execute(
+        _request(),
+        "请规划下周一从上海到杭州的旅行",
+        reference_date=date(2026, 7, 30),
+    )
+
+    assert result.route_decision.mode == InteractionMode.PLAN.value
+    assert result.constraint_snapshot.version == 1
+    assert planner.calls
+    date_constraint = next(
+        item for item in result.constraint_snapshot.constraints if item.category == "date_range"
+    )
+    assert date_constraint.normalized_value.start == date(2026, 8, 3)  # type: ignore[union-attr]
+    assert date_constraint.normalized_value.end == date(2026, 8, 3)  # type: ignore[union-attr]
+    assert repository.get("trip-facade").status is WorkflowStatus.RESEARCHING
+
+
 def test_facade_routes_missing_plan_fields_to_clarification_without_plan_call() -> None:
     facade, planner, repository = _facade(_interpretation(InteractionMode.PLAN, ready=False))
 

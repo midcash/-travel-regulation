@@ -148,6 +148,8 @@ class TripInteractionFacade:
             raise
         active_state = state
         security_context = context or _default_cli_security_context()
+        created_at = self._clock.now()
+        effective_reference_date = reference_date or created_at.date()
 
         with trace_workflow_request(
             trace_id=trace_id,
@@ -187,6 +189,7 @@ class TripInteractionFacade:
                         current_state=state,
                         allowed_modes=tuple(InteractionMode),
                         redacted_input=redacted_input,
+                        reference_date=effective_reference_date,
                     )
                     stage.add_summary(
                         schema_version="m2.interpretation.v1",
@@ -209,7 +212,6 @@ class TripInteractionFacade:
                         entity_count=len(interpretation.extracted_entities),
                         confidence=float(interpretation.overall_confidence),
                     )
-                created_at = self._clock.now()
                 with observe_stage("constraint_service") as stage:
                     snapshot = self._constraint_service.build_snapshot(
                         interpretation,
@@ -218,7 +220,7 @@ class TripInteractionFacade:
                         created_at=created_at,
                         previous_snapshot=state.constraint_snapshot,
                         negation_text=raw_input,
-                        reference_date=reference_date or created_at.date(),
+                        reference_date=effective_reference_date,
                     )
                     stage.add_summary(
                         schema_version="m2.constraint_snapshot.v1",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Collection
+from datetime import date
 from typing import Final, NoReturn
 
 from pydantic import ValidationError
@@ -53,6 +54,7 @@ class RequestInterpreter:
         current_state: TripState | None = None,
         allowed_modes: Collection[InteractionMode] = (),
         redacted_input: str | None = None,
+        reference_date: date | None = None,
     ) -> InterpretationResult:
         """执行一次请求解释。
 
@@ -63,6 +65,8 @@ class RequestInterpreter:
             current_state: 当前 TripState；初次请求可以为空。
             allowed_modes: 上游允许解释器返回的工作模式白名单。
             redacted_input: PII 输入对应的脱敏文本，必须在传给 LLM 前显式提供。
+            reference_date: 相对日期解析使用的日期；由应用入口与 ConstraintService
+                使用同一值传入。
 
         Returns:
             InterpretationResult: 经过 Pydantic Schema 校验的结构化解释。
@@ -95,6 +99,7 @@ class RequestInterpreter:
             conversation_summary=conversation_summary,
             current_state=current_state,
             allowed_modes=normalized_modes,
+            reference_date=reference_date,
         )
 
         try:
@@ -214,10 +219,14 @@ class RequestInterpreter:
         conversation_summary: str,
         current_state: TripState | None,
         allowed_modes: tuple[InteractionMode, ...],
+        reference_date: date | None,
     ) -> str:
         allowed_values = tuple(mode.value for mode in allowed_modes)
         if not allowed_values:
             allowed_values = tuple(mode.value for mode in InteractionMode)
+        reference_date_text = (
+            reference_date.isoformat() if reference_date is not None else "unavailable"
+        )
         schema = json.dumps(
             InterpretationResult.model_json_schema(),
             ensure_ascii=False,
@@ -241,8 +250,13 @@ one of: {json.dumps(allowed_values, ensure_ascii=False)}.
 Interpretation rules:
 - Use canonical categories whenever applicable: origin, destination, date_range,
   travelers, budget, accommodation, activity, avoid_activity.
-- Represent date_range as one string such as "2026-08-01/2026-08-03";
-  represent travelers as an integer; represent budget as a scalar string such
+- Represent date/date_range as a canonical ISO date or date range string, such as
+  "2026-08-01" or "2026-08-01/2026-08-03". Resolve relative expressions such
+  as "下周一", "明天" and "本周末" against REFERENCE_DATE_DATA before returning
+  them. For a one-day relative expression, return the resolved ISO date. Never
+  Never append weekday names, explanations, parentheses, or other text to a date
+  value.
+  Represent travelers as an integer; represent budget as a scalar string such
   as "5000 CNY" or as a number.
 - Every constraint value must be a JSON string, integer, number, boolean, or an
   array of strings. Never return an object as a constraint value.
@@ -272,6 +286,10 @@ JSON Schema:
 <CURRENT_TRIP_STATE_DATA>
 {_state_summary(current_state)}
 </CURRENT_TRIP_STATE_DATA>
+
+<REFERENCE_DATE_DATA>
+{reference_date_text}
+</REFERENCE_DATE_DATA>
 
 <USER_INPUT_DATA>
 {prompt_input}
