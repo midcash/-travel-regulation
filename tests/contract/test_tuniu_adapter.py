@@ -327,6 +327,36 @@ def test_tuniu_adapter_factory_exposes_only_supported_capabilities() -> None:
     assert bindings.context is None
 
 
+def test_tuniu_adapter_stops_after_first_sse_event() -> None:
+    event = json.dumps(_mcp_payload(_hotel_payload()))
+
+    class SingleEventStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield ("event: message\r\ndata: " + event + "\r\n\r\n").encode()
+            raise AssertionError("adapter waited for SSE stream closure")
+
+        async def aclose(self) -> None:
+            return None
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=SingleEventStream(),
+        )
+
+    async def scenario() -> StayProviderResult:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = TuniuTravelProvider(
+                Settings(tuniu_api_key=_TEST_KEY, tuniu_enabled=True),
+                client,
+                FakeClock(_OBSERVED_AT),
+            )
+            return await provider.search(_stay_query(), timeout_seconds=Decimal("1"))
+
+    result = _run(scenario())
+    assert result.items[0].name == "City Hotel"
+
 def test_tuniu_adapter_decodes_one_sse_result() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         event = json.dumps(_mcp_payload(_hotel_payload()))
@@ -459,6 +489,19 @@ def test_tuniu_adapter_maps_timeout_and_connection_failure_once() -> None:
     assert "internal endpoint" not in str(timeout_raised.value)
     assert "internal endpoint" not in str(transport_raised.value)
 
+
+def test_tuniu_adapter_maps_os_error_to_transport_failure() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise OSError("provider socket failed")
+
+    provider, _ = _provider(httpx.MockTransport(handler))
+
+    with pytest.raises(ToolTransportError) as raised:
+        _run(provider.search(_transport_query(), timeout_seconds=Decimal("1")))
+
+    assert raised.value.code == "TOOL_TRANSPORT_ERROR"
+    assert raised.value.retryable is True
+    assert "provider socket failed" not in str(raised.value)
 
 @pytest.mark.parametrize(
     ("response", "query"),

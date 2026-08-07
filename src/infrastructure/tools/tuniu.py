@@ -331,6 +331,11 @@ class TuniuTravelProvider:
                 **_error_kwargs(query, operation),
                 safe_message="provider transport failed",
             ) from exc
+        except OSError as exc:
+            raise ToolTransportError(
+                **_error_kwargs(query, operation),
+                safe_message="provider transport failed",
+            ) from exc
         return _decode_mcp_result(body, query, operation)
 
 
@@ -370,14 +375,19 @@ async def _read_limited_body(
     query: ProviderQueryBase,
     operation: str,
 ) -> bytes:
-    """Read an external response with a bounded in-memory payload size."""
+    """Read one bounded JSON response or the first complete SSE event."""
     chunks: list[bytes] = []
     total_size = 0
+    is_sse = "text/event-stream" in response.headers.get("content-type", "").lower()
     async for chunk in response.aiter_bytes():
         total_size += len(chunk)
         if total_size > MAX_RESPONSE_BYTES:
             raise _schema_error(query, operation, "provider response exceeds the size limit")
         chunks.append(chunk)
+        if is_sse:
+            event = _first_sse_event(b"".join(chunks))
+            if event is not None:
+                return event
     return b"".join(chunks)
 
 
@@ -414,6 +424,14 @@ def _raise_for_http_status(
             safe_message="provider returned an unsupported redirect response",
         )
 
+
+def _first_sse_event(body: bytes) -> bytes | None:
+    """Return the first complete SSE event without waiting for stream closure."""
+    for separator in (b"\r\n\r\n", b"\n\n"):
+        boundary = body.find(separator)
+        if boundary >= 0:
+            return body[: boundary + len(separator)]
+    return None
 
 def _decode_mcp_result(
     body: bytes,
