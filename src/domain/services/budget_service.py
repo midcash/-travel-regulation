@@ -9,7 +9,7 @@ from typing import Final, NoReturn, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.domain.errors import WorkflowError
-from src.domain.models.candidates import Candidate, CandidatePoolResult
+from src.domain.models.candidates import Candidate, CandidatePoolResult, StayCandidate
 from src.domain.models.enums import ErrorCategory, EvidenceStatus, EvidenceTtlCategory
 from src.domain.models.evidence import EvidenceSnapshot
 from src.domain.models.itinerary import (
@@ -307,14 +307,6 @@ class BudgetService:
         selected: list[Candidate] = []
         seen: set[CandidateId] = set()
         for item in context.schedule_result.plan.items:
-            if item.candidate_id in seen:
-                _raise_budget_error(
-                    context,
-                    "BUDGET_DUPLICATE_PLAN_CANDIDATE",
-                    "scheduled plan contains a candidate more than once",
-                    upstream_refs=(item.candidate_id,),
-                )
-            seen.add(item.candidate_id)
             candidate = candidate_by_id.get(item.candidate_id)
             if candidate is None:
                 _raise_budget_error(
@@ -323,6 +315,16 @@ class BudgetService:
                     "scheduled plan references a candidate outside the pool",
                     upstream_refs=(item.candidate_id,),
                 )
+            if item.candidate_id in seen:
+                if isinstance(candidate, StayCandidate):
+                    continue
+                _raise_budget_error(
+                    context,
+                    "BUDGET_DUPLICATE_PLAN_CANDIDATE",
+                    "scheduled plan contains a candidate more than once",
+                    upstream_refs=(item.candidate_id,),
+                )
+            seen.add(item.candidate_id)
             if candidate.price is None:
                 _raise_budget_error(
                     context,

@@ -9,10 +9,12 @@ import pytest
 from pydantic import ValidationError
 
 from src.domain.models.candidates import (
+    Candidate,
     CandidatePoolResult,
     CandidatePrice,
     CandidateProvenance,
     PlaceCandidate,
+    StayCandidate,
 )
 from src.domain.models.enums import EvidenceStatus, EvidenceTtlCategory, WorkflowStatus
 from src.domain.models.evidence import EvidenceItem, EvidenceSnapshot
@@ -101,8 +103,32 @@ def _unpriced_candidate(candidate_id: str = "candidate:place") -> PlaceCandidate
     )
 
 
+
+def _stay_candidate(candidate_id: str = "candidate:stay") -> StayCandidate:
+    price_ref = f"evidence:price:{candidate_id.split(':')[-1]}"
+    return StayCandidate(
+        candidate_id=candidate_id,
+        name="verified hotel",
+        evidence_refs=(price_ref,),
+        provenance=(
+            CandidateProvenance(
+                provider="fake-provider",
+                entity_id=f"entity:{candidate_id}",
+                source_ref=f"source:{candidate_id}",
+            ),
+        ),
+        timezone="Asia/Shanghai",
+        area="destination",
+        check_in=datetime(2026, 8, 10, tzinfo=LOCAL),
+        check_out=datetime(2026, 8, 12, tzinfo=LOCAL),
+        price=CandidatePrice(
+            total=Money(amount=Decimal("900"), currency="CNY"),
+            evidence_refs=(price_ref,),
+        ),
+    )
+
 def _schedule_result(
-    candidates: tuple[PlaceCandidate, ...],
+    candidates: tuple[Candidate, ...],
     *,
     trace_id: str = "trace:budget",
     buffers: tuple[PlanBuffer, ...] = (),
@@ -148,7 +174,7 @@ def _schedule_result(
 
 
 def _context(
-    *candidates: PlaceCandidate,
+    *candidates: Candidate,
     budget: BudgetSpec | None = None,
     target_currency: str | None = None,
     exchange_rates: tuple[ExchangeRate, ...] = (),
@@ -448,6 +474,19 @@ def test_budget_rejects_duplicate_scheduled_candidate() -> None:
 
     assert error.value.payload.code == "BUDGET_DUPLICATE_PLAN_CANDIDATE"
 
+
+
+def test_budget_charges_stay_candidate_once_for_boundary_items() -> None:
+    candidate = _stay_candidate()
+    schedule = _schedule_result((candidate, candidate))
+
+    result = BudgetService().calculate(
+        _context(candidate, budget=_maximum(), schedule_result=schedule)
+    )
+
+    assert len(result.lines) == 1
+    assert result.lines[0].amount == Money(amount=Decimal("900"), currency="CNY")
+    assert result.budget_breakdown.total == Money(amount=Decimal("900"), currency="CNY")
 
 def test_budget_context_requires_matching_trace_and_rate_pairs() -> None:
     candidate = _candidate()
