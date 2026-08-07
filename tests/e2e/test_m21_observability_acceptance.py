@@ -19,6 +19,7 @@ from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.domain.models.value_objects import DateRange
 from src.engine import loop
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
+from tests.support.clock_fakes import FakeClock
 from tests.support.fakes import FakeLLM
 from tests.support.llm_fakes import FakeLLMGateway
 
@@ -96,6 +97,7 @@ def _facade(response: str, planner: PlanExecutor) -> TripInteractionFacade:
         planner=planner,
         gateway=FakeLLMGateway([response]),
         state_repository=InMemoryStateRepository(),
+        clock=FakeClock(),
     )
 
 
@@ -231,6 +233,7 @@ def test_legacy_revision_trace_keeps_review_sources_and_redacts_plan(
         planner=legacy_planner,
         gateway=FakeLLMGateway([_interpretation_response(*_READY_CANDIDATES)]),
         state_repository=InMemoryStateRepository(),
+        clock=FakeClock(),
     )
 
     result = facade.execute(request, "plan a city trip with budget 2000")

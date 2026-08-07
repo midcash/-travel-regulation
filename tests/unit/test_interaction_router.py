@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from decimal import Decimal
 
@@ -100,17 +100,17 @@ def test_interaction_router_routes_ready_plan_and_selects_research_capabilities(
 
     assert decision.mode == InteractionMode.PLAN.value
     assert decision.reason_codes == (RouteReasonCode.PLAN_REQUEST,)
-    assert decision.required_capabilities == ("geo", "transport", "place", "stay")
+    assert decision.required_capabilities == ("geo", "transport", "stay")
     assert decision.missing_blockers == ()
 
 
 @pytest.mark.parametrize(
     ("mode", "expected_capabilities", "reason"),
     [
-        (InteractionMode.ANSWER, ("context",), RouteReasonCode.ANSWER_REQUEST),
+        (InteractionMode.ANSWER, (), RouteReasonCode.ANSWER_REQUEST),
         (
             InteractionMode.COMPARE,
-            ("geo", "place", "context"),
+            ("geo",),
             RouteReasonCode.COMPARE_REQUEST,
         ),
         (
@@ -269,3 +269,23 @@ def test_interaction_router_rejects_untyped_runtime_inputs() -> None:
         router.route(interpretation, "not-readiness", g0_result=g0_result)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="G0ValidationResult"):
         router.route(interpretation, readiness, g0_result="not-g0")  # type: ignore[arg-type]
+
+
+def test_interaction_router_enables_place_only_for_explicit_place_category() -> None:
+    decision = InteractionRouter().route(
+        _interpretation(InteractionMode.PLAN, categories=("place_category",)),
+        _readiness(InteractionMode.PLAN),
+        g0_result=_g0(),
+    )
+
+    assert decision.required_capabilities == ("geo", "transport", "place")
+
+
+def test_interaction_router_enables_answer_context_only_for_explicit_context_type() -> None:
+    decision = InteractionRouter().route(
+        _interpretation(InteractionMode.ANSWER, categories=("weather",)),
+        _readiness(InteractionMode.ANSWER),
+        g0_result=_g0(),
+    )
+
+    assert decision.required_capabilities == ("context",)

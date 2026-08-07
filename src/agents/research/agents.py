@@ -1,4 +1,4 @@
-"""M4 step six: four read-only Research Agents."""
+"""M4 step six: five read-only Research Agents."""
 
 from __future__ import annotations
 

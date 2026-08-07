@@ -1,48 +1,41 @@
 ﻿# M4 Offline Coverage Report
 
 - Stage: M4
-- Status: `PASSED`
+- Status: `PASSED_OFFLINE_PENDING_LIVE`
 - Run date: 2026-08-07
-- Scope: M4 Task Graph, orchestration, research agents, itinerary composer, schedule/budget services, Fake vertical slice, M4 use case, facade, and configuration.
+- Scope: M2→M4 adapter、dynamic router、Geo Research Agent、Task Graph、orchestration、research agents、Composer、Schedule/Budget、Fake vertical slice、M4 facade and configuration.
 
 ## Verification result
 
 Command:
 
 ```powershell
-venv/Scripts/python.exe -m pytest -p no:cacheprovider --basetemp .pytest-tmp-m4-coverage-record -m "not slow" --cov=src.application.task_graph --cov=src.application.task_graph_builder --cov=src.application.budget_policy --cov=src.application.orchestrator --cov=src.application.fake_provider_workflow --cov=src.application.use_cases.m4_plan --cov=src.agents.research --cov=src.agents.itinerary_composer --cov=src.domain.services.schedule_service --cov=src.domain.services.budget_service --cov=src.application.interaction_facade --cov=src.config --cov-report=term-missing --cov-fail-under=90
+venv/Scripts/python.exe -m pytest -q --basetemp="F:\\Commercial project\\skill\\.pytest-tmp-m4-strict-20260807" --cov=. --cov-report=term --cov-fail-under=90
 ```
 
 Result:
 
-- Tests: `605 passed, 8 deselected`
-- Statements: `2,613`
-- Missed: `258`
-- Covered: `2,355`
-- Coverage tool result: `90.13%`
-- Strict threshold check: `PASSED`; `--cov-fail-under=90` reports coverage `90.13%` and exits with code 0.
+- Tests: `618 passed, 8 deselected`
+- Total coverage: `93.44%`
+- Strict threshold: `PASSED`; `--cov-fail-under=90` reached the required threshold and exited with code 0.
+- Ruff: `PASSED`; `venv/Scripts/python.exe -m ruff check .`
 
-The strict aggregate coverage gate passed at `90.13%`, above the required `>=90%` threshold.
-
-## Module coverage
+## Changed-path coverage
 
 | Module | Coverage |
 | --- | ---: |
-| `src/application/use_cases/m4_plan.py` | 68% |
-| `src/application/fake_provider_workflow.py` | 83% |
-| `src/application/orchestrator.py` | 84% |
-| `src/application/task_graph_builder.py` | 85% |
-| `src/application/task_graph.py` | 97% |
-| `src/agents/itinerary_composer.py` | 93% |
+| `src/agents/research/geo_agent.py` | 93% |
 | `src/agents/research/agents.py` | 92% |
-| `src/agents/research/contracts.py` | 96% |
-| `src/domain/services/schedule_service.py` | 90% |
-| `src/domain/services/budget_service.py` | 94% |
-| `src/application/interaction_facade.py` | 95% |
-| `src/config.py` | 93% |
+| `src/application/interaction_router.py` | 97% |
+| `src/application/interaction_facade.py` | 94% |
+| `src/application/fake_provider_workflow.py` | 78% |
+| `src/application/m4_input_resolver.py` | 85% |
+| `src/domain/services/readiness_evaluator.py` | 92% |
+
+The aggregate gate is the acceptance threshold. Lower module-level percentages are retained transparently; no coverage exclusion or forced pass was added.
 
 ## Interpretation
 
-The complete offline suite, strict coverage threshold, Ruff check, and `git diff --check` passed. This report is the offline evidence for the M4 acceptance gate; it must be combined with the Live Vertical Slice report.
+Offline M4 behavior is closed: the Geo prerequisite, snapshot binding, dynamic task selection, structured past-date blocker, and failure propagation have regression evidence. The M4 acceptance remains pending only the real Live M4 revalidation because the current attempt stopped at the external DeepSeek connection before the M4 orchestrator.
 
-The strict M4 offline coverage gate is closed. No M5 implementation is included in this follow-up.
+No M5 implementation is included in this follow-up.

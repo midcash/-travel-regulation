@@ -12,8 +12,10 @@ from src.domain.models.enums import ConstraintHardness
 from src.domain.models.interpretation import ConstraintCandidate, InterpretationResult
 from src.domain.models.state import TripState
 from src.domain.models.trip_request import TravelerProfile, TripRequest
+from src.domain.state_repository_errors import StateConflictError
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
 from src.obs.stage import observe_stage
+from tests.support.clock_fakes import FakeClock
 from tests.support.llm_fakes import FakeLLMGateway
 
 
@@ -33,6 +35,13 @@ class _FailureOnFailedSaveRepository(InMemoryStateRepository):
             raise RuntimeError("database password must not be exposed")
         return super().save(state, expected_version)
 
+
+class _FailureAfterFailedPersistRepository(InMemoryStateRepository):
+    def save(self, state: TripState, expected_version: int) -> TripState:
+        if state.status.value == "failed":
+            persisted = super().save(state, expected_version)
+            raise StateConflictError(state.trip_id, expected_version, persisted.version)
+        return super().save(state, expected_version)
 
 def _request() -> TripRequest:
     return TripRequest(
@@ -99,9 +108,23 @@ def _facade(repository: InMemoryStateRepository) -> TripInteractionFacade:
         planner=_UnexpectedPlanner(),
         gateway=FakeLLMGateway([_interpretation_response()]),
         state_repository=repository,
+        clock=FakeClock(),
     )
 
 
+def test_already_persisted_root_failure_does_not_emit_secondary_persistence_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    clear_contextvars()
+    repository = _FailureAfterFailedPersistRepository()
+
+    with pytest.raises(RuntimeError, match="secret-key"):
+        _facade(repository).execute(_request(), "schedule a trip")
+
+    events = _events(capsys.readouterr().err)
+    assert any(event["event"] == "workflow_failed" for event in events)
+    assert not any(event["event"] == "state_persistence_failed" for event in events)
+    assert repository.get("m21-error-trip").status.value == "failed"
 def test_unknown_planner_error_is_safe_and_persisted(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

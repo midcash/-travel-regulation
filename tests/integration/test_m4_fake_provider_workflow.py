@@ -27,6 +27,8 @@ from src.domain.models.evidence import EvidenceTtlPolicy
 from src.domain.models.provider import (
     ContextProviderResult,
     ContextResultItem,
+    GeoProviderResult,
+    GeoResultItem,
     PlaceProviderResult,
     PlaceResultItem,
     StayProviderResult,
@@ -46,6 +48,7 @@ from src.ports.tool_errors import ToolEmptyResultError
 from tests.support.clock_fakes import FakeClock
 from tests.support.provider_fakes import (
     FakeContextProvider,
+    FakeGeoProvider,
     FakePlaceProvider,
     FakeStayProvider,
     FakeTransportProvider,
@@ -114,6 +117,36 @@ def _route(*capabilities: str) -> RouteDecision:
 
 
 def _providers(*, transport_error: BaseException | None = None) -> ResearchProviders:
+    geo_origin = GeoProviderResult(
+        query_id="provider-query:geo-origin",
+        provider="fake-geo",
+        observed_at=_AS_OF,
+        source_ref="source:geo:origin",
+        items=(
+            GeoResultItem(
+                entity_id="entity:geo-origin",
+                name="Shanghai",
+                location=GeoPoint(latitude=31.23, longitude=121.47),
+                address="Shanghai",
+                confidence=Decimal("1"),
+            ),
+        ),
+    )
+    geo_destination = GeoProviderResult(
+        query_id="provider-query:geo-destination",
+        provider="fake-geo",
+        observed_at=_AS_OF,
+        source_ref="source:geo:destination",
+        items=(
+            GeoResultItem(
+                entity_id="entity:geo-destination",
+                name="Hangzhou",
+                location=GeoPoint(latitude=30.27, longitude=120.15),
+                address="Hangzhou",
+                confidence=Decimal("1"),
+            ),
+        ),
+    )
     transport_item = TransportProviderResult(
         query_id="provider-query:transport",
         provider="fake-transport",
@@ -178,6 +211,7 @@ def _providers(*, transport_error: BaseException | None = None) -> ResearchProvi
     )
     transport_responses: list[object] = [transport_error or transport_item]
     return ResearchProviders(
+        geo=FakeGeoProvider([geo_origin, geo_destination]),
         transport=FakeTransportProvider(transport_responses),
         stay=FakeStayProvider([stay_item]),
         place=FakePlaceProvider([place_item]),
@@ -342,7 +376,7 @@ def _run(workflow: FakeProviderWorkflow, state: TripState, route: RouteDecision)
 def test_fake_provider_workflow_completes_research_to_budget_with_aligned_references() -> None:
     workflow, state, state_repository, gateway = _workflow()
 
-    result = _run(workflow, state, _route("transport", "stay", "place", "context"))
+    result = _run(workflow, state, _route("geo", "transport", "stay", "place", "context"))
 
     assert result.trace_id == "trace:m4-step10"
     assert result.orchestration.state.status is WorkflowStatus.DRAFTING
@@ -361,8 +395,12 @@ def test_fake_provider_workflow_is_deterministic_for_same_fake_inputs() -> None:
     first_workflow, first_state, _, _ = _workflow()
     second_workflow, second_state, _, _ = _workflow()
 
-    first = _run(first_workflow, first_state, _route("transport", "stay", "place", "context"))
-    second = _run(second_workflow, second_state, _route("transport", "stay", "place", "context"))
+    first = _run(
+        first_workflow, first_state, _route("geo", "transport", "stay", "place", "context")
+    )
+    second = _run(
+        second_workflow, second_state, _route("geo", "transport", "stay", "place", "context")
+    )
 
     assert first.orchestration.graph == second.orchestration.graph
     assert first.candidate_pool == second.candidate_pool
@@ -389,16 +427,19 @@ def test_fake_provider_workflow_propagates_provider_empty_result_without_partial
     assert gateway.calls == []
 
 
-def test_fake_provider_workflow_stops_on_unsupported_dependency_task() -> None:
-    workflow, state, state_repository, gateway = _workflow()
+def test_fake_provider_workflow_supports_geo_prerequisite_task() -> None:
+    workflow, state, _, gateway = _workflow()
 
-    with pytest.raises(WorkflowError) as caught:
-        _run(workflow, state, _route("geo", "transport"))
+    result = _run(workflow, state, _route("geo", "transport", "stay", "place"))
 
-    assert caught.value.payload.code == "FAKE_PROVIDER_CAPABILITY_UNSUPPORTED"
-    assert state_repository.get(state.trip_id).status is WorkflowStatus.FAILED
-    assert gateway.calls == []
-
+    assert tuple(task.capability for task in result.orchestration.graph.tasks) == (
+        "geo",
+        "transport",
+        "stay",
+        "place",
+    )
+    assert result.orchestration.graph.tasks[1].dependencies == ("task-geo",)
+    assert len(gateway.calls) == 1
 
 def test_fake_provider_workflow_fails_preflight_when_budget_is_exhausted() -> None:
     workflow, state, state_repository, gateway = _workflow(
@@ -406,7 +447,7 @@ def test_fake_provider_workflow_fails_preflight_when_budget_is_exhausted() -> No
     )
 
     with pytest.raises(WorkflowError) as caught:
-        _run(workflow, state, _route("transport", "stay", "place", "context"))
+        _run(workflow, state, _route("geo", "transport", "stay", "place", "context"))
 
     assert caught.value.payload.code == "BUDGET_EXHAUSTED"
     assert caught.value.payload.category is ErrorCategory.BUDGET
@@ -435,6 +476,7 @@ async def _cancel_workflow() -> None:
     workflow, state, _, _ = _workflow()
     blocking = _BlockingTransportProvider()
     workflow._providers = ResearchProviders(
+        geo=workflow._providers.geo,
         transport=blocking,  # type: ignore[arg-type]
         stay=workflow._providers.stay,
         place=workflow._providers.place,

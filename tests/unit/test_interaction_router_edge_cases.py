@@ -97,7 +97,7 @@ def test_interaction_router_clarifies_non_action_supported_modes_without_reason_
     assert decision.reason_codes == (RouteReasonCode.ROUTE_UNCERTAIN,)
 
 
-def test_interaction_router_adds_stay_and_context_capabilities_for_plan() -> None:
+def test_interaction_router_adds_only_explicit_stay_capability_for_plan() -> None:
     interpretation = _interpretation(
         InteractionMode.PLAN,
         categories=("hotel", "activity"),
@@ -106,10 +106,38 @@ def test_interaction_router_adds_stay_and_context_capabilities_for_plan() -> Non
     assert _required_capabilities(InteractionMode.PLAN, interpretation) == (
         "geo",
         "transport",
-        "place",
         "stay",
-        "context",
     )
     assert _required_capabilities(InteractionMode.ACTION, interpretation) == (
         "action_confirmation",
+    )
+
+def test_interaction_router_does_not_enable_place_or_context_for_activity_alone() -> None:
+    interpretation = _interpretation(InteractionMode.PLAN, categories=("activity",))
+
+    assert _required_capabilities(InteractionMode.PLAN, interpretation) == (
+        "geo",
+        "transport",
+    )
+
+
+def test_interaction_router_enables_place_for_explicit_category() -> None:
+    interpretation = _interpretation(InteractionMode.PLAN, categories=("scenic",))
+
+    assert _required_capabilities(InteractionMode.PLAN, interpretation) == (
+        "geo",
+        "transport",
+        "place",
+    )
+
+
+
+
+def test_interaction_router_enables_context_for_explicit_context_type() -> None:
+    interpretation = _interpretation(InteractionMode.PLAN, categories=("weather",))
+
+    assert _required_capabilities(InteractionMode.PLAN, interpretation) == (
+        "geo",
+        "transport",
+        "context",
     )

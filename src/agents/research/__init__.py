@@ -19,6 +19,7 @@ from .contracts import (
     CandidateDraft,
     EvidenceDraft,
 )
+from .geo_agent import GeoResearchAgent
 
 __all__ = [
     "AgentBudget",
@@ -29,6 +30,7 @@ __all__ = [
     "AgentSummary",
     "CandidateDraft",
     "ContextPolicyAgent",
+    "GeoResearchAgent",
     "EvidenceDraft",
     "PlaceResearchAgent",
     "ResearchAgentError",

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from datetime import date
@@ -20,6 +20,7 @@ from src.domain.models.value_objects import DateRange
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
 from src.obs import trace as trace_module
 from src.obs.stage import observe_stage
+from tests.support.clock_fakes import FakeClock
 from tests.support.llm_fakes import FakeLLMGateway
 
 
@@ -107,6 +108,7 @@ def test_facade_emits_ordered_stage_summaries_and_spans(
         planner=_Planner(),
         gateway=FakeLLMGateway([_interpretation_response()]),
         state_repository=InMemoryStateRepository(),
+        clock=FakeClock(),
     )
     result = facade.execute(_request(), "请安排上海到杭州的三日行程。")
 

@@ -16,6 +16,7 @@ _QUESTION_TEXT: Final[dict[ReadinessBlockerCode, str]] = {
     ReadinessBlockerCode.MISSING_DESTINATION: "请补充目的地。",
     ReadinessBlockerCode.DATE_OR_DURATION_UNDETERMINED: "请补充出行日期范围或旅行天数。",
     ReadinessBlockerCode.DATE_DURATION_CONFLICT: "请确认出行日期范围与旅行天数，二者目前不一致。",
+    ReadinessBlockerCode.DATE_RANGE_IN_PAST: "the requested trip dates are earlier than today",
     ReadinessBlockerCode.TRAVELER_COUNT_UNDETERMINED: "请确认出行人数。",
     ReadinessBlockerCode.SPECIAL_POPULATION_UNDETERMINED: (
         "请说明是否有儿童、老人、婴幼儿或无障碍需求。"

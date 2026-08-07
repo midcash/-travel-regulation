@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict
 from src.agents.request_interpreter import RequestInterpreter
 from src.application.fake_provider_workflow import FakeProviderWorkflowResult
 from src.application.interaction_router import InteractionRouter
+from src.application.m4_input_resolver import M4InputResolver
 from src.application.orchestrator import OrchestratorResult
 from src.application.trip_state_integration import TripStateIntegration
 from src.application.use_cases.plan_trip import PlanTripResult
@@ -126,6 +127,7 @@ class TripInteractionFacade:
         self._constraint_service = constraint_service or ConstraintService()
         self._readiness_evaluator = readiness_evaluator or ReadinessEvaluator()
         self._router = router or InteractionRouter()
+        self._m4_input_resolver = M4InputResolver()
         self._state_integration = state_integration or TripStateIntegration()
         self._clarification_builder = clarification_builder or ClarificationBuilder()
         self._clock = clock or SystemClock()
@@ -270,6 +272,7 @@ class TripInteractionFacade:
                             request=request,
                             current_plan_ref=current_plan_ref,
                             security_context=security_context,
+                            reference_date=effective_reference_date,
                         ),
                     )
                     stage.add_summary(
@@ -311,6 +314,13 @@ class TripInteractionFacade:
                             str(blocker_id) for blocker_id in decision.missing_blockers
                         ),
                     )
+                planning_request = request
+                if decision.mode == InteractionMode.PLAN.value:
+                    planning_request = self._m4_input_resolver.resolve(
+                        request,
+                        snapshot,
+                        trace_id=trace_id,
+                    )
                 with observe_stage("state") as stage:
                     stage.add_summary(
                         schema_version="m2.state.v1",
@@ -322,7 +332,7 @@ class TripInteractionFacade:
                     active_state = self._apply_and_save_state(
                         state,
                         decision,
-                        request=request,
+                        request=planning_request,
                         constraint_snapshot=snapshot,
                     )
                     stage.add_summary(
@@ -338,7 +348,7 @@ class TripInteractionFacade:
                 if decision.mode == InteractionMode.PLAN.value:
                     plan_result = _execute_plan(
                         self._planner,
-                        request,
+                        planning_request,
                         raw_input,
                         state=active_state,
                         route_decision=decision,
@@ -439,6 +449,12 @@ class TripInteractionFacade:
         try:
             self._state_repository.save(failed, expected_version=state.version)
         except Exception as persistence_error:
+            try:
+                authoritative = self._state_repository.get(state.trip_id)
+            except Exception:
+                authoritative = None
+            if authoritative is not None and authoritative.status is WorkflowStatus.FAILED:
+                return
             persistence_failure = from_exception(
                 persistence_error,
                 trace_id=str(failure.payload.trace_id),
@@ -449,7 +465,6 @@ class TripInteractionFacade:
                 **persistence_failure.event_fields(),
                 root_failure_code=failure.payload.code,
             )
-
 
 def _default_cli_security_context() -> G0SecurityContext:
     """为本地 CLI 提供显式、最小的已认证调用上下文。"""
@@ -506,12 +521,14 @@ def _readiness_context(
     request: TripRequest,
     current_plan_ref: StableId | None,
     security_context: G0SecurityContext,
+    reference_date: date,
 ) -> ReadinessEvaluationContext:
     """把已校验入口上下文转换为 G1 所需的类型化上下文。"""
     mode = interpretation.mode_hint or request.requested_mode
     return ReadinessEvaluationContext(
         mode=mode,
         current_plan_ref=current_plan_ref,
+        reference_date=reference_date,
         action_preconditions=ActionPreconditions(
             authenticated=security_context.authenticated,
             authorized=security_context.authorized,

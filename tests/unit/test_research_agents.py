@@ -17,6 +17,7 @@ from src.agents.research import (
     AgentSummary,
     CandidateDraft,
     ContextPolicyAgent,
+    GeoResearchAgent,
     PlaceResearchAgent,
     ResearchAgentError,
     StayResearchAgent,
@@ -28,6 +29,8 @@ from src.domain.models.constraint import ConstraintSnapshot
 from src.domain.models.provider import (
     ContextProviderResult,
     ContextResultItem,
+    GeoProviderResult,
+    GeoResultItem,
     PlaceProviderResult,
     PlaceResultItem,
     StayProviderResult,
@@ -40,6 +43,7 @@ from src.domain.models.value_objects import DateRange, GeoPoint, Money
 from src.ports.tool_errors import ToolEmptyResultError
 from tests.support.provider_fakes import (
     FakeContextProvider,
+    FakeGeoProvider,
     FakePlaceProvider,
     FakeStayProvider,
     FakeTransportProvider,
@@ -83,7 +87,9 @@ def _context(
     context_types: tuple[str, ...] = (),
     place_category: str | None = None,
 ) -> AgentContext:
-    expected_output_type = "EvidenceDraft" if capability == "context" else "CandidateDraft"
+    expected_output_type = (
+        "EvidenceDraft" if capability in {"context", "geo"} else "CandidateDraft"
+    )
     task_type = "context_research" if capability == "context" else f"{capability}_research"
     task = TaskSpec(
         task_id=f"task-{capability}",
@@ -180,6 +186,23 @@ def _place_result() -> PlaceProviderResult:
     )
 
 
+def _geo_result(*, entity_id: str = "geo-1", name: str = "Shanghai") -> GeoProviderResult:
+    return GeoProviderResult(
+        query_id=f"provider-geo-query-{entity_id}",
+        provider="fake-geo",
+        observed_at=_OBSERVED_AT,
+        source_ref="https://provider.example/geo",
+        items=(
+            GeoResultItem(
+                entity_id=entity_id,
+                name=name,
+                location=GeoPoint(latitude=31.23, longitude=121.47),
+                address=name,
+                confidence=Decimal("0.99"),
+            ),
+        ),
+    )
+
 def _context_result(*, summary: str = "Clear weather") -> ContextProviderResult:
     return ContextProviderResult(
         query_id="provider-context-query",
@@ -204,8 +227,16 @@ def _run(coroutine: object) -> object:
         return asyncio.run(coroutine)  # type: ignore[arg-type]
 
 
-def test_four_research_agents_return_structured_drafts_without_writing_state() -> None:
+def test_five_research_agents_return_structured_drafts_without_writing_state() -> None:
     cases = (
+        (
+            GeoResearchAgent(
+                FakeGeoProvider([_geo_result(), _geo_result(entity_id="geo-2", name="Hangzhou")])
+            ),
+            _context("geo", max_tool_calls=2),
+            4,
+            0,
+        ),
         (
             TransportResearchAgent(FakeTransportProvider([_transport_result()])),
             _context("transport"),
@@ -316,6 +347,57 @@ def test_research_agent_failures_are_explicit_and_do_not_return_partial_success(
     assert budget_caught.value.payload.code == "BUDGET_EXHAUSTED"
 
 
+def test_geo_agent_is_fail_fast_for_empty_schema_timeout_budget_and_partial_failure() -> None:
+    empty = GeoProviderResult.model_construct(
+        query_id="provider-empty-geo",
+        provider="fake-geo",
+        operation="geo_search",
+        observed_at=_OBSERVED_AT,
+        source_ref="https://provider.example/geo",
+        items=(),
+    )
+    with pytest.raises(ResearchAgentError) as empty_caught:
+        _run(GeoResearchAgent(FakeGeoProvider([empty])).run(_context("geo", max_tool_calls=2)))
+    assert empty_caught.value.payload.code == "TOOL_EMPTY_RESULT_ERROR"
+
+    class _InvalidGeoProvider:
+        async def search(self, query: object, *, timeout_seconds: Decimal) -> object:
+            del query, timeout_seconds
+            return {"invalid": True}
+
+    with pytest.raises(ResearchAgentError) as schema_caught:
+        _run(GeoResearchAgent(_InvalidGeoProvider()).run(_context("geo", max_tool_calls=2)))
+    assert schema_caught.value.payload.code == "RESEARCH_RESULT_SCHEMA_INVALID"
+
+    with pytest.raises(ResearchAgentError) as timeout_caught:
+        _run(
+            GeoResearchAgent(_NeverReleasesTransportProvider()).run(
+                _context("geo", max_tool_calls=2).model_copy(
+                    update={
+                        "budget": AgentBudget(
+                            max_tool_calls=2,
+                            timeout_seconds=Decimal("0.001"),
+                            max_results=4,
+                        )
+                    }
+                )
+            )
+        )
+    assert timeout_caught.value.payload.code == "RESEARCH_TIMEOUT"
+
+    budget_provider = FakeGeoProvider([_geo_result(), _geo_result(entity_id="geo-2")])
+    with pytest.raises(ResearchAgentError) as budget_caught:
+        _run(GeoResearchAgent(budget_provider).run(_context("geo", max_tool_calls=1)))
+    assert budget_caught.value.payload.code == "BUDGET_EXHAUSTED"
+    assert budget_provider.calls == []
+
+    partial_provider = FakeGeoProvider([_geo_result(), RuntimeError("second location failed")])
+    with pytest.raises(ResearchAgentError) as partial_caught:
+        _run(
+            GeoResearchAgent(partial_provider).run(_context("geo", max_tool_calls=2))
+        )
+    assert partial_caught.value.payload.code == "RESEARCH_PROVIDER_ERROR"
+    assert len(partial_provider.calls) == 2
 def test_research_agents_reject_missing_dates_and_provider_injection_text() -> None:
     no_date_request = _request(date_range=None).model_copy(
         update={"date_range": None, "duration_days": 3}

@@ -108,6 +108,7 @@ class M4PlanUseCase:
             state_repository=state_repository,
             evidence_repository=repository,
             providers=ResearchProviders(
+                geo=assembly.geo or _MissingProvider("geo"),
                 transport=assembly.transport or _MissingProvider("transport"),
                 stay=assembly.stay or _MissingProvider("stay"),
                 place=assembly.place or _MissingProvider("place"),

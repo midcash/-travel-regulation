@@ -31,8 +31,20 @@ _CONTEXT_CATEGORIES: Final[frozenset[str]] = frozenset(
         "policy",
         "weather",
         "holiday",
-        "activity",
-        "activities",
+        "context_type",
+        "context_types",
+    }
+)
+_PLACE_CATEGORIES: Final[frozenset[str]] = frozenset(
+    {
+        "place",
+        "place_category",
+        "category",
+        "scenic",
+        "sightseeing",
+        "attraction",
+        "restaurant",
+        "food",
     }
 )
 
@@ -249,18 +261,25 @@ def _required_capabilities(
     interpretation: InterpretationResult,
 ) -> tuple[str, ...]:
     """把路由模式映射为有限能力名，不在本步骤创建任务或调用工具。"""
+    categories = {
+        candidate.category.strip().casefold()
+        for candidate in interpretation.constraint_candidates
+    }
     if mode is InteractionMode.ANSWER:
-        return ("context",)
+        return ("context",) if categories.intersection(_CONTEXT_CATEGORIES) else ()
     if mode is InteractionMode.COMPARE:
-        return ("geo", "place", "context")
+        capabilities = ["geo"]
+        if categories.intersection(_PLACE_CATEGORIES):
+            capabilities.append("place")
+        if categories.intersection(_CONTEXT_CATEGORIES):
+            capabilities.append("context")
+        return tuple(capabilities)
     if mode is InteractionMode.PLAN:
-        categories = {
-            candidate.category.strip().casefold()
-            for candidate in interpretation.constraint_candidates
-        }
-        capabilities = ["geo", "transport", "place"]
+        capabilities = ["geo", "transport"]
         if categories.intersection(_STAY_CATEGORIES):
             capabilities.append("stay")
+        if categories.intersection(_PLACE_CATEGORIES):
+            capabilities.append("place")
         if categories.intersection(_CONTEXT_CATEGORIES):
             capabilities.append("context")
         return tuple(capabilities)

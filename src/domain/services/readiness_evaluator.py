@@ -104,6 +104,7 @@ class ReadinessEvaluationContext(BaseModel):
     mode: InteractionMode = InteractionMode.PLAN
     current_plan_ref: StableId | None = None
     action_preconditions: ActionPreconditions | None = None
+    reference_date: date | None = None
 
 
 class ReadinessEvaluator:
@@ -137,6 +138,10 @@ class ReadinessEvaluator:
         if evaluation_context.mode in _PLANNING_MODES:
             blockers.extend(_required_trip_fields(grouped))
             blockers.extend(_date_duration_conflicts(grouped))
+            if evaluation_context.reference_date is not None:
+                blockers.extend(
+                    _past_date_blockers(grouped, evaluation_context.reference_date)
+                )
             blockers.extend(_budget_conflicts(grouped))
         if evaluation_context.mode in {
             InteractionMode.PLAN,
@@ -253,6 +258,39 @@ def _date_duration_conflicts(
             )
         ]
     return []
+
+
+def _past_date_blockers(
+    grouped: dict[str, tuple[Constraint, ...]],
+    reference_date: date,
+) -> list[ReadinessBlocker]:
+    """Block planning when an explicit trip has already started."""
+    dates = _items_for(grouped, _DATE_CATEGORIES)
+    past_items: list[Constraint] = []
+    for item in dates:
+        if _is_undetermined(item):
+            continue
+        value = item.normalized_value
+        start = (
+            value.start
+            if isinstance(value, DateRange)
+            else value
+            if isinstance(value, date)
+            else None
+        )
+        if start is not None and start < reference_date:
+            past_items.append(item)
+    if not past_items:
+        return []
+    return [
+        _blocker(
+            ReadinessBlockerCode.DATE_RANGE_IN_PAST,
+            field="date_range",
+            message="the requested trip date range is earlier than the current date",
+            constraint_refs=_refs(past_items),
+            priority=22,
+        )
+    ]
 
 
 def _budget_conflicts(

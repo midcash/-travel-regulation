@@ -81,6 +81,37 @@ def test_readiness_evaluator_accepts_complete_plan_and_exposes_missing_budget_as
     assert first.confidence == Decimal("0.9")
 
 
+def test_readiness_evaluator_blocks_explicit_past_date_before_external_research() -> None:
+    result = ReadinessEvaluator().evaluate(
+        _ready_trip_snapshot(),
+        trace_id="trace-past-date",
+        context=ReadinessEvaluationContext(
+            mode=InteractionMode.PLAN,
+            reference_date=date(2026, 8, 7),
+        ),
+    )
+
+    assert result.ready is False
+    blockers = [
+        item for item in result.blockers if item.code is ReadinessBlockerCode.DATE_RANGE_IN_PAST
+    ]
+    assert len(blockers) == 1
+    assert blockers[0].field == "date_range"
+    assert blockers[0].constraint_refs == ("date-1",)
+
+
+def test_readiness_evaluator_keeps_future_date_plannable() -> None:
+    result = ReadinessEvaluator().evaluate(
+        _ready_trip_snapshot(),
+        trace_id="trace-future-date",
+        context=ReadinessEvaluationContext(
+            mode=InteractionMode.PLAN,
+            reference_date=date(2026, 7, 30),
+        ),
+    )
+
+    assert result.ready is True
+    assert ReadinessBlockerCode.DATE_RANGE_IN_PAST not in _codes(result)
 def test_readiness_evaluator_blocks_missing_critical_trip_fields_without_fallback() -> None:
     result = ReadinessEvaluator().evaluate(_snapshot(), trace_id="trace-1")
 

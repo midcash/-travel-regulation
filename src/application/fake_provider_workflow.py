@@ -23,6 +23,7 @@ from src.agents.research import (
     AgentResult,
     CandidateDraft,
     ContextPolicyAgent,
+    GeoResearchAgent,
     PlaceResearchAgent,
     StayResearchAgent,
     TransportResearchAgent,
@@ -71,10 +72,55 @@ from src.ports.evidence_repository import EvidenceRepository
 from src.ports.state_repository import StateRepository
 from src.ports.tool_provider import (
     ContextProvider,
+    GeoProvider,
     PlaceProvider,
     StayProvider,
     TransportProvider,
 )
+
+_CONTEXT_CATEGORIES = frozenset(
+    {"event", "events", "opening_hours", "policy", "weather", "holiday"}
+)
+_PLACE_CATEGORIES = frozenset(
+    {
+        "place",
+        "place_category",
+        "category",
+        "scenic",
+        "sightseeing",
+        "attraction",
+        "restaurant",
+        "food",
+    }
+)
+
+
+def _snapshot_context_types(snapshot: ConstraintSnapshot) -> tuple[str, ...]:
+    """Extract only explicit context type constraints from the frozen snapshot."""
+    values: set[str] = set()
+    for constraint in snapshot.constraints:
+        category = constraint.category.casefold()
+        if category in {"context_type", "context_types"}:
+            value = constraint.normalized_value
+            if isinstance(value, str):
+                values.add(value)
+            elif isinstance(value, tuple):
+                values.update(item for item in value if isinstance(item, str))
+        elif category in _CONTEXT_CATEGORIES:
+            values.add(category)
+    return tuple(sorted(values))
+
+
+def _snapshot_place_category(snapshot: ConstraintSnapshot) -> str | None:
+    """Extract one explicit place category without inventing a default."""
+    for constraint in snapshot.constraints:
+        category = constraint.category.casefold()
+        value = constraint.normalized_value
+        if category in {"place_category", "category"} and isinstance(value, str):
+            return value
+        if category in _PLACE_CATEGORIES and category not in {"place", "category"}:
+            return category
+    return None
 
 
 class ComposerPort(Protocol):
@@ -100,8 +146,9 @@ class ScheduleInputBuilder(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ResearchProviders:
-    """Explicit provider ports used by the four M4 research agents."""
+    """Explicit provider ports used by the five M4 research agents."""
 
+    geo: GeoProvider
     transport: TransportProvider
     stay: StayProvider
     place: PlaceProvider
@@ -491,10 +538,11 @@ class _ResearchTaskRunner:
     ) -> None:
         self._request = request
         self._constraint_snapshot = constraint_snapshot
-        self._context_types = context_types
-        self._place_category = place_category
+        self._context_types = context_types or _snapshot_context_types(constraint_snapshot)
+        self._place_category = place_category or _snapshot_place_category(constraint_snapshot)
         self._stay_area = stay_area
         self._agents: Mapping[str, object] = {
+            "geo": GeoResearchAgent(providers.geo),
             "transport": TransportResearchAgent(providers.transport),
             "stay": StayResearchAgent(providers.stay),
             "place": PlaceResearchAgent(providers.place),
@@ -557,6 +605,7 @@ class _ResearchTaskRunner:
 def _tool_name(capability: str) -> str:
     """Map a graph capability to the provider tool allowlist."""
     return {
+        "geo": "geo_search",
         "transport": "transport_search",
         "stay": "stay_search",
         "place": "place_search",

@@ -11,6 +11,7 @@ from src.config import Settings
 from src.domain.errors import WorkflowError
 from src.domain.models.enums import ConstraintHardness, InteractionMode, WorkflowStatus
 from src.domain.models.interpretation import ConstraintCandidate, InterpretationResult
+from src.domain.models.readiness import ReadinessBlockerCode
 from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.domain.models.value_objects import DateRange
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
@@ -124,13 +125,13 @@ def test_facade_routes_ready_plan_and_preserves_legacy_plan_call() -> None:
 def test_facade_resolves_relative_date_with_one_reference_date() -> None:
     relative_date_interpretation = _interpretation(InteractionMode.PLAN, ready=True).replace(
         "2026-08-01/2026-08-03",
-        "下周一",
+        "\u4e0b\u5468\u4e00",
     )
     facade, planner, repository = _facade(relative_date_interpretation)
 
     result = facade.execute(
         _request(),
-        "请规划下周一从上海到杭州的旅行",
+        "\u8bf7\u89c4\u5212\u4e0b\u5468\u4e00\u4ece\u4e0a\u6d77\u5230\u676d\u5dde\u7684\u65c5\u884c",
         reference_date=date(2026, 7, 30),
     )
 
@@ -145,6 +146,23 @@ def test_facade_resolves_relative_date_with_one_reference_date() -> None:
     assert repository.get("trip-facade").status is WorkflowStatus.RESEARCHING
 
 
+def test_facade_blocks_past_date_as_structured_clarification_without_planner_call() -> None:
+    facade, planner, repository = _facade(_interpretation(InteractionMode.PLAN, ready=True))
+
+    result = facade.execute(
+        _request(),
+        "plan a trip from Shanghai to Hangzhou",
+        reference_date=date(2026, 8, 7),
+    )
+
+    assert result.route_decision.mode == InteractionMode.CLARIFY.value
+    assert result.clarification is not None
+    assert any(
+        question.code is ReadinessBlockerCode.DATE_RANGE_IN_PAST
+        for question in result.clarification.questions
+    )
+    assert planner.calls == []
+    assert repository.get("trip-facade").status is WorkflowStatus.CLARIFYING
 def test_facade_routes_missing_plan_fields_to_clarification_without_plan_call() -> None:
     facade, planner, repository = _facade(_interpretation(InteractionMode.PLAN, ready=False))
 
