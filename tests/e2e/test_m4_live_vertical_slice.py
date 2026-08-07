@@ -225,13 +225,16 @@ def _run_case(
         settings,
         state_repository=repository,
         plan_variant="balanced",
-        place_category="ticket",
     )
     route = RouteDecision(
         mode=InteractionMode.PLAN.value,
         confidence=Decimal("1"),
         reason_codes=(RouteReasonCode.PLAN_REQUEST,),
-        required_capabilities=("transport", "stay", "place"),
+        # The M4 live gate uses the Tuniu hotel capability as its stable
+        # real-provider path. Flight and ticket endpoints are separate M3
+        # contracts and may legitimately have no inventory or certificate
+        # availability for a future-dated probe.
+        required_capabilities=("stay",),
     )
     result = use_case.execute_routed(
         request,

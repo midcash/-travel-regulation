@@ -51,7 +51,7 @@ Codex 不自动调用真实 LLM 或供应商 API。用户在具备真实密钥�
 - `m4-live-constraint`：预算上限与多偏好约束；
 - `m4-live-complex`：多人、多个偏好和弹性节奏约束。
 
-每次运行固定：`retry_count=0`、无缓存、无 fallback、无 partial success，并断言：
+每次运行固定：`retry_count=0`、无缓存、无 fallback、无 partial success。Live slice 使用已验证可返回住宿候选的 Tuniu hotel capability；航班和门票属于独立的 M3 工具契约，不作为本切片的必选能力。测试仍断言：
 
 - TaskGraph 合法，关键任务全部 `SUCCEEDED`；
 - Evidence/Candidate/PlanCandidate 引用完整；
