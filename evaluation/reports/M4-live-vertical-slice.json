@@ -1,0 +1,32 @@
+﻿{
+  "stage": "M4",
+  "status": "PENDING_MANUAL_ACCEPTANCE",
+  "gate": "live_vertical_slice",
+  "schema_version": "m4.live-vertical-slice.v1",
+  "prompt_version": "m4-itinerary-composer-v1",
+  "model": null,
+  "configured_providers": [],
+  "expected_runs": [
+    {"case_id": "m4-live-normal", "repetition": 1},
+    {"case_id": "m4-live-normal", "repetition": 2},
+    {"case_id": "m4-live-constraint", "repetition": 1},
+    {"case_id": "m4-live-complex", "repetition": 1}
+  ],
+  "budget": {
+    "retry_count": 0,
+    "cache_reads": false,
+    "fallbacks": false,
+    "partial_success": false,
+    "fixed_per_case": true
+  },
+  "observations": [],
+  "failure_summary": null,
+  "missing_credentials": [],
+  "redaction": {
+    "raw_payloads": false,
+    "credentials": false,
+    "full_prompts": false,
+    "pii": false,
+    "failure_summary": "exception type only"
+  }
+}

@@ -9,7 +9,9 @@ param(
 
     [switch]$LiveSmoke,
 
-    [switch]$LiveTool
+    [switch]$LiveTool,
+
+    [switch]$LiveM4
 )
 
 Set-StrictMode -Version Latest
@@ -41,6 +43,7 @@ $allowedVariables = [System.Collections.Generic.HashSet[string]]::new(
     'CACHE_READS'
     'FALLBACKS'
     'PARTIAL_SUCCESS'
+    'WORKFLOW_USE_CASE'
     'LLM_TIMEOUT_SECONDS'
     'EXTERNAL_API_TIMEOUT_SECONDS'
     'MAX_REVISION_ROUNDS'
@@ -131,13 +134,13 @@ if (-not $LiveTool) {
     }
 }
 
-if ($ValidateOnly -and ($LiveSmoke -or $LiveTool)) {
+if ($ValidateOnly -and ($LiveSmoke -or $LiveTool -or $LiveM4)) {
     throw '-ValidateOnly 不能与 Live 模式同时使用。'
 }
-if ($LiveSmoke -and $LiveTool) {
-    throw '-LiveSmoke 与 -LiveTool 不能同时使用。'
+if (($LiveSmoke -and $LiveTool) -or ($LiveSmoke -and $LiveM4) -or ($LiveTool -and $LiveM4)) {
+    throw '-LiveSmoke、-LiveTool 与 -LiveM4 只能选择一个。'
 }
-if (($LiveSmoke -or $LiveTool) -and $MainArgs.Count -gt 0) {
+if (($LiveSmoke -or $LiveTool -or $LiveM4) -and $MainArgs.Count -gt 0) {
     throw 'Live 模式不接受主流程参数。'
 }
 
@@ -152,7 +155,15 @@ if ($LiveTool) {
         }
     }
 }
-
+if ($LiveM4) {
+    $tuniuKey = [Environment]::GetEnvironmentVariable('TUNIU_API_KEY', 'Process')
+    if ([string]::IsNullOrWhiteSpace($tuniuKey)) {
+        throw 'TUNIU_API_KEY 未进入进程环境，拒绝启动 M4 Live Vertical Slice。'
+    }
+    if (Test-PlaceholderValue -Value $tuniuKey) {
+        throw 'TUNIU_API_KEY 仍是占位符，拒绝启动 M4 Live Vertical Slice。'
+    }
+}
 $loadedDisplay = ($loadedNames | Sort-Object -Unique) -join ', '
 Write-Host "已将本地配置载入进程环境：$loadedDisplay"
 Write-Host '密钥值不会显示，环境变量仅在当前 PowerShell 进程及其子进程中有效。'
@@ -188,6 +199,17 @@ if ($LiveTool) {
     Push-Location $projectRoot
     try {
         & $pythonPath -m pytest -m 'slow and live_tool'
+        exit $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+}
+if ($LiveM4) {
+    Write-Host '已启用 M4 Live Vertical Slice：将在当前进程环境中运行真实 LLM/Tuniu 端到端切片。'
+    Push-Location $projectRoot
+    try {
+        & $pythonPath -m pytest -m 'slow and live_e2e'
         exit $LASTEXITCODE
     }
     finally {
