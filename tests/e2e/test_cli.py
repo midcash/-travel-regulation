@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
@@ -10,7 +10,14 @@ from src.domain.models.trip_request import TripRequest
 
 @pytest.fixture(autouse=True)
 def fake_bootstrap_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main, 'bootstrap_settings', lambda: Settings(deepseek_api_key='fake-key'))
+    monkeypatch.setattr(
+        main,
+        'bootstrap_settings',
+        lambda: Settings(
+            deepseek_api_key='fake-key',
+            workflow_use_case='legacy',
+        ),
+    )
 
 
 def _result(request: TripRequest) -> PlanTripResult:

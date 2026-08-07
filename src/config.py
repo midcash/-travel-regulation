@@ -6,6 +6,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from math import isfinite
+from typing import Literal, cast
 from urllib.parse import urlparse
 
 _LOG_LEVELS = frozenset({'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'})
@@ -29,6 +30,7 @@ class Settings:
     cache_reads: bool = False
     fallbacks: bool = False
     partial_success: bool = False
+    workflow_use_case: Literal["m4", "legacy"] = "m4"
     llm_timeout_seconds: float = 30.0
     external_api_timeout_seconds: float = 15.0
     max_revision_rounds: int = 2
@@ -58,6 +60,8 @@ class Settings:
             raise ConfigurationError('strict mode forbids FALLBACKS')
         if self.partial_success:
             raise ConfigurationError('strict mode forbids PARTIAL_SUCCESS')
+        if self.workflow_use_case not in {"m4", "legacy"}:
+            raise ConfigurationError("WORKFLOW_USE_CASE must be m4 or legacy")
         if self.retry_count < 0:
             raise ConfigurationError('RETRY_COUNT must not be negative')
         if not isfinite(self.llm_timeout_seconds) or self.llm_timeout_seconds <= 0:
@@ -108,6 +112,7 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         partial_success=_parse_bool(
             values.get('PARTIAL_SUCCESS', 'false'), 'PARTIAL_SUCCESS'
         ),
+        workflow_use_case=_parse_workflow_use_case(values.get('WORKFLOW_USE_CASE', 'm4')),
         llm_timeout_seconds=_parse_float(
             values.get('LLM_TIMEOUT_SECONDS', '30'), 'LLM_TIMEOUT_SECONDS'
         ),
@@ -138,6 +143,14 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
             'CONSOLE_SPAN_EXPORTER',
         ),
     )
+
+
+def _parse_workflow_use_case(raw: str) -> Literal["m4", "legacy"]:
+    """Parse the explicit CLI Use Case selection."""
+    normalized = raw.strip().lower()
+    if normalized not in {"m4", "legacy"}:
+        raise ConfigurationError("WORKFLOW_USE_CASE must be m4 or legacy")
+    return cast(Literal["m4", "legacy"], normalized)
 
 
 def _parse_bool(raw: str, name: str) -> bool:

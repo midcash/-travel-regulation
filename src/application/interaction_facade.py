@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from time import perf_counter
-from collections.abc import Callable
-from typing import Protocol, cast
+from typing import Protocol, TypeAlias, cast
 
 from pydantic import BaseModel, ConfigDict
 
 from src.agents.request_interpreter import RequestInterpreter
+from src.application.fake_provider_workflow import FakeProviderWorkflowResult
 from src.application.interaction_router import InteractionRouter
+from src.application.orchestrator import OrchestratorResult
 from src.application.trip_state_integration import TripStateIntegration
 from src.application.use_cases.plan_trip import PlanTripResult
 from src.config import Settings
@@ -26,7 +28,7 @@ from src.domain.models.readiness import (
 from src.domain.models.routing import RouteDecision
 from src.domain.models.state import TripState
 from src.domain.models.trip_request import TripRequest
-from src.domain.models.value_objects import StableId
+from src.domain.models.value_objects import StableId, TraceId
 from src.domain.services.clarification_builder import ClarificationBuilder
 from src.domain.services.constraint_service import ConstraintService
 from src.domain.services.readiness_evaluator import ReadinessEvaluationContext, ReadinessEvaluator
@@ -51,11 +53,32 @@ from src.ports.state_repository import StateRepository
 logger = get_logger(__name__)
 
 
-class PlanExecutor(Protocol):
-    """现有 PLAN Facade 的最小调用契约。"""
+PlanResult: TypeAlias = PlanTripResult | FakeProviderWorkflowResult
 
-    def execute(self, request: TripRequest) -> PlanTripResult:
-        """执行已有的 PLAN 规划流程。"""
+
+class PlanExecutor(Protocol):
+    """legacy PLAN Use Case 的最小调用契约。"""
+
+    def execute(self, request: TripRequest) -> PlanResult:
+        """执行兼容规划流程。"""
+        ...
+
+
+class RoutedPlanExecutor(Protocol):
+    """M4 Routed Use Case 的最小调用契约。"""
+
+    def execute_routed(
+        self,
+        request: TripRequest,
+        *,
+        state: TripState,
+        route_decision: RouteDecision,
+        constraint_snapshot: ConstraintSnapshot,
+        raw_input: str,
+        trace_id: TraceId,
+    ) -> PlanResult:
+        """执行已经完成 M2 路由的规划请求。"""
+        ...
 
 
 class TripInteractionResult(BaseModel):
@@ -68,7 +91,7 @@ class TripInteractionResult(BaseModel):
     constraint_snapshot: ConstraintSnapshot
     readiness: ReadinessResult
     clarification: ClarificationRequest | None = None
-    plan_result: PlanTripResult | None = None
+    plan_result: PlanResult | None = None
 
 
 class TripInteractionFacade:
@@ -78,7 +101,7 @@ class TripInteractionFacade:
         self,
         settings: Settings,
         *,
-        planner: PlanExecutor,
+        planner: PlanExecutor | RoutedPlanExecutor,
         gateway: LLMGateway | None = None,
         state_repository: StateRepository | None = None,
         g0_validator: G0Validator | None = None,
@@ -313,7 +336,16 @@ class TripInteractionFacade:
                 )
                 plan_result = None
                 if decision.mode == InteractionMode.PLAN.value:
-                    plan_result = _execute_plan(self._planner, request, raw_input)
+                    plan_result = _execute_plan(
+                        self._planner,
+                        request,
+                        raw_input,
+                        state=active_state,
+                        route_decision=decision,
+                        constraint_snapshot=snapshot,
+                        trace_id=trace_id,
+                    )
+                    active_state = _state_after_plan_result(active_state, plan_result)
                 record_workflow_result("success")
                 logger.info(
                     "workflow_completed",
@@ -378,10 +410,7 @@ class TripInteractionFacade:
     ) -> TripState:
         updated = self._state_integration.apply_route_decision(state, decision)
         if updated is state:
-            if (
-                state.trip_request == request
-                and state.constraint_snapshot == constraint_snapshot
-            ):
+            if state.trip_request == request and state.constraint_snapshot == constraint_snapshot:
                 return state
             updated = state.model_copy(
                 update={
@@ -432,19 +461,43 @@ def _default_cli_security_context() -> G0SecurityContext:
 
 
 def _execute_plan(
-    planner: PlanExecutor,
+    planner: PlanExecutor | RoutedPlanExecutor,
     request: TripRequest,
     raw_input: str,
-) -> PlanTripResult:
-    """Pass validated transient text to planners that support the CLI bridge."""
+    *,
+    state: TripState,
+    route_decision: RouteDecision,
+    constraint_snapshot: ConstraintSnapshot,
+    trace_id: str,
+) -> PlanResult:
+    """将 PLAN 路由交给 M4 Use Case 或显式 legacy 兼容入口。"""
+    execute_routed = getattr(planner, "execute_routed", None)
+    if callable(execute_routed):
+        typed_executor = cast(Callable[..., PlanResult], execute_routed)
+        return typed_executor(
+            request,
+            state=state,
+            route_decision=route_decision,
+            constraint_snapshot=constraint_snapshot,
+            raw_input=raw_input,
+            trace_id=trace_id,
+        )
     execute_with_raw_input = getattr(planner, "execute_with_raw_input", None)
     if callable(execute_with_raw_input):
         typed_executor = cast(
-            Callable[[TripRequest, str], PlanTripResult],
+            Callable[[TripRequest, str], PlanResult],
             execute_with_raw_input,
         )
         return typed_executor(request, raw_input)
-    return planner.execute(request)
+    return cast(PlanExecutor, planner).execute(request)
+
+
+def _state_after_plan_result(state: TripState, plan_result: PlanResult) -> TripState:
+    """同步 M4 Orchestrator 已持久化的状态，避免 Facade 返回旧快照。"""
+    orchestration = getattr(plan_result, "orchestration", None)
+    if isinstance(orchestration, OrchestratorResult):
+        return orchestration.state
+    return state
 
 
 def _readiness_context(
