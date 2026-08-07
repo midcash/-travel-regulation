@@ -18,7 +18,7 @@ from src.application.orchestrator import FakeTaskRunner, Orchestrator
 from src.application.task_graph_builder import TaskGraphBuilder
 from src.domain.errors import WorkflowError
 from src.domain.models.constraint import ConstraintSnapshot
-from src.domain.models.enums import WorkflowStatus
+from src.domain.models.enums import ErrorCategory, WorkflowStatus
 from src.domain.models.routing import RouteDecision, RouteReasonCode
 from src.domain.models.state import TripState
 from src.domain.models.trip_request import TravelerProfile, TripRequest
@@ -164,6 +164,39 @@ def test_orchestrator_runs_independent_tasks_in_parallel_without_sleep() -> None
     with _event_loop_socket():
         asyncio.run(scenario())
 
+
+def test_orchestrator_preserves_nested_research_failure_cause() -> None:
+    inner_failure = RuntimeError("provider connection failed")
+
+    class ResearchFailureRunner:
+        def run(self, context: object) -> object:
+            raise WorkflowError(
+                trace_id="trace-1",
+                stage="research_agent",
+                category=ErrorCategory.TOOL,
+                code="RESEARCH_PROVIDER_ERROR",
+                safe_message="research provider call failed",
+                cause=inner_failure,
+            )
+
+    state = _state()
+    repository = InMemoryStateRepository()
+    repository.create(state)
+
+    with _event_loop_socket():
+        with pytest.raises(WorkflowError) as raised:
+            Orchestrator(
+                state_repository=repository,
+                task_runner=ResearchFailureRunner(),
+            ).execute(
+                state,
+                _route(capabilities=("geo",)),
+                trace_id="trace-1",
+            )
+
+    assert raised.value.payload.code == "RESEARCH_PROVIDER_ERROR"
+    assert raised.value.cause is inner_failure
+    assert repository.get("trip-1").last_error is not None
 
 def test_orchestrator_task_failure_marks_failed_and_does_not_return_partial_result() -> None:
     state = _state()

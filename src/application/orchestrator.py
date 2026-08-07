@@ -448,7 +448,7 @@ class Orchestrator:
                     code=exc.public_payload().code,
                     safe_message=exc.public_payload().safe_message,
                     retryable=exc.retryable,
-                    cause=exc,
+                    cause=exc.cause or exc,
                 ) from exc
             except Exception as exc:
                 raise TaskExecutionError(
