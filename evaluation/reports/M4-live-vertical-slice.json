@@ -1,16 +1,30 @@
-﻿{
+{
   "stage": "M4",
-  "status": "PENDING_MANUAL_ACCEPTANCE",
+  "status": "SUCCESS",
   "gate": "live_vertical_slice",
   "schema_version": "m4.live-vertical-slice.v1",
   "prompt_version": "m4-itinerary-composer-v1",
-  "model": null,
-  "configured_providers": [],
+  "model": "deepseek-v4-flash",
+  "configured_providers": [
+    "tuniu"
+  ],
   "expected_runs": [
-    {"case_id": "m4-live-normal", "repetition": 1},
-    {"case_id": "m4-live-normal", "repetition": 2},
-    {"case_id": "m4-live-constraint", "repetition": 1},
-    {"case_id": "m4-live-complex", "repetition": 1}
+    {
+      "case_id": "m4-live-normal",
+      "repetition": 1
+    },
+    {
+      "case_id": "m4-live-normal",
+      "repetition": 2
+    },
+    {
+      "case_id": "m4-live-constraint",
+      "repetition": 1
+    },
+    {
+      "case_id": "m4-live-complex",
+      "repetition": 1
+    }
   ],
   "budget": {
     "retry_count": 0,
@@ -19,7 +33,100 @@
     "partial_success": false,
     "fixed_per_case": true
   },
-  "observations": [],
+  "observations": [
+    {
+      "case_id": "m4-live-normal",
+      "repetition": 1,
+      "status": "success",
+      "trace_id": "m4-live:m4-live-normal:1",
+      "model": "deepseek-v4-flash",
+      "providers": [
+        "tuniu"
+      ],
+      "llm_calls": 1,
+      "input_tokens": 7471,
+      "output_tokens": 1005,
+      "latency_ms": 22898,
+      "tool_calls": 6,
+      "model_calls": 0,
+      "graph_task_count": 1,
+      "candidate_count": 7,
+      "plan_count": 3,
+      "references_complete": true,
+      "hard_constraints_complete": true,
+      "hard_budget_within_limit": true,
+      "failure_type": null
+    },
+    {
+      "case_id": "m4-live-normal",
+      "repetition": 2,
+      "status": "success",
+      "trace_id": "m4-live:m4-live-normal:2",
+      "model": "deepseek-v4-flash",
+      "providers": [
+        "tuniu"
+      ],
+      "llm_calls": 1,
+      "input_tokens": 7448,
+      "output_tokens": 901,
+      "latency_ms": 16638,
+      "tool_calls": 6,
+      "model_calls": 0,
+      "graph_task_count": 1,
+      "candidate_count": 7,
+      "plan_count": 3,
+      "references_complete": true,
+      "hard_constraints_complete": true,
+      "hard_budget_within_limit": true,
+      "failure_type": null
+    },
+    {
+      "case_id": "m4-live-constraint",
+      "repetition": 1,
+      "status": "success",
+      "trace_id": "m4-live:m4-live-constraint:1",
+      "model": "deepseek-v4-flash",
+      "providers": [
+        "tuniu"
+      ],
+      "llm_calls": 1,
+      "input_tokens": 8253,
+      "output_tokens": 1053,
+      "latency_ms": 15615,
+      "tool_calls": 6,
+      "model_calls": 0,
+      "graph_task_count": 1,
+      "candidate_count": 8,
+      "plan_count": 3,
+      "references_complete": true,
+      "hard_constraints_complete": true,
+      "hard_budget_within_limit": true,
+      "failure_type": null
+    },
+    {
+      "case_id": "m4-live-complex",
+      "repetition": 1,
+      "status": "success",
+      "trace_id": "m4-live:m4-live-complex:1",
+      "model": "deepseek-v4-flash",
+      "providers": [
+        "tuniu"
+      ],
+      "llm_calls": 1,
+      "input_tokens": 5027,
+      "output_tokens": 874,
+      "latency_ms": 12489,
+      "tool_calls": 6,
+      "model_calls": 0,
+      "graph_task_count": 1,
+      "candidate_count": 4,
+      "plan_count": 3,
+      "references_complete": true,
+      "hard_constraints_complete": true,
+      "hard_budget_within_limit": true,
+      "failure_type": null
+    }
+  ],
   "failure_summary": null,
   "missing_credentials": [],
   "redaction": {

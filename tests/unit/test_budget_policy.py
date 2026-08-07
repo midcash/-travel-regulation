@@ -65,3 +65,22 @@ def test_policy_rejects_runtime_usage_without_partial_success() -> None:
 def test_policy_rejects_invalid_concurrency_limit() -> None:
     with pytest.raises(ValueError, match="max_concurrent_tasks"):
         BudgetPolicy(max_tasks=2, max_concurrent_tasks=3)
+
+def test_policy_rejects_non_finite_workflow_timeout() -> None:
+    with pytest.raises(ValueError, match="workflow_timeout_seconds must be finite"):
+        BudgetPolicy(workflow_timeout_seconds=float("inf"))
+
+
+def test_policy_rejects_non_task_graph_preflight_input() -> None:
+    with pytest.raises(TypeError, match="graph must be a TaskGraph"):
+        BudgetPolicy().preflight(object())  # type: ignore[arg-type]
+
+
+def test_policy_rejects_non_budget_usage_check_input() -> None:
+    with pytest.raises(TypeError, match="usage must be a BudgetUsage"):
+        BudgetPolicy().check_usage(object())  # type: ignore[arg-type]
+
+
+def test_policy_rejects_non_finite_runtime_elapsed_time() -> None:
+    with pytest.raises(ValueError, match="elapsed_seconds must be finite"):
+        BudgetUsage(elapsed_seconds=float("inf"))
