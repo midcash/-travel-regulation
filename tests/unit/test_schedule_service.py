@@ -376,6 +376,21 @@ def test_schedule_rejects_transport_without_exact_times() -> None:
     assert raised.value.payload.code == "SCHEDULE_FIXED_TIME_MISSING"
 
 
+def test_schedule_allows_stay_boundaries_outside_daily_window() -> None:
+    stay = _stay().model_copy(
+        update={
+            "check_in": datetime(2026, 8, 10, 0, tzinfo=LOCAL),
+            "check_out": datetime(2026, 8, 12, 0, tzinfo=LOCAL),
+        }
+    )
+    result = ScheduleService().schedule(_context(stay, plan=_plan(stay.candidate_id, days=(1,))))
+
+    assert result.plan.items[0].title == "verified hotel check-in"
+    assert result.plan.items[0].start_at == datetime(2026, 8, 10, 0, tzinfo=LOCAL)
+    assert result.plan.items[1].title == "verified hotel check-out"
+    assert result.plan.items[1].start_at == datetime(2026, 8, 12, 0, tzinfo=LOCAL)
+
+
 def test_schedule_rejects_fixed_event_outside_daily_window() -> None:
     train = _transport(
         departure_at=datetime(2026, 8, 10, 7, tzinfo=LOCAL),

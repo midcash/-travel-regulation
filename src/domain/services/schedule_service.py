@@ -620,7 +620,7 @@ class ScheduleService:
         day_end: datetime,
         existing_events: list[_ScheduledEvent],
     ) -> datetime:
-        """Place one exact-time event without changing its provider timestamp."""
+        """Place one exact-time event while honoring its event semantics."""
         if event.end_at < event.start_at:
             _raise_schedule_error(
                 context,
@@ -628,14 +628,15 @@ class ScheduleService:
                 "fixed event has a negative duration",
                 upstream_refs=(event.candidate_id,),
             )
-        if event.start_at < day_start or event.end_at > day_end:
+        is_stay_boundary = event.kind in {"stay_check_in", "stay_check_out"}
+        if not is_stay_boundary and (event.start_at < day_start or event.end_at > day_end):
             _raise_schedule_error(
                 context,
                 "SCHEDULE_FIXED_EVENT_OUTSIDE_DAY",
                 "fixed event is outside the configured daily window",
                 upstream_refs=(event.candidate_id,),
             )
-        if event.start_at < cursor or any(
+        if (not is_stay_boundary and event.start_at < cursor) or any(
             _events_overlap(event, other) for other in existing_events
         ):
             _raise_schedule_error(
