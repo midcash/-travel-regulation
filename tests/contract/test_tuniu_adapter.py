@@ -225,6 +225,12 @@ def test_tuniu_adapter_normalizes_all_supported_capabilities_once() -> None:
     )
     assert stay.operation == "stay_search"
     assert stay.items[0].area == "Beijing"
+    assert stay.items[0].check_in == datetime(
+        2026, 8, 15, tzinfo=timezone(timedelta(hours=8))
+    )
+    assert stay.items[0].check_out == datetime(
+        2026, 8, 17, tzinfo=timezone(timedelta(hours=8))
+    )
     assert stay.items[0].total_price == Money(amount=Decimal("1416"), currency="CNY")
     assert place.operation == "place_search"
     assert place.items[0].name == "Summer Palace Adult"

@@ -8,7 +8,7 @@ import json
 import math
 import re
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from time import perf_counter
 from typing import cast, overload
@@ -234,7 +234,7 @@ class TuniuTravelProvider:
 
         try:
             items = tuple(
-                _normalize_hotel_item(record) for record in records[: query.max_results]
+                _normalize_hotel_item(record, query) for record in records[: query.max_results]
             )
             return StayProviderResult(
                 query_id=query.query_id,
@@ -575,8 +575,8 @@ def _normalize_flight_item(value: object, query: TransportQuery) -> TransportRes
     )
 
 
-def _normalize_hotel_item(value: object) -> StayResultItem:
-    """Normalize one documented hotel record to the stay DTO."""
+def _normalize_hotel_item(value: object, query: StayQuery) -> StayResultItem:
+    """Normalize one hotel record and preserve the requested stay window."""
     item = _plain_mapping(value)
     hotel_id = item.get("hotelId")
     if isinstance(hotel_id, bool) or not isinstance(hotel_id, str | int):
@@ -585,6 +585,8 @@ def _normalize_hotel_item(value: object) -> StayResultItem:
         entity_id=_stable_id("hotel", hotel_id),
         name=_clean_external_text(item.get("hotelName")),
         area=_clean_external_text(item.get("cityName")),
+        check_in=datetime.combine(query.date_range.start, time.min, tzinfo=_CHINA_TIMEZONE),
+        check_out=datetime.combine(query.date_range.end, time.min, tzinfo=_CHINA_TIMEZONE),
         total_price=_money(item.get("lowestPrice")),
         source_ref=TUNIU_HOTEL_URL,
     )
