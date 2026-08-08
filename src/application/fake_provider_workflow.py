@@ -59,6 +59,7 @@ from src.domain.services.budget_service import (
     ExchangeRate,
 )
 from src.domain.services.candidate_pool import CandidatePool
+from src.domain.services.request_constraints import RequestConstraintService
 from src.domain.services.schedule_service import (
     ActivitySpec,
     OpeningWindow,
@@ -68,6 +69,7 @@ from src.domain.services.schedule_service import (
     ScheduleResult,
     ScheduleService,
 )
+from src.obs.log import get_logger
 from src.ports.evidence_repository import EvidenceRepository
 from src.ports.state_repository import StateRepository
 from src.ports.tool_provider import (
@@ -93,6 +95,7 @@ _PLACE_CATEGORIES = frozenset(
         "food",
     }
 )
+logger = get_logger(__name__)
 
 
 def _snapshot_context_types(snapshot: ConstraintSnapshot) -> tuple[str, ...]:
@@ -277,6 +280,7 @@ class FakeProviderWorkflow:
         schedule_service: ScheduleService | None = None,
         budget_service: BudgetService | None = None,
         budget_policy: BudgetPolicy | None = None,
+        request_constraint_service: RequestConstraintService | None = None,
     ) -> None:
         self._state_repository = state_repository
         self._evidence_repository = evidence_repository
@@ -287,6 +291,7 @@ class FakeProviderWorkflow:
         self._schedule_service = schedule_service or ScheduleService()
         self._budget_service = budget_service or BudgetService()
         self._budget_policy = budget_policy or BudgetPolicy()
+        self._request_constraint_service = request_constraint_service or RequestConstraintService()
 
     def execute(
         self,
@@ -337,6 +342,11 @@ class FakeProviderWorkflow:
     ) -> FakeProviderWorkflowResult:
         """Execute one fail-fast vertical slice."""
         request, snapshot = self._require_planning_inputs(state, trace_id)
+        try:
+            self._request_constraint_service.validate(request, snapshot, trace_id=trace_id)
+        except WorkflowError as exc:
+            self._persist_downstream_failure(state, exc)
+            raise
         runner = _ResearchTaskRunner(
             request=request,
             constraint_snapshot=snapshot,
@@ -475,6 +485,40 @@ class FakeProviderWorkflow:
             candidates,
             evidence_snapshot=evidence_snapshot,
             constraint_snapshot=constraint_snapshot,
+        )
+        constraints_by_id = {
+            constraint.id: constraint for constraint in constraint_snapshot.constraints
+        }
+        logger.info(
+            "candidate_pool_built",
+            accepted_count=len(candidate_pool.candidates),
+            rejected_count=len(candidate_pool.rejected),
+            accepted_kinds=tuple(
+                sorted({candidate.kind for candidate in candidate_pool.candidates})
+            ),
+            rejected_kinds=tuple(
+                sorted({item.candidate.kind for item in candidate_pool.rejected})
+            ),
+            rejection_codes=tuple(
+                sorted(
+                    {
+                        reason.code.value
+                        for item in candidate_pool.rejected
+                        for reason in item.reasons
+                    }
+                )
+            ),
+            rejection_constraint_categories=tuple(
+                sorted(
+                    {
+                        constraints_by_id[reason.constraint_ref].category.casefold()
+                        for item in candidate_pool.rejected
+                        for reason in item.reasons
+                        if reason.constraint_ref in constraints_by_id
+                    }
+                )
+            ),
+            deferred_constraint_count=len(candidate_pool.deferred_hard_constraint_refs),
         )
         return evidence_snapshot, candidate_pool
 

@@ -50,34 +50,49 @@ def _request() -> TripRequest:
     )
 
 
-def _constraint_snapshot() -> ConstraintSnapshot:
-    return ConstraintSnapshot(
-        version=2,
-        created_at=AS_OF,
-        request_id="request:composer",
-        constraints=(
+def _constraint_snapshot(*, include_travelers: bool = False) -> ConstraintSnapshot:
+    constraints = [
+        Constraint(
+            id="constraint:date",
+            category="date_range",
+            normalized_value=DateRange(start="2026-08-10", end="2026-08-12"),
+            hardness=ConstraintHardness.HARD,
+            priority=100,
+            scope="trip",
+            source=ConstraintSource.USER,
+            confidence=Decimal("1"),
+            user_confirmed=True,
+        ),
+        Constraint(
+            id="constraint:slow",
+            category="preference",
+            normalized_value="few_transfers",
+            hardness=ConstraintHardness.SOFT,
+            priority=10,
+            scope="trip",
+            source=ConstraintSource.USER,
+            confidence=Decimal("0.9"),
+        ),
+    ]
+    if include_travelers:
+        constraints.append(
             Constraint(
-                id="constraint:date",
-                category="date_range",
-                normalized_value=DateRange(start="2026-08-10", end="2026-08-12"),
+                id="constraint:travelers",
+                category="travelers",
+                normalized_value=2,
                 hardness=ConstraintHardness.HARD,
                 priority=100,
                 scope="trip",
                 source=ConstraintSource.USER,
                 confidence=Decimal("1"),
                 user_confirmed=True,
-            ),
-            Constraint(
-                id="constraint:slow",
-                category="preference",
-                normalized_value="few_transfers",
-                hardness=ConstraintHardness.SOFT,
-                priority=10,
-                scope="trip",
-                source=ConstraintSource.USER,
-                confidence=Decimal("0.9"),
-            ),
-        ),
+            )
+        )
+    return ConstraintSnapshot(
+        version=2,
+        created_at=AS_OF,
+        request_id="request:composer",
+        constraints=tuple(constraints),
     )
 
 
@@ -159,6 +174,7 @@ def _context(
     ),
     evidence_items: tuple[EvidenceItem, ...] | None = None,
     candidate_pool_kwargs: dict[str, object] | None = None,
+    include_travelers: bool = False,
 ) -> ComposerContext:
     items = evidence_items or (
         _evidence("evidence:transport", "candidate:transport"),
@@ -174,7 +190,7 @@ def _context(
     return ComposerContext(
         trace_id="trace:composer",
         request=_request(),
-        constraint_snapshot=_constraint_snapshot(),
+        constraint_snapshot=_constraint_snapshot(include_travelers=include_travelers),
         candidate_pool=CandidatePoolResult.model_validate(pool_data),
         evidence_snapshot=EvidenceSnapshot(
             snapshot_id="evidence-snapshot:composer",
@@ -265,7 +281,50 @@ def test_composer_prompt_delimits_structured_data_and_forbids_provider_calls() -
     assert "<EVIDENCE_DATA>" in prompt
     assert "Do not call tools" in prompt
     assert "candidate:transport" in prompt
-    assert "m4-itinerary-composer-v1" in prompt
+    assert "m4-itinerary-composer-v2" in prompt
+
+
+def test_composer_prompt_defines_empty_day_skeleton_semantics() -> None:
+    prompt = build_composer_prompt(_context())
+
+    assert "A day may contain zero selected candidates" in prompt
+    assert "Do not invent a candidate to fill an empty day" in prompt
+
+
+def test_composer_accepts_empty_day_skeleton_entries_for_unassigned_days() -> None:
+    payload = _plan("budget", ["candidate:transport"], ["evidence:transport"])
+    payload["day_skeleton"] = [
+        {
+            "day_number": 1,
+            "candidate_refs": ["candidate:transport"],
+            "focus": "travel day",
+        },
+        {
+            "day_number": 2,
+            "candidate_refs": [],
+            "focus": "unassigned day",
+        },
+        {
+            "day_number": 3,
+            "candidate_refs": [],
+            "focus": "unassigned day",
+        },
+    ]
+
+    response = ComposerResponse.model_validate(
+        {"plans": [payload], "reduction_reason": "only one supported variant"}
+    )
+
+    assert response.plans[0].day_skeleton[1].candidate_refs == ()
+
+    result = ItineraryComposer(
+        FakeLLMGateway(
+            [json.dumps({"plans": [payload], "reduction_reason": "only one supported variant"})]
+        ),
+        Settings(),
+    ).compose(_context())
+
+    assert result.plan_candidates[0].day_skeleton[2].candidate_refs == ()
 
 
 def test_composer_allows_fewer_variants_only_with_explicit_reason() -> None:
@@ -344,6 +403,17 @@ def test_composer_rejects_deferred_hard_constraints_before_llm_call() -> None:
     with pytest.raises(ValidationError):
         _context(candidate_pool_kwargs={"deferred_hard_constraint_refs": ("constraint:date",)})
     assert gateway.calls == []
+
+
+def test_composer_accepts_deferred_request_level_traveler_constraint() -> None:
+    context = _context(
+        include_travelers=True,
+        candidate_pool_kwargs={
+            "deferred_hard_constraint_refs": ("constraint:travelers",),
+        },
+    )
+
+    assert context.candidate_pool.deferred_hard_constraint_refs == ("constraint:travelers",)
 
 
 def test_composer_rejects_prompt_injection_in_generated_display_text() -> None:

@@ -18,7 +18,9 @@ from src.application.fake_provider_workflow import (
     ScheduleInputs,
 )
 from src.domain.errors import WorkflowError
+from src.domain.models.constraint import Constraint, ConstraintSnapshot, ConstraintSource
 from src.domain.models.enums import (
+    ConstraintHardness,
     ErrorCategory,
     InteractionMode,
     WorkflowStatus,
@@ -423,6 +425,36 @@ def test_fake_provider_workflow_propagates_provider_empty_result_without_partial
 
     assert caught.value.payload.code == "TOOL_EMPTY_RESULT_ERROR"
     assert caught.value.payload.category is ErrorCategory.TOOL
+    assert state_repository.get(state.trip_id).status is WorkflowStatus.FAILED
+    assert gateway.calls == []
+
+
+def test_fake_provider_workflow_validates_request_level_travelers_before_research() -> None:
+    workflow, state, state_repository, gateway = _workflow()
+    mismatched_snapshot = ConstraintSnapshot(
+        version=1,
+        created_at=_AS_OF,
+        request_id=state.trip_request.request_id,
+        constraints=(
+            Constraint(
+                id="constraint:travelers",
+                category="travelers",
+                normalized_value=1,
+                hardness=ConstraintHardness.HARD,
+                priority=100,
+                scope="trip",
+                source=ConstraintSource.USER,
+                confidence=Decimal("1"),
+                user_confirmed=True,
+            ),
+        ),
+    )
+    invalid_state = state.model_copy(update={"constraint_snapshot": mismatched_snapshot})
+
+    with pytest.raises(WorkflowError) as caught:
+        _run(workflow, invalid_state, _route("geo", "transport", "stay", "place"))
+
+    assert caught.value.payload.code == "REQUEST_LEVEL_TRAVELERS_MISMATCH"
     assert state_repository.get(state.trip_id).status is WorkflowStatus.FAILED
     assert gateway.calls == []
 

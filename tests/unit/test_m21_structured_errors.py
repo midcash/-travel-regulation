@@ -1,27 +1,61 @@
 from __future__ import annotations
 
 import json
+import ssl
 from decimal import Decimal
 
 import pytest
+from pydantic import BaseModel, ValidationError, model_validator
 from structlog.contextvars import clear_contextvars
 
 from src.application.interaction_facade import TripInteractionFacade
 from src.config import Settings
-from src.domain.models.enums import ConstraintHardness
+from src.domain.errors import WorkflowError
+from src.domain.models.enums import ConstraintHardness, ErrorCategory
 from src.domain.models.interpretation import ConstraintCandidate, InterpretationResult
 from src.domain.models.state import TripState
 from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.domain.state_repository_errors import StateConflictError
 from src.infrastructure.persistence.in_memory import InMemoryStateRepository
+from src.obs.errors import from_exception
 from src.obs.stage import observe_stage
 from tests.support.clock_fakes import FakeClock
 from tests.support.llm_fakes import FakeLLMGateway
 
 
+class _SafeSslError(ssl.SSLError):
+    reason = "APPLICATION_DATA_AFTER_CLOSE_NOTIFY"
+
+
 class _UnexpectedPlanner:
     def execute(self, request: TripRequest) -> None:
         raise RuntimeError("secret-key must not be exposed")
+
+
+class _DiagnosticModel(BaseModel):
+    amount: int
+
+
+class _ModelLevelDiagnostic(BaseModel):
+    amount: int
+
+    @model_validator(mode="after")
+    def reject_amount(self) -> _ModelLevelDiagnostic:
+        raise ValueError("secret model validation detail")
+
+
+class _CodedValidationError(ValueError):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__("diagnostic message must not be emitted")
+
+
+class _CodedModelLevelDiagnostic(BaseModel):
+    value: int
+
+    @model_validator(mode="after")
+    def reject_value(self) -> _CodedModelLevelDiagnostic:
+        raise _CodedValidationError("composer_context.deferred_hard_constraints")
 
 
 class _FailureOnGetRepository(InMemoryStateRepository):
@@ -110,6 +144,91 @@ def _facade(repository: InMemoryStateRepository) -> TripInteractionFacade:
         state_repository=repository,
         clock=FakeClock(),
     )
+
+
+def test_workflow_failure_reports_root_cause_type_without_exception_text() -> None:
+    try:
+        try:
+            raise _SafeSslError(1, "secret socket details")
+        except OSError as root:
+            raise RuntimeError("secret transport details") from root
+    except RuntimeError as transport:
+        error = WorkflowError(
+            trace_id="trace-safe-cause",
+            stage="orchestrator",
+            category=ErrorCategory.TOOL,
+            code="TOOL_TRANSPORT_ERROR",
+            safe_message="provider transport failed",
+            cause=transport,
+        )
+
+    fields = from_exception(error, trace_id=error.trace_id).event_fields()
+
+    assert fields["cause_type"] == "RuntimeError"
+    assert fields["root_cause_type"] == "_SafeSslError"
+    assert fields["root_cause_code"] == "APPLICATION_DATA_AFTER_CLOSE_NOTIFY"
+    assert "secret" not in json.dumps(fields)
+
+
+def test_workflow_failure_reports_only_validation_locations_and_types() -> None:
+    with pytest.raises(ValidationError) as caught:
+        _DiagnosticModel(amount="secret-value")
+
+    error = WorkflowError(
+        trace_id="trace-validation-cause",
+        stage="fake_provider_workflow",
+        category=ErrorCategory.VALIDATION,
+        code="FAKE_PROVIDER_WORKFLOW_FAILED",
+        safe_message="fake provider workflow failed",
+        cause=caught.value,
+    )
+
+    fields = from_exception(error, trace_id=error.trace_id).event_fields()
+
+    assert fields["root_cause_model"] == "_DiagnosticModel"
+    assert fields["root_cause_validation"] == ["amount:int_parsing"]
+    assert "secret-value" not in json.dumps(fields)
+
+
+def test_workflow_failure_reports_model_level_validation_type_without_message() -> None:
+    with pytest.raises(ValidationError) as caught:
+        _ModelLevelDiagnostic(amount=1)
+
+    error = WorkflowError(
+        trace_id="trace-model-validation-cause",
+        stage="fake_provider_workflow",
+        category=ErrorCategory.VALIDATION,
+        code="FAKE_PROVIDER_WORKFLOW_FAILED",
+        safe_message="fake provider workflow failed",
+        cause=caught.value,
+    )
+
+    fields = from_exception(error, trace_id=error.trace_id).event_fields()
+
+    assert fields["root_cause_model"] == "_ModelLevelDiagnostic"
+    assert fields["root_cause_validation"] == ["__model__:value_error"]
+    assert "secret model validation detail" not in json.dumps(fields)
+
+
+def test_workflow_failure_reports_safe_custom_validation_code() -> None:
+    with pytest.raises(ValidationError) as caught:
+        _CodedModelLevelDiagnostic(value=1)
+
+    error = WorkflowError(
+        trace_id="trace-coded-validation-cause",
+        stage="fake_provider_workflow",
+        category=ErrorCategory.VALIDATION,
+        code="FAKE_PROVIDER_WORKFLOW_FAILED",
+        safe_message="fake provider workflow failed",
+        cause=caught.value,
+    )
+
+    fields = from_exception(error, trace_id=error.trace_id).event_fields()
+
+    assert fields["root_cause_validation"] == [
+        "__model__:composer_context.deferred_hard_constraints"
+    ]
+    assert "diagnostic message" not in json.dumps(fields)
 
 
 def test_already_persisted_root_failure_does_not_emit_secondary_persistence_error(

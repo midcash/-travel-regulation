@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ssl
 from collections.abc import Callable
 
 import httpx
@@ -11,11 +12,12 @@ from src.infrastructure.tools.amap import AmapGeoProvider
 from src.infrastructure.tools.assembly import (
     ProviderBindings,
     ToolProviderAssembly,
+    _provider_ssl_context,
     assemble_tool_providers,
 )
 from src.ports.tool_errors import ToolConfigurationError
 from src.ports.tool_provider import GeoProvider
-from tests.support.provider_fakes import FakeGeoProvider
+from tests.support.provider_fakes import FakeGeoProvider, FakeTransportProvider
 
 
 def _geo_factory(
@@ -26,6 +28,52 @@ def _geo_factory(
         return ProviderBindings(provider="amap", geo=FakeGeoProvider())
 
     return factory
+
+
+def test_tuniu_ssl_context_keeps_verification_and_caps_tls_1_2() -> None:
+    context = _provider_ssl_context("tuniu")
+
+    assert context.check_hostname is True
+    assert context.verify_mode is ssl.CERT_REQUIRED
+    assert context.maximum_version is ssl.TLSVersion.TLSv1_2
+
+
+def test_non_tuniu_ssl_context_keeps_runtime_maximum() -> None:
+    context = _provider_ssl_context("amap")
+
+    assert context.check_hostname is True
+    assert context.verify_mode is ssl.CERT_REQUIRED
+    assert context.maximum_version is ssl.TLSVersion.MAXIMUM_SUPPORTED
+
+
+def test_assembly_uses_provider_specific_clients_when_not_injected() -> None:
+    settings = Settings(
+        deepseek_api_key="llm-key",
+        amap_api_key="amap-key",
+        tuniu_api_key="tuniu-key",
+        amap_enabled=True,
+        tuniu_enabled=True,
+    )
+    amap_seen: list[tuple[Settings, httpx.AsyncClient]] = []
+    tuniu_seen: list[httpx.AsyncClient] = []
+
+    def tuniu_factory(_: Settings, client: httpx.AsyncClient) -> ProviderBindings:
+        tuniu_seen.append(client)
+        return ProviderBindings(
+            provider="tuniu",
+            transport=FakeTransportProvider(),
+        )
+
+    assembly = assemble_tool_providers(
+        settings,
+        amap_factory=_geo_factory(amap_seen),
+        tuniu_factory=tuniu_factory,
+    )
+
+    assert amap_seen[0][1] is assembly.http_client
+    assert tuniu_seen[0] is not amap_seen[0][1]
+    assert assembly.owned_http_clients == (amap_seen[0][1], tuniu_seen[0])
+
 
 
 def test_assembly_injects_one_settings_snapshot_and_shared_client() -> None:

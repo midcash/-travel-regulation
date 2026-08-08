@@ -49,6 +49,12 @@ _PROMPT_INJECTION_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"(?:system\s+prompt|developer\s+message|reveal\s+(?:your\s+)?prompt))",
     re.IGNORECASE,
 )
+_FLIGHT_MODE_TERMS: Final[tuple[str, ...]] = (
+    "flight", "airplane", "plane", "飞机", "航班", "机票"
+)
+_TRAIN_MODE_TERMS: Final[tuple[str, ...]] = (
+    "train", "rail", "high-speed rail", "火车", "高铁", "动车"
+)
 
 
 class ResearchAgentError(WorkflowError):
@@ -314,6 +320,31 @@ def _constraint_text(context: AgentContext, categories: set[str]) -> str | None:
     return None
 
 
+def _transport_mode(context: AgentContext) -> str:
+    """Choose one transport mode from explicit text, defaulting to train."""
+    values = [*context.request.preferences, *context.request.explicit_exclusions]
+    for constraint in context.constraint_snapshot.constraints:
+        if constraint.category.casefold() in {"mode", "transport", "transport_mode"}:
+            value = constraint.normalized_value
+            if isinstance(value, str):
+                values.append(value)
+            elif isinstance(value, tuple) and all(isinstance(item, str) for item in value):
+                values.extend(value)
+
+    normalized = tuple(value.casefold() for value in values)
+    flight_requested = any(
+        term.casefold() in value for value in normalized for term in _FLIGHT_MODE_TERMS
+    )
+    train_requested = any(
+        term.casefold() in value for value in normalized for term in _TRAIN_MODE_TERMS
+    )
+    if flight_requested and train_requested:
+        raise ValueError("transport mode constraints are ambiguous")
+    if flight_requested:
+        return "flight"
+    return "train"
+
+
 def _maximum_budget(context: AgentContext) -> Money | None:
     """Pass only an explicit maximum or range upper bound to stay search."""
     budget = context.request.budget
@@ -463,6 +494,7 @@ class TransportResearchAgent(_ResearchAgentBase):
             "constraint_refs": _constraint_refs(context),
             "origin": context.request.origin,
             "destination": _destination(context),
+            "mode": _transport_mode(context),
             "departure_after": _date_start(context, date_range.start),
             "arrival_before": None,
             "travelers": context.request.travelers.total_count,
@@ -488,6 +520,10 @@ class TransportResearchAgent(_ResearchAgentBase):
             origin = _safe_external_text(context, item.origin, "transport origin")
             destination = _safe_external_text(context, item.destination, "transport destination")
             schedule_values = [mode, name, origin, destination]
+            if item.departure_station is not None:
+                schedule_values.append(f"departure_station={item.departure_station}")
+            if item.arrival_station is not None:
+                schedule_values.append(f"arrival_station={item.arrival_station}")
             if item.departure_at is not None:
                 schedule_values.append(f"departure_at={item.departure_at.isoformat()}")
             if item.arrival_at is not None:

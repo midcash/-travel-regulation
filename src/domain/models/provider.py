@@ -102,6 +102,7 @@ class TransportQuery(ProviderQueryBase):
 
     origin: str = Field(min_length=1, max_length=256)
     destination: str = Field(min_length=1, max_length=256)
+    mode: Literal["flight", "train"] = "flight"
     departure_after: datetime | None = None
     arrival_before: datetime | None = None
     travelers: int = Field(default=1, ge=1, le=20)
@@ -132,6 +133,8 @@ class TransportResultItem(BaseModel):
     name: str = Field(min_length=1, max_length=256)
     origin: str = Field(min_length=1, max_length=256)
     destination: str = Field(min_length=1, max_length=256)
+    departure_station: str | None = Field(default=None, min_length=1, max_length=256)
+    arrival_station: str | None = Field(default=None, min_length=1, max_length=256)
     departure_at: datetime | None = None
     arrival_at: datetime | None = None
     total_price: Money | None = None

@@ -28,6 +28,7 @@ from src.infrastructure.tools.tuniu import (
     TUNIU_FLIGHT_URL,
     TUNIU_HOTEL_URL,
     TUNIU_TICKET_URL,
+    TUNIU_TRAIN_URL,
     TuniuTravelProvider,
     create_tuniu_bindings,
 )
@@ -61,6 +62,10 @@ def _transport_query() -> TransportQuery:
         departure_after=datetime(2026, 8, 15, 8, tzinfo=UTC),
         travelers=2,
     )
+
+
+def _train_query() -> TransportQuery:
+    return _transport_query().model_copy(update={"mode": "train"})
 
 
 def _stay_query() -> StayQuery:
@@ -97,6 +102,27 @@ def _flight_payload(**item: object) -> dict[str, object]:
                 "arrivalTime": "2026-08-15 09:55",
                 "basePrice": "710",
                 "totalTax": "50",
+                **item,
+            }
+        ],
+    }
+
+
+def _train_payload(**item: object) -> dict[str, object]:
+    return {
+        "successCode": True,
+        "queryId": "train-page-1",
+        "totalPageNum": 1,
+        "data": [
+            {
+                "trainNum": "G123",
+                "departStationName": "Beijing South",
+                "destStationName": "Shanghai Hongqiao",
+                "trainType": "direct",
+                "departureTime": "2026-08-15 07:20",
+                "arrivalTime": "2026-08-15 08:15",
+                "duration": "55 minutes",
+                "price": {"edzPrice": "73", "ydzPrice": "117", "wzPrice": ""},
                 **item,
             }
         ],
@@ -251,7 +277,7 @@ def test_tuniu_adapter_normalizes_all_supported_capabilities_once() -> None:
     assert requests[0].extensions["timeout"]["read"] == 3.5
     assert json.loads(requests[0].content) == {
         "jsonrpc": "2.0",
-        "id": "transport-query-1",
+        "id": 1,
         "method": "tools/call",
         "params": {
             "name": "searchLowestPriceFlight",
@@ -277,6 +303,36 @@ def test_tuniu_adapter_normalizes_all_supported_capabilities_once() -> None:
         "name": "query_cheapest_tickets",
         "arguments": {"scenic_name": "Summer Palace"},
     }
+
+
+def test_tuniu_adapter_uses_train_tool_for_explicit_train_transport() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=_mcp_payload(_train_payload()))
+
+    provider, _ = _provider(httpx.MockTransport(handler))
+    result = _run(provider.search(_train_query(), timeout_seconds=Decimal("1")))
+
+    assert isinstance(result, TransportProviderResult)
+    assert str(requests[0].url) == TUNIU_TRAIN_URL
+    assert json.loads(requests[0].content)["params"] == {
+        "name": "searchLowestPriceTrain",
+        "arguments": {
+            "departureCityName": "Beijing",
+            "arrivalCityName": "Shanghai",
+            "departureDate": "2026-08-15",
+        },
+    }
+    assert result.items[0].mode == "train"
+    assert result.items[0].name == "direct G123"
+    assert result.items[0].origin == "Beijing"
+    assert result.items[0].destination == "Shanghai"
+    assert result.items[0].departure_station == "Beijing South"
+    assert result.items[0].arrival_station == "Shanghai Hongqiao"
+    assert result.items[0].total_price == Money(amount=Decimal("73"), currency="CNY")
+    assert result.items[0].source_ref == TUNIU_TRAIN_URL
 
 
 def test_tuniu_adapter_uses_settings_endpoint_and_emits_tool_span(
@@ -356,6 +412,67 @@ def test_tuniu_adapter_stops_after_first_sse_event() -> None:
 
     result = _run(scenario())
     assert result.items[0].name == "City Hotel"
+
+def test_tuniu_adapter_accepts_complete_sse_before_broken_chunk_close() -> None:
+    event = json.dumps(_mcp_payload(_hotel_payload()))
+
+    class BrokenChunkAfterCompleteEvent(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield ("event: message\r\ndata: " + event + "\r\n").encode()
+            raise httpx.RemoteProtocolError("incomplete chunked read")
+
+        async def aclose(self) -> None:
+            return None
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=BrokenChunkAfterCompleteEvent(),
+        )
+
+    async def scenario() -> StayProviderResult:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = TuniuTravelProvider(
+                Settings(tuniu_api_key=_TEST_KEY, tuniu_enabled=True),
+                client,
+                FakeClock(_OBSERVED_AT),
+            )
+            return await provider.search(_stay_query(), timeout_seconds=Decimal("1"))
+
+    result = _run(scenario())
+
+    assert result.items[0].name == "City Hotel"
+
+
+def test_tuniu_adapter_rejects_truncated_sse_before_broken_chunk_close() -> None:
+    class BrokenChunkWithTruncatedEvent(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'data: {"jsonrpc":"2.0","id":"stay-query-1","result":'
+            raise httpx.RemoteProtocolError("incomplete chunked read")
+
+        async def aclose(self) -> None:
+            return None
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            stream=BrokenChunkWithTruncatedEvent(),
+        )
+
+    async def scenario() -> StayProviderResult:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = TuniuTravelProvider(
+                Settings(tuniu_api_key=_TEST_KEY, tuniu_enabled=True),
+                client,
+                FakeClock(_OBSERVED_AT),
+            )
+            return await provider.search(_stay_query(), timeout_seconds=Decimal("1"))
+
+    with pytest.raises(ToolTransportError, match="incomplete SSE"):
+        _run(scenario())
+
 
 def test_tuniu_adapter_decodes_one_sse_result() -> None:
     async def handler(_: httpx.Request) -> httpx.Response:

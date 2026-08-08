@@ -286,6 +286,7 @@ def test_transport_and_stay_queries_preserve_explicit_inputs_and_budget() -> Non
     )
     assert transport_query.travelers == 2
     assert transport_query.max_results == 4
+    assert transport_query.mode == "train"
     assert transport_timeout == Decimal("3")
 
     stay_provider = FakeStayProvider([_stay_result()])

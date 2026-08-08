@@ -20,6 +20,7 @@ from src.config import (
     DEFAULT_TUNIU_FLIGHT_URL,
     DEFAULT_TUNIU_HOTEL_URL,
     DEFAULT_TUNIU_TICKET_URL,
+    DEFAULT_TUNIU_TRAIN_URL,
     Settings,
 )
 from src.domain.models.provider import (
@@ -53,8 +54,10 @@ from src.ports.tool_errors import (
 # Backward-compatible public aliases; runtime calls use the Settings snapshot.
 TUNIU_HOTEL_URL = DEFAULT_TUNIU_HOTEL_URL
 TUNIU_FLIGHT_URL = DEFAULT_TUNIU_FLIGHT_URL
+TUNIU_TRAIN_URL = DEFAULT_TUNIU_TRAIN_URL
 TUNIU_TICKET_URL = DEFAULT_TUNIU_TICKET_URL
 MAX_RESPONSE_BYTES = 1_048_576
+_JSON_RPC_REQUEST_ID = 1
 
 _CHINA_TIMEZONE = timezone(timedelta(hours=8))
 _CONTROL_CHARS = re.compile(r"[\x00-\x1F\x7F]")
@@ -163,15 +166,18 @@ class TuniuTravelProvider:
     async def _search_transport(
         self, query: TransportQuery, *, timeout_seconds: Decimal
     ) -> TransportProviderResult:
-        """Search the documented low-price domestic-flight tool once."""
+        """Search exactly one explicitly selected domestic transport tool."""
         if query.departure_after is None:
             raise ToolBusinessError(
                 **_error_kwargs(query, "transport_search"),
                 safe_message="provider requires a departure date",
             )
+        is_train = query.mode == "train"
+        endpoint = self._settings.tuniu_train_url if is_train else self._settings.tuniu_flight_url
+        tool_name = "searchLowestPriceTrain" if is_train else "searchLowestPriceFlight"
         payload = await self._call_tool(
-            endpoint=self._settings.tuniu_flight_url,
-            tool_name="searchLowestPriceFlight",
+            endpoint=endpoint,
+            tool_name=tool_name,
             operation="transport_search",
             query=query,
             timeout_seconds=timeout_seconds,
@@ -188,13 +194,18 @@ class TuniuTravelProvider:
 
         try:
             items = tuple(
-                _normalize_flight_item(record, query) for record in records[: query.max_results]
+                (
+                    _normalize_train_item(record, query, endpoint)
+                    if is_train
+                    else _normalize_flight_item(record, query)
+                )
+                for record in records[: query.max_results]
             )
             return TransportProviderResult(
                 query_id=query.query_id,
                 provider="tuniu",
                 observed_at=self._clock.now(),
-                source_ref=self._settings.tuniu_flight_url,
+                source_ref=endpoint,
                 items=items,
             )
         except (TypeError, ValueError, ValidationError, InvalidOperation) as exc:
@@ -304,7 +315,7 @@ class TuniuTravelProvider:
         """Issue exactly one legacy API-key JSON-RPC request and unwrap its result."""
         request_payload = {
             "jsonrpc": "2.0",
-            "id": query.query_id,
+            "id": _JSON_RPC_REQUEST_ID,
             "method": "tools/call",
             "params": {"name": tool_name, "arguments": dict(arguments)},
         }
@@ -379,15 +390,30 @@ async def _read_limited_body(
     chunks: list[bytes] = []
     total_size = 0
     is_sse = "text/event-stream" in response.headers.get("content-type", "").lower()
-    async for chunk in response.aiter_bytes():
-        total_size += len(chunk)
-        if total_size > MAX_RESPONSE_BYTES:
-            raise _schema_error(query, operation, "provider response exceeds the size limit")
-        chunks.append(chunk)
-        if is_sse:
-            event = _first_sse_event(b"".join(chunks))
-            if event is not None:
-                return event
+    try:
+        async for chunk in response.aiter_bytes():
+            total_size += len(chunk)
+            if total_size > MAX_RESPONSE_BYTES:
+                raise _schema_error(query, operation, "provider response exceeds the size limit")
+            chunks.append(chunk)
+            if is_sse:
+                event = _first_sse_event(b"".join(chunks))
+                if event is not None:
+                    return event
+    except httpx.RemoteProtocolError as exc:
+        body = b"".join(chunks)
+        if is_sse and _has_complete_sse_json_rpc(body):
+            return body
+        if not body:
+            safe_message = "provider disconnected before returning a response body"
+        elif is_sse:
+            safe_message = "provider returned an incomplete SSE response"
+        else:
+            safe_message = "provider returned an incomplete non-SSE response"
+        raise ToolTransportError(
+            **_error_kwargs(query, operation),
+            safe_message=safe_message,
+        ) from exc
     return b"".join(chunks)
 
 
@@ -432,6 +458,32 @@ def _first_sse_event(body: bytes) -> bytes | None:
         if boundary >= 0:
             return body[: boundary + len(separator)]
     return None
+
+def _has_complete_sse_json_rpc(body: bytes) -> bool:
+    """Accept one complete JSON-RPC SSE payload despite a broken chunk terminator."""
+    try:
+        decoded = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    data_lines = tuple(
+        line.removeprefix("data:").strip()
+        for line in decoded.splitlines()
+        if line.startswith("data:")
+        and line.removeprefix("data:").strip() not in {"", "[DONE]"}
+    )
+    if len(data_lines) != 1:
+        return False
+    try:
+        envelope = json.loads(data_lines[0])
+    except json.JSONDecodeError:
+        return False
+    return (
+        isinstance(envelope, dict)
+        and envelope.get("jsonrpc") == "2.0"
+        and "id" in envelope
+        and ("result" in envelope or "error" in envelope)
+    )
+
 
 def _decode_mcp_result(
     body: bytes,
@@ -593,6 +645,34 @@ def _normalize_flight_item(value: object, query: TransportQuery) -> TransportRes
     )
 
 
+def _normalize_train_item(
+    value: object,
+    query: TransportQuery,
+    source_ref: str,
+) -> TransportResultItem:
+    """Normalize one documented train record to the transport DTO."""
+    item = _plain_mapping(value)
+    train_number = _clean_external_text(item.get("trainNum"))
+    departure_station = _clean_external_text(item.get("departStationName"))
+    arrival_station = _clean_external_text(item.get("destStationName"))
+    departure_at = _parse_tuniu_datetime(item.get("departureTime"))
+    arrival_at = _parse_tuniu_datetime(item.get("arrivalTime"))
+    train_type = _clean_external_text(item.get("trainType"))
+    return TransportResultItem(
+        entity_id=_stable_id("train", train_number, item.get("departureTime")),
+        mode="train",
+        name=f"{train_type} {train_number}",
+        origin=query.origin,
+        destination=query.destination,
+        departure_station=departure_station,
+        arrival_station=arrival_station,
+        departure_at=departure_at,
+        arrival_at=arrival_at,
+        total_price=_train_total_price(item),
+        source_ref=source_ref,
+    )
+
+
 def _normalize_hotel_item(value: object, query: StayQuery) -> StayResultItem:
     """Normalize one hotel record and preserve the requested stay window."""
     item = _plain_mapping(value)
@@ -637,6 +717,36 @@ def _flight_total_price(item: Mapping[str, object]) -> Money:
     base_price = _decimal(item.get("basePrice"))
     total_tax = _decimal(item.get("totalTax"))
     return Money(amount=base_price + total_tax, currency="CNY")
+
+
+def _train_total_price(item: Mapping[str, object]) -> Money:
+    """Select the lowest positive seat quote from one train result."""
+    prices = _plain_mapping(item.get("price"))
+    available: list[Decimal] = []
+    for field_name in (
+        "edzPrice",
+        "ydzPrice",
+        "yzPrice",
+        "wzPrice",
+        "rzPrice",
+        "rwPrice",
+        "ywPrice",
+        "swzPrice",
+        "tdzPrice",
+        "dwPrice",
+        "ydwPrice",
+        "edwPrice",
+        "gjrwPrice",
+    ):
+        value = prices.get(field_name)
+        if value in {None, ""}:
+            continue
+        amount = _decimal(value)
+        if amount > 0:
+            available.append(amount)
+    if not available:
+        raise ValueError("provider train result has no usable seat price")
+    return Money(amount=min(available), currency="CNY")
 
 
 def _money(value: object) -> Money:
@@ -736,6 +846,7 @@ __all__ = [
     "TUNIU_FLIGHT_URL",
     "TUNIU_HOTEL_URL",
     "TUNIU_TICKET_URL",
+    "TUNIU_TRAIN_URL",
     "TuniuTravelProvider",
     "create_tuniu_bindings",
 ]

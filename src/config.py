@@ -13,6 +13,7 @@ _LOG_LEVELS = frozenset({'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'})
 DEFAULT_AMAP_GEOCODE_URL = 'https://restapi.amap.com/v3/geocode/geo'
 DEFAULT_TUNIU_HOTEL_URL = 'https://openapi.tuniu.cn/mcp/hotel'
 DEFAULT_TUNIU_FLIGHT_URL = 'https://openapi.tuniu.cn/mcp/flight'
+DEFAULT_TUNIU_TRAIN_URL = 'https://openapi.tuniu.cn/mcp/train'
 DEFAULT_TUNIU_TICKET_URL = 'https://openapi.tuniu.cn/mcp/ticket'
 DEFAULT_DEEPSEEK_MAX_TOKENS = 2048
 
@@ -44,6 +45,7 @@ class Settings:
     amap_geocode_url: str = DEFAULT_AMAP_GEOCODE_URL
     tuniu_hotel_url: str = DEFAULT_TUNIU_HOTEL_URL
     tuniu_flight_url: str = DEFAULT_TUNIU_FLIGHT_URL
+    tuniu_train_url: str = DEFAULT_TUNIU_TRAIN_URL
     tuniu_ticket_url: str = DEFAULT_TUNIU_TICKET_URL
     log_level: str = 'INFO'
     console_span_exporter: bool = False
@@ -81,6 +83,7 @@ class Settings:
             'amap_geocode_url',
             'tuniu_hotel_url',
             'tuniu_flight_url',
+            'tuniu_train_url',
             'tuniu_ticket_url',
         ):
             _validate_endpoint(field_name, getattr(self, field_name))
@@ -136,6 +139,7 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         amap_geocode_url=values.get('AMAP_GEOCODE_URL', DEFAULT_AMAP_GEOCODE_URL).strip(),
         tuniu_hotel_url=values.get('TUNIU_HOTEL_URL', DEFAULT_TUNIU_HOTEL_URL).strip(),
         tuniu_flight_url=values.get('TUNIU_FLIGHT_URL', DEFAULT_TUNIU_FLIGHT_URL).strip(),
+        tuniu_train_url=values.get('TUNIU_TRAIN_URL', DEFAULT_TUNIU_TRAIN_URL).strip(),
         tuniu_ticket_url=values.get('TUNIU_TICKET_URL', DEFAULT_TUNIU_TICKET_URL).strip(),
         log_level=values.get('LOG_LEVEL', 'INFO').strip().upper(),
         console_span_exporter=_parse_bool(

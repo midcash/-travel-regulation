@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
@@ -56,7 +57,7 @@ class ToolProviderAssembly:
     http_client: httpx.AsyncClient | None
     amap: ProviderBindings | None = None
     tuniu: ProviderBindings | None = None
-    owns_http_client: bool = False
+    owned_http_clients: tuple[httpx.AsyncClient, ...] = ()
 
     @property
     def providers(self) -> tuple[ProviderBindings, ...]:
@@ -99,9 +100,9 @@ class ToolProviderAssembly:
         return self.capability("context")  # type: ignore[return-value]
 
     async def aclose(self) -> None:
-        """Close a client created by this assembly."""
-        if self.owns_http_client and self.http_client is not None:
-            await self.http_client.aclose()
+        """Close every provider client created by this assembly."""
+        for client in self.owned_http_clients:
+            await client.aclose()
 
 
 def assemble_tool_providers(
@@ -138,16 +139,25 @@ def assemble_tool_providers(
     if not active:
         return ToolProviderAssembly(settings=settings, http_client=http_client)
 
-    owns_http_client = http_client is None
-    shared_client = http_client or httpx.AsyncClient(
-        timeout=settings.external_api_timeout_seconds,
-    )
+    if http_client is not None:
+        provider_clients = {provider_name: http_client for provider_name in active}
+        owned_http_clients: tuple[httpx.AsyncClient, ...] = ()
+    else:
+        provider_clients = {
+            provider_name: httpx.AsyncClient(
+                timeout=settings.external_api_timeout_seconds,
+                verify=_provider_ssl_context(provider_name),
+            )
+            for provider_name in active
+        }
+        owned_http_clients = tuple(provider_clients[name] for name in active)
+
     bindings: dict[str, ProviderBindings] = {}
     for provider_name, factory in (("amap", amap_factory), ("tuniu", tuniu_factory)):
         if provider_name not in active:
             continue
         assert factory is not None
-        binding = factory(settings, shared_client)
+        binding = factory(settings, provider_clients[provider_name])
         if not isinstance(binding, ProviderBindings):
             raise TypeError(f"{provider_name} adapter factory must return ProviderBindings")
         if binding.provider != provider_name:
@@ -161,11 +171,22 @@ def assemble_tool_providers(
     _reject_duplicate_capabilities(bindings)
     return ToolProviderAssembly(
         settings=settings,
-        http_client=shared_client,
+        http_client=provider_clients[active[0]],
         amap=bindings.get("amap"),
         tuniu=bindings.get("tuniu"),
-        owns_http_client=owns_http_client,
+        owned_http_clients=owned_http_clients,
     )
+
+
+def _provider_ssl_context(provider_name: str) -> ssl.SSLContext:
+    """Create a verified TLS context compatible with active provider endpoints."""
+    context = ssl.create_default_context()
+    if provider_name == "tuniu":
+        # Tuniu's MCP endpoint corrupts TLS 1.3 records with the supported
+        # CPython/OpenSSL runtime. TLS 1.2 retains certificate verification
+        # while matching the endpoint's stable protocol path.
+        context.maximum_version = ssl.TLSVersion.TLSv1_2
+    return context
 
 
 def _active_provider_names(settings: Settings) -> tuple[str, ...]:

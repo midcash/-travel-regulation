@@ -82,6 +82,7 @@ def test_load_settings_injects_tool_endpoints_from_one_snapshot() -> None:
             'AMAP_GEOCODE_URL': 'https://mock.example/amap',
             'TUNIU_HOTEL_URL': 'https://mock.example/hotel',
             'TUNIU_FLIGHT_URL': 'https://mock.example/flight',
+            'TUNIU_TRAIN_URL': 'https://mock.example/train',
             'TUNIU_TICKET_URL': 'https://mock.example/ticket',
         }
     )
@@ -89,4 +90,5 @@ def test_load_settings_injects_tool_endpoints_from_one_snapshot() -> None:
     assert settings.amap_geocode_url == 'https://mock.example/amap'
     assert settings.tuniu_hotel_url == 'https://mock.example/hotel'
     assert settings.tuniu_flight_url == 'https://mock.example/flight'
+    assert settings.tuniu_train_url == 'https://mock.example/train'
     assert settings.tuniu_ticket_url == 'https://mock.example/ticket'

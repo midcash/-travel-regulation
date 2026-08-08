@@ -9,7 +9,7 @@ from pathlib import Path
 
 REPORT_PATH = Path("evaluation/reports/M4-live-vertical-slice.json")
 SCHEMA_VERSION = "m4.live-vertical-slice.v1"
-PROMPT_VERSION = "m4-itinerary-composer-v1"
+PROMPT_VERSION = "m4-itinerary-composer-v2"
 EXPECTED_RUNS: tuple[tuple[str, int], ...] = (
     ("m4-live-normal", 1),
     ("m4-live-normal", 2),
