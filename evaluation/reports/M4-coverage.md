@@ -1,8 +1,8 @@
 ﻿# M4 Offline Coverage Report
 
 - Stage: M4
-- Status: `PASSED_OFFLINE_PENDING_LIVE`
-- Run date: 2026-08-07
+- Status: `PASSED`
+- Run date: 2026-08-08
 - Scope: M2→M4 adapter、dynamic router、Geo Research Agent、Task Graph、orchestration、research agents、Composer、Schedule/Budget、Fake vertical slice、M4 facade and configuration.
 
 ## Verification result
@@ -10,13 +10,14 @@
 Command:
 
 ```powershell
-venv/Scripts/python.exe -m pytest -q --basetemp="F:\\Commercial project\\skill\\.pytest-tmp-m4-strict-20260807" --cov=. --cov-report=term --cov-fail-under=90
+$offlineBase = Join-Path $env:TEMP 'm4-offline-basetemp-20260808'
+venv/Scripts/python.exe -m pytest -q --basetemp="$offlineBase" --cov=. --cov-report=term --cov-fail-under=90
 ```
 
 Result:
 
-- Tests: `618 passed, 8 deselected`
-- Total coverage: `93.44%`
+- Tests: `637 passed, 8 deselected`
+- Total coverage: `93.48%`
 - Strict threshold: `PASSED`; `--cov-fail-under=90` reached the required threshold and exited with code 0.
 - Ruff: `PASSED`; `venv/Scripts/python.exe -m ruff check .`
 
@@ -36,6 +37,6 @@ The aggregate gate is the acceptance threshold. Lower module-level percentages a
 
 ## Interpretation
 
-Offline M4 behavior is closed: the Geo prerequisite, snapshot binding, dynamic task selection, structured past-date blocker, and failure propagation have regression evidence. The M4 acceptance remains pending only the real Live M4 revalidation because the current attempt stopped at the external DeepSeek connection before the M4 orchestrator.
+Offline M4 behavior is closed: the Geo prerequisite, snapshot binding, dynamic task selection, structured past-date blocker, and failure propagation have regression evidence. The real Live M4 Vertical Slice also passed with 4/4 cases successful, including the required repeated normal case. The current M4 acceptance status is `PASSED`.
 
 No M5 implementation is included in this follow-up.

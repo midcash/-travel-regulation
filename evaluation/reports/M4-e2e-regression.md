@@ -1,7 +1,7 @@
 # M4 端到端链路重新验证记录
 
-Date: 2026-08-07
-Status: `OFFLINE_PASSED_LIVE_PENDING`
+Date: 2026-08-08
+Status: `PASSED`
 
 ## 修复范围
 
@@ -19,10 +19,10 @@ Status: `OFFLINE_PASSED_LIVE_PENDING`
 - Future Fake Provider vertical slice：通过，生成候选、排程和预算；
 - Past-date CLI/Facade path：以 G1 blocker 结束，未调用外部工具；
 - Root failure persistence propagation：通过；
-- 全量：`618 passed, 8 deselected`；覆盖率 `93.44%`；Ruff 通过。
+- 全量：`637 passed, 8 deselected`；覆盖率 `93.48%`；Ruff 通过。
 
 ## Live 状态
 
-未来日期 CLI 已使用 `.env` 载入真实配置并启动，但 DeepSeek Interpreter 请求返回 `APIConnectionError`，根错误 `INTERPRETATION_INVALID`。故本次没有将该失败归因于 Geo 或伪装为成功，也没有启用 fallback、重试、缓存或部分成功。
+`start-local.ps1 -EnvFile .env -LiveM4` 已使用真实 LLM 和途牛配置完成 4 次 Live Vertical Slice 运行：normal 重复 2 次、constraint 1 次、complex 1 次。报告状态为 `SUCCESS`，Evidence/Candidate 引用、硬约束、硬预算和 fail-fast 策略均通过；未启用 fallback、重试、缓存或部分成功。
 
-需要网络/API 恢复后重新执行真实 Live M4，成功后才能闭合 M4。
+M4 端到端链路验收通过，M4 阶段可以闭合；M5 仍未启动。

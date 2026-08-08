@@ -1,8 +1,8 @@
 ﻿# M4 验收准备与当前记录
 
 - Stage: M4
-- Current status: `REVALIDATION_IN_PROGRESS`
-- Record date: 2026-08-07
+- Current status: `PASSED`
+- Record date: 2026-08-08
 - Scope: Task Graph、Geo/Research Agent、Evidence/Candidate 汇总、Composer、Schedule、Budget、Fake vertical slice、CLI Use Case 接入，以及 M2→M4 接口适配
 - Explicitly excluded: M5 GateRunner、Critic、Targeted Repair、Action、交易写操作和生产韧性能力
 
@@ -17,10 +17,10 @@
 | Geo Task 依赖顺序 | PASSED（离线） | `tests/unit/test_task_graph_builder.py`、`tests/integration/test_m4_fake_provider_workflow.py` |
 | G1 过去日期阻断 | PASSED（离线） | `src/domain/services/readiness_evaluator.py`、Facade/Readiness 回归测试 |
 | 失败持久化日志 | PASSED（离线） | `tests/unit/test_m21_structured_errors.py` |
-| Offline 全量测试 | PASSED | `618 passed, 8 deselected` |
+| Offline 全量测试 | PASSED | `637 passed, 8 deselected` |
 | Ruff | PASSED | `venv/Scripts/python.exe -m ruff check .` |
-| 严格覆盖率门 | PASSED | `93.44%`，`--cov-fail-under=90` 退出码 0 |
-| 真实 Live M4 CLI | BLOCKED（外部） | 本次请求在 `interpreter` 阶段收到 `APIConnectionError`，未进入 Geo/供应商阶段 |
+| 严格覆盖率门 | PASSED | `93.48%`，`--cov-fail-under=90` 退出码 0 |
+| 真实 Live M4 Vertical Slice | PASSED | 4 个真实案例全部通过，normal 案例重复 2 次；报告为 `evaluation/reports/M4-live-vertical-slice.json` |
 
 ## 离线端到端证据
 
@@ -34,16 +34,16 @@
 - M2 冻结快照中的地点、日期、人数和预算不会被 LLM 猜测或默认值覆盖；
 - 过去日期在 G1 生成 `DATE_RANGE_IN_PAST` blocker，状态进入澄清，不调用外部工具。
 
-## Live 复验状态
+## Live 验收结果
 
-本次尝试命令：
+本次通过命令：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-local.ps1 -EnvFile .env "请安排上海到杭州的行程，时间是2026-8-10到2026-8-12，1人"
+.\start-local.ps1 -EnvFile .env -LiveM4
 ```
 
-配置加载成功；请求随后在 `interpreter` 阶段因 `APIConnectionError` 失败，根错误为 `INTERPRETATION_INVALID`。这不是 Geo Agent 或 Fake Provider 错误，也没有证据表明已完成真实 Geo/transport 查询。历史 `M4-live-vertical-slice.json` 保留为此前验收证据，但本次接口变更后仍需重新执行真实 Live M4。
+真实 LLM 与途牛配置加载成功，Live Vertical Slice 执行 4 个案例并全部通过。报告状态为 `SUCCESS`，Prompt 版本为 `m4-itinerary-composer-v2`，Evidence/Candidate 引用、硬约束、硬预算和 fail-fast 预算断言均通过。
 
 ## 当前验收判断
 
-M4 的离线实现和质量门已通过，但真实 Live 复验尚未通过，因此当前不能将 M4 标记为最终 `PASSED`，也不进入 M5。待 DeepSeek/API 网络恢复后，重新执行未来日期 Live M4；只有该复验成功，才可闭合 M4。
+M4 的离线实现、质量门和真实 Live Vertical Slice 均已通过，当前 M4 标记为最终 `PASSED`。M5 GateRunner、Critic、Repair、Action 和生产韧性能力仍属于后续阶段，未在本次验收中实现。
