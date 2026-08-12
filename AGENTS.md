@@ -1,8 +1,8 @@
 # AGENTS.md
 
-本文件规定 Codex 在本仓库中的开发方式。目标架构的唯一设计依据是 `.codex/rules/架构.md`；历史 V9.2、Phase 0～8 等文档只能作为背景材料，不得覆盖当前目标架构。
+本文件规定 Codex 在本仓库中的开发方式。项目业务边界、技术选型、目标架构与全局验收的唯一设计依据是 `.codex/rules/架构.md`；历史 V9.2、Phase 0～8 等文档只能作为背景材料，不得覆盖项目总 Spec。
 
-执行架构升级时还必须阅读 `.codex/rules/roadmap/00-总路线图.md` 和当前 M0～M9 阶段规格；M0～M6 是求职项目核心完成线，M7 是进阶差异化能力，M8～M9 是岗位定向扩展。前一阶段未验收，不得启动后一阶段或提前实现未来阶段能力。
+执行架构升级时还必须阅读 `.codex/rules/roadmap/00-总路线图.md`、当前阶段 Spec 和对应 Plan；M0～M6（包含插入阶段 M4.1、M4.2、M4.3）是求职项目核心完成线，M7 是进阶差异化能力，M8～M9 是岗位定向扩展。前一阶段未验收，不得启动后一阶段或提前实现未来阶段能力。
 
 ---
 
@@ -47,7 +47,8 @@ venv/Scripts/python -m pytest --cov=. --cov-report=term-missing
 | 语言 | Python 3.11+ | 领域逻辑、Agent 与工具编排 |
 | LLM 网关 | DeepSeek API（OpenAI SDK） | 约束理解、方案生成、语义 Critic |
 | 数据模型 | Pydantic v2 | 请求、约束、证据、候选、方案、验证问题 |
-| 外部 API | 高德地图、途牛 MCP | 地理、酒店、航班、门票 |
+| 外部 API | 高德地图、途牛 MCP | 地理、酒店、航班/铁路、市内交通 |
+| 政策知识 | PolicyKnowledgePort + 本地 PDF Adapter | 公司政策检索与页码级引用；完整 RAG 后续评测决定 |
 | API 服务 | FastAPI + Uvicorn（后期） | 对外服务化 |
 | 状态存储 | SQLite / JSONL（演进目标） | 会话、计划版本、Checkpoint、反馈 |
 | 可观测性 | structlog + OpenTelemetry + prometheus_client | 日志、Trace、Metrics |
@@ -58,46 +59,38 @@ venv/Scripts/python -m pytest --cov=. --cov-report=term-missing
 
 ## 当前代码基线
 
-当前仓库是最小可运行内核，不等于目标架构：
+当前仓库已完成 M0～M4 通用内核的历史验收，但尚未完成 M4.1 商务差旅评测基线、M4.2 差旅语义与能力路由、M4.3 差旅最小纵向切片。以下仅列职责入口，不代表所有文件：
 
 ```text
 skill/
 ├── main.py
 ├── src/
-│   ├── engine/
-│   │   ├── loop.py                 # LLM-A → L1 → LLM-B → 有界修订
-│   │   └── prompts.py
-│   ├── gateway/
-│   │   ├── deepseek.py             # LLM Gateway
-│   │   └── json_utils.py
-│   ├── guard/
-│   │   └── negation.py
-│   ├── tool/
-│   │   └── knowledge.py            # 高德/途牛 Tool Calling
-│   ├── review/
-│   │   ├── l1.py
-│   │   └── l2.py
-│   └── obs/
-│       ├── log.py
-│       ├── trace.py
-│       └── metric.py
+│   ├── domain/                      # Pydantic 合同与确定性领域服务
+│   ├── application/                 # Router、Orchestrator、Task Graph、Use Case
+│   ├── agents/                      # Interpreter、Research、Composer
+│   ├── ports/                       # LLM、Tool、Evidence、State 等抽象接口
+│   ├── infrastructure/              # 高德/途牛、Evidence 与 State 实现
+│   ├── gateway/                     # DeepSeek LLM Gateway 与 JSON 边界
+│   ├── obs/                         # 日志、Trace、Metrics
+│   ├── engine/                      # 历史双 LLM 兼容内核
+│   └── legacy/                      # 旧接口兼容 Mapper
 ├── tests/
 │   ├── unit/
 │   ├── integration/
 │   └── e2e/
 ├── evaluation/
 ├── data/
-├── .codex/rules/架构.md             # 目标架构唯一依据
+├── .codex/rules/架构.md             # 项目总 Spec 与目标架构唯一依据
 └── AGENTS.md
 ```
 
-不要将尚不存在的目录或能力描述为“已实现”。每次架构升级都要区分当前状态、目标状态和本次增量。
+不要将尚不存在的目录或能力描述为“已实现”。每次架构升级都要区分历史已验收内核、当前业务差距、目标状态和本次增量。
 
 ---
 
-## 目标架构概述
+## 项目总 Spec 与目标架构概述
 
-旅行规划是**交互式约束满足 + 多目标优化 + 动态重规划**，不是风险二分类，也不是一次性自由文本生成。
+企业商务差旅规划是**交互式约束满足 + 多目标优化 + 动态重规划**，不是风险二分类，也不是一次性自由文本生成。求职版以 `meeting_arrival_ready` 为边界：覆盖通用公司政策、去程、候选级且最多一晚的会前住宿、市内交通和首场会议到达时限；会议结束时间、会议期间住宿和返程默认不规划并显式披露，景点/活动不进入主链路。
 
 主链路：
 
@@ -155,7 +148,7 @@ Request Gateway
 - `TripRequest`：出发地、目的地、日期、人数、预算、偏好和工作模式；
 - `Constraint` / `ConstraintSnapshot`：hard、soft、assumption、unknown 及其来源和优先级；
 - `EvidenceItem` / `EvidenceSnapshot`：事实、来源、时间、TTL、状态和原始引用；
-- `Candidate`：可参与规划的标准化交通、住宿、地点或活动；
+- `Candidate`：可参与规划的标准化去程交通、住宿和市内交通；公司政策作为版本化 Evidence/Rule，不作为旅游地点候选；
 - `ItineraryPlan`：版本化日程、预算、备选、假设、警告和证据引用；
 - `ValidationIssue`：Gate、严重级别、影响范围、证据、修复策略；
 - `AgentContext` / `AgentResult`：Agent 的统一输入输出；
@@ -369,7 +362,7 @@ Commit Message：
 | 变量 | 用途 | 必需 |
 |:---|:---|:---:|
 | `DEEPSEEK_API_KEY` | DeepSeek LLM API | 是 |
-| `DEEPSEEK_MODEL` | 默认模型 | 否 |
+| `DEEPSEEK_MODEL` | Live 运行使用的模型 ID；禁止隐式默认或回退 | Live 必需，离线测试否 |
 | `AMAP_API_KEY` | 高德地图 API | 按功能 |
 | `TUNIU_API_KEY` | 途牛 MCP API | 按功能 |
 | `STRICT_MODE` | 开发/测试强制 fail-fast，默认应为 `true` | 开发测试必需 |
