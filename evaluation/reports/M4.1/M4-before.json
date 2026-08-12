@@ -1,0 +1,18 @@
+{
+  "component": "2e2952a210d7b0a3bae61151dbd107d31e0e48f37b68b9d5a2a637080f351b74",
+  "component_case_count": 12,
+  "component_component_availability": "NOT_IMPLEMENTED_IN_BASELINE",
+  "component_evaluator_errors": 0,
+  "component_first_failed_stage": "SCOPE",
+  "component_run_status": "COMPLETED",
+  "dataset_fingerprint": "98f90eee878c14688b96a5c2857bf39a56d8ee7a466b6a29d7b8f55e41d1fc08",
+  "integration": "d1a07c94cc058b44105dd77b97713a0329f33f054931e6ea5767a087717e6f7a",
+  "integration_case_count": 12,
+  "integration_component_availability": "IMPLEMENTED",
+  "integration_evaluator_errors": 0,
+  "integration_first_failed_stage": "INTERPRETER",
+  "integration_run_status": "COMPLETED",
+  "policy_fingerprint": "4146449c0235b98f5522102cd84eab921c8f7322f54eaa78bc745d37c5e527d1",
+  "runtime_fingerprint": "f78dde1e7bf9290b07649d24ac1b0d25fce789c8b4d8901868b38c2a0eef6fc6",
+  "view_fixture_fingerprint": "610e7603d7b0cf8a41a5fc92f54f3e9a75972545cedf0c8c492fecfcc20507a4"
+}

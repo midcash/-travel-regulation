@@ -1,0 +1,31 @@
+{
+  "dataset_id": "business-travel-m4.1-v1",
+  "dataset_version": "business-travel-m4.1-v1",
+  "formal_case_count": 12,
+  "dev_dataset_id": "business-travel-m4.1-dev-v1",
+  "dev_case_count": 6,
+  "oracle_version": "business-travel-m4.1-oracle-v1",
+  "dataset_file": "business-travel-m4.1-v1.jsonl",
+  "dataset_hash": "68c0d02cc59f24377f1f326c6548f92ae9b0564c90ac29c470a18fdfd47a0421",
+  "dev_dataset_file": "business-travel-m4.1-dev-v1.jsonl",
+  "dev_dataset_hash": "6bd8abc6310354d1417f7fd4de1ae0f001d2cc051df25fcb926ab834737425bc",
+  "fixture_file": "business-travel-m4.1-v1.json",
+  "fixture_hash": "289478919e5a8f68e3d0301176aa95aad5f972c65847e7da048fab424a542a7f",
+  "policy_files": {
+    "meeting-readiness-policy-v1": "meeting-readiness-policy-v1.json",
+    "pre-meeting-lodging-policy-v1": "pre-meeting-lodging-policy-v1.json",
+    "repetition-policy-m4.1-v1": "repetition-policy-m4.1-v1.json",
+    "timing-policy-cn-domestic-v1": "timing-policy-cn-domestic-v1.json",
+    "universal-business-travel-policy-v1": "universal-business-travel-policy-v1.json"
+  },
+  "policy_hashes": {
+    "meeting-readiness-policy-v1": "88175bc90d58002345eae6aeed7d230bc4ecd7be1cb256c16fe34fe1d3214c0a",
+    "pre-meeting-lodging-policy-v1": "94892ec67c86a950b9168b5838fbed01aff92963300e115bdf3cbf7a3efc81c1",
+    "repetition-policy-m4.1-v1": "dd260d684e13d8de4e2d2b9a0e54bf486e369d193c1c63090a5eeb442d214195",
+    "timing-policy-cn-domestic-v1": "cc26a3525d0ff90a9e9c75fcdf46cfdd998a05d75eeacd4c9c90a157705db5d8",
+    "universal-business-travel-policy-v1": "8d0ecad8e555c16b4cbaeff5df74186b7e98479f141edbfc30d32b0075af3a13"
+  },
+  "review_file": "business-travel-m4.1-v1-review.json",
+  "review_status": "accepted",
+  "unresolved_issue_count": 0
+}

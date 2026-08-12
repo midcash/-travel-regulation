@@ -17,5 +17,11 @@ strict = true
 warn_unused_configs = true
 files = [
     "src",
-    "evaluation/runner.py",
+    "evaluation",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: tests that require real external services",
+    "integration: tests that exercise multiple application components",
 ]

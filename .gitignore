@@ -18,6 +18,9 @@ venv/
 .codex
 .agents
 .codex-temp
+.superpowers
+.pytest-tmp*/
+evaluation/reports/M4.1/runs/_tmp/
 data
 docs
 

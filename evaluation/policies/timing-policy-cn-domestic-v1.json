@@ -1,0 +1,1 @@
+{"citations":[{"page":1,"ref":"timing-policy-cn-domestic-v1"}],"kind":"timing","policy_id":"timing-policy-cn-domestic-v1","rules":{"airport_exit_buffer_minutes":45,"meeting_arrival_buffer_minutes":30,"railway_exit_buffer_minutes":20,"local_transport_risk_buffer_minutes":20},"version":1}

@@ -1,0 +1,14 @@
+{
+  "review_id": "business-travel-m4.1-v1-review-v1",
+  "reviewer": {"kind": "independent_reviewer_agent", "model": "gpt-5.6-sol", "prompt_scope": "spec+dataset+dataset-card"},
+  "dataset_id": "business-travel-m4.1-v1",
+  "issues": [
+    {"issue_id": "REV-001", "severity": "important", "question": "是否明确会议到达边界并排除返程与景点？", "decision": "accepted", "resolution": "数据卡和 BT-M41-012 显式记录 meeting_arrival_ready 与禁止输出。"},
+    {"issue_id": "REV-002", "severity": "important", "question": "住宿是否为候选级且最多一晚？", "decision": "accepted", "resolution": "BT-M41-002/003/009 使用候选级 Oracle，策略固定最多一晚。"},
+    {"issue_id": "REV-003", "severity": "important", "question": "澄清案例是否保证零外部研究任务？", "decision": "accepted", "resolution": "BT-M41-005/006 以空能力、禁止输出和 Fixture must_not_call 固定。"},
+    {"issue_id": "REV-004", "severity": "important", "question": "正式与开发输入是否隔离？", "decision": "accepted", "resolution": "Registry 合同测试验证 12+6 数量和跨分区输入唯一。"},
+    {"issue_id": "REV-005", "severity": "important", "question": "是否把供应商失败或未实现能力伪装为成功？", "decision": "accepted", "resolution": "Fixture 显式配置 empty/timeout/unreachable，业务合同保留失败状态。"}
+  ],
+  "unresolved_issue_count": 0,
+  "final_decision": "accepted"
+}

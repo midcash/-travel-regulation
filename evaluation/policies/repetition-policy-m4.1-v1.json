@@ -1,0 +1,1 @@
+{"citations":[{"page":1,"ref":"repetition-policy-m4.1-v1"}],"kind":"repetition","policy_id":"repetition-policy-m4.1-v1","rules":{"live_blocking_runs_per_case":3,"live_interpreter_call_budget_max":20,"live_observational_runs_per_case":1,"offline_full_suite_runs":2,"retry_count":0},"version":1}

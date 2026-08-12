@@ -1,0 +1,42 @@
+{
+  "fixture_version": "business-travel-m4.1-v1",
+  "venues": {
+    "fixture:bt-d01": {"resolution": "unique", "venue_id": "venue-bj-chaoyang"},
+    "fixture:bt-d02": {"resolution": "ambiguous", "venue_id": null},
+    "fixture:bt-d03": {"resolution": "unique", "venue_id": "venue-sh-hongqiao"},
+    "fixture:bt-d04": {"resolution": "unique", "venue_id": "venue-hz-east"},
+    "fixture:bt-d05": {"resolution": "unsupported", "venue_id": null},
+    "fixture:bt-d06": {"resolution": "invalid", "venue_id": null},
+    "fixture:bt-001": {"resolution": "unique", "venue_id": "venue-hz-east"},
+    "fixture:bt-002": {"resolution": "unique", "venue_id": "venue-sh-pudong"},
+    "fixture:bt-003": {"resolution": "unique", "venue_id": "venue-sz-nanshan"},
+    "fixture:bt-004": {"resolution": "unique", "venue_id": "venue-nj-xinjiekou"},
+    "fixture:bt-005": {"resolution": "ambiguous", "venue_id": null},
+    "fixture:bt-006": {"resolution": "unique", "venue_id": "venue-bj-chaoyang"},
+    "fixture:bt-007": {"resolution": "unique", "venue_id": "venue-sh-hongqiao"},
+    "fixture:bt-008": {"resolution": "unique", "venue_id": "venue-sh-pudong"},
+    "fixture:bt-009": {"resolution": "unique", "venue_id": "venue-nb-east"},
+    "fixture:bt-010": {"resolution": "unique", "venue_id": "venue-gz-tianhe"},
+    "fixture:bt-011": {"resolution": "unique", "venue_id": "venue-cd-tianfu"},
+    "fixture:bt-012": {"resolution": "unique", "venue_id": "venue-gz-pazhou"}
+  },
+  "providers": {
+    "fixture:bt-001": {"transport": "configured_success", "lodging": "not_called"},
+    "fixture:bt-002": {"transport": "configured_success", "lodging": "configured_success"},
+    "fixture:bt-003": {"transport": "configured_success", "lodging": "configured_success"},
+    "fixture:bt-004": {"transport": "configured_success", "lodging": "configured_success"},
+    "fixture:bt-005": {"transport": "must_not_call", "lodging": "must_not_call", "map": "ambiguous"},
+    "fixture:bt-006": {"transport": "must_not_call", "lodging": "must_not_call", "clock": "conflict"},
+    "fixture:bt-007": {"policy": "configured_success", "transport": "configured_success"},
+    "fixture:bt-008": {"lodging": "configured_success", "price_semantics": "night_tax_total"},
+    "fixture:bt-009": {"lodging": "empty", "transport": "configured_success"},
+    "fixture:bt-010": {"local_transport": "unreachable"},
+    "fixture:bt-011": {"policy": "conflict_and_expired", "provider": "timeout"},
+    "fixture:bt-012": {"transport": "legacy_supported", "return": "unsupported", "sightseeing": "forbidden"}
+  },
+  "errors": {
+    "empty_result": {"error_type": "PROVIDER_EMPTY_RESULT", "fallback": false},
+    "invalid_schema": {"error_type": "PROVIDER_RESPONSE_INVALID", "fallback": false},
+    "timeout": {"error_type": "EXTERNAL_DEPENDENCY_FAILURE", "retry": false}
+  }
+}
