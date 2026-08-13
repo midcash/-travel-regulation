@@ -15,10 +15,6 @@ from pathlib import Path
 ACCEPTANCE_COMMAND: tuple[str, ...] = (
     "-m",
     "evaluation.stage_acceptance",
-    "--stage",
-    "M4.1",
-    "--mode",
-    "all",
 )
 
 ACCEPTANCE_ENV_NAMES = frozenset(

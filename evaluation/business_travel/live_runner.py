@@ -128,6 +128,10 @@ def _semantic_summary(result: SemanticEvaluationResult) -> dict[str, object]:
         "mode": result.route_decision.mode,
         "required_capabilities": list(result.route_decision.required_capabilities),
         "missing_blocker_fields": [blocker.field for blocker in result.readiness.blockers],
+        "terminal_status": {
+            "clarify": "clarifying",
+            "unsupported": "unsupported_scope",
+        }.get(result.route_decision.mode, "planned"),
         "trajectory": list(result.trajectory),
     }
 
@@ -254,6 +258,8 @@ def run_live_semantic(
                         "capabilities": semantic_summary["required_capabilities"],
                         "scope": (),
                         "lodging": "not_required",
+                        "terminal_status": semantic_summary["terminal_status"],
+                        "trajectory": semantic_summary["trajectory"],
                         "recommendation_evidence_types": (),
                         "forbidden_outputs": (),
                     },

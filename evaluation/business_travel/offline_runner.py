@@ -271,13 +271,71 @@ def _predicted_semantic(
 ) -> dict[str, Any]:
     route = result.route_decision
     blockers = tuple(blocker.field for blocker in result.readiness.blockers)
+    trajectory = tuple(getattr(result, "trajectory", ()))
+    if not trajectory:
+        trajectory = (
+            "g0",
+            "interpreter",
+            "constraint_service",
+            "readiness_evaluator",
+            "router",
+        )
+    plan_result = getattr(result, "plan_result", None)
+    orchestration = getattr(plan_result, "orchestration", None)
+    graph = getattr(orchestration, "graph", None)
+    tasks = tuple(getattr(graph, "tasks", ()))
+    task_by_id = {task.task_id: task for task in tasks}
+    task_dependencies = tuple(
+        sorted(
+            (task_by_id[dependency].capability, task.capability)
+            for task in tasks
+            for dependency in task.dependencies
+            if dependency in task_by_id
+        )
+    )
+    ordered_task_capabilities: list[str] = []
+    completed_tasks: set[str] = set()
+    remaining_tasks = set(task_by_id)
+    while remaining_tasks:
+        ready_tasks = sorted(
+            task_id
+            for task_id in remaining_tasks
+            if set(task_by_id[task_id].dependencies).issubset(completed_tasks)
+        )
+        if not ready_tasks:
+            break
+        for task_id in ready_tasks:
+            ordered_task_capabilities.append(str(task_by_id[task_id].capability))
+            completed_tasks.add(task_id)
+            remaining_tasks.remove(task_id)
+    if plan_result is not None:
+        trajectory = (*trajectory, "task_graph", *ordered_task_capabilities, "composer")
+
+    state = getattr(result, "state", None)
+    state_status = getattr(state, "status", None)
+    terminal_status = {
+        "clarify": "clarifying",
+        "unsupported": "unsupported_scope",
+    }.get(route.mode, "planned")
+    if getattr(state_status, "value", None) == "failed":
+        terminal_status = "failed"
+    last_error = getattr(state, "last_error", None)
     return {
         "mode": route.mode,
         "clarification_fields": blockers,
         "scope": (),
         "capabilities": route.required_capabilities,
+        "initial_task_dependencies": (),
+        "task_dependencies": task_dependencies,
+        "expanded_scope_by_candidate": {},
+        "expanded_capabilities_by_candidate": {},
+        "expanded_task_dependencies": (),
         "lodging": "not_required",
+        "min_distinct_alternatives": None,
         "recommendation_evidence_types": (),
+        "terminal_status": terminal_status,
+        "error_type": getattr(last_error, "code", None),
+        "trajectory": trajectory,
         "forbidden_outputs": (),
     }
 
@@ -476,6 +534,7 @@ def _run_integration_case(case: AgentEvalCase) -> OfflineCaseResult:
                 )
                 else "not_required"
             )
+            predicted["min_distinct_alternatives"] = len(plan_result.composition.plan_candidates)
         return _score_result(case, predicted, kind="integration")
     except Exception as exc:
         return OfflineCaseResult(

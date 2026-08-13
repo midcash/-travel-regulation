@@ -201,9 +201,11 @@ def run_stage_acceptance(*, stage: str, mode: str, root: Path) -> StageAcceptanc
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run M4.1 stage acceptance")
-    parser.add_argument("--stage", required=True)
-    parser.add_argument("--mode", required=True, choices=("offline", "all"))
+    parser = argparse.ArgumentParser(
+        description="Run M4.1 stage acceptance; no arguments runs the full Live gate."
+    )
+    parser.add_argument("--stage", default="M4.1")
+    parser.add_argument("--mode", default="all", choices=("offline", "all"))
     args = parser.parse_args(argv)
     result = run_stage_acceptance(stage=args.stage, mode=args.mode, root=Path.cwd())
     sys.stdout.write(
