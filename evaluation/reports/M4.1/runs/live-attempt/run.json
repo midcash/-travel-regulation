@@ -1,27 +1,715 @@
 {
-  "error_type": "EvaluationConfigurationError",
+  "case_results": [
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-001",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "1",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-001",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "1",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-001",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "1",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-003",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-003",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-003",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-005",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": null,
+        "capability_exact_match": "1",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": null,
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "1",
+        "recommendation_grounding_rate": "1",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "1"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-005",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": null,
+        "capability_exact_match": "1",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": null,
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "1",
+        "recommendation_grounding_rate": "1",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "1"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-005",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": null,
+        "capability_exact_match": "1",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": null,
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "1",
+        "recommendation_grounding_rate": "1",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "1"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-012",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": null,
+        "capability_exact_match": "1",
+        "clarification_precision": "1",
+        "clarification_recall": "1",
+        "evidence_coverage": null,
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "1",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "1"
+      },
+      "semantic": {
+        "missing_blocker_fields": [],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-012",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": null,
+        "capability_exact_match": "1",
+        "clarification_precision": "1",
+        "clarification_recall": "1",
+        "evidence_coverage": null,
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "1",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "1"
+      },
+      "semantic": {
+        "missing_blocker_fields": [],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-012",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": null,
+        "capability_exact_match": "1",
+        "clarification_precision": "1",
+        "clarification_recall": "1",
+        "evidence_coverage": null,
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "1",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "1"
+      },
+      "semantic": {
+        "missing_blocker_fields": [],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_blocking"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-002",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-004",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-006",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": null,
+        "capability_exact_match": "1",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": null,
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "1",
+        "recommendation_grounding_rate": "1",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "1"
+      },
+      "semantic": {
+        "missing_blocker_fields": [],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-007",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "origin",
+          "destination",
+          "date_range_or_duration_days",
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-008",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "origin",
+          "date_range",
+          "travelers",
+          "budget"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-009",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "0",
+        "clarification_recall": "0",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [
+          "origin",
+          "destination",
+          "date_range_or_duration_days",
+          "travelers"
+        ],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-010",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "1",
+        "clarification_recall": "1",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [],
+        "mode": "clarify",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    },
+    {
+      "business_assertion": "FAIL",
+      "case_id": "BT-M41-011",
+      "failure_category": "BUSINESS_FAILURE",
+      "first_failed_stage": "INTERPRETER",
+      "metric_values": {
+        "alternative_diversity_pass_rate": "0",
+        "candidate_coverage": null,
+        "candidate_pre_meeting_lodging_exact_match": "0",
+        "capability_exact_match": "0",
+        "clarification_precision": "1",
+        "clarification_recall": "1",
+        "evidence_coverage": "1",
+        "forbidden_output_rate": "0",
+        "mode_accuracy": "0",
+        "recommendation_grounding_rate": "0",
+        "return_scope_disclosure_rate": null,
+        "scope_exact_match": "0"
+      },
+      "semantic": {
+        "missing_blocker_fields": [],
+        "mode": "unsupported",
+        "required_capabilities": [],
+        "trajectory": [
+          "g0",
+          "interpreter",
+          "constraint_service",
+          "readiness_evaluator",
+          "router"
+        ]
+      },
+      "view": "live_observation"
+    }
+  ],
+  "dataset_fingerprint": "98f90eee878c14688b96a5c2857bf39a56d8ee7a466b6a29d7b8f55e41d1fc08",
+  "downstream_calls": 0,
   "max_tokens": 4096,
-  "model": "<unset>",
+  "model": "deepseek-v4-flash",
+  "policy_fingerprint": "4146449c0235b98f5522102cd84eab921c8f7322f54eaa78bc745d37c5e527d1",
   "provider": "deepseek",
   "retry_count": 0,
-  "run_status": "EXTERNAL_FAILURE",
+  "run_status": "COMPLETED",
+  "runtime_fingerprint": "bc9ed89fd9313abf7412fea8a6c35ce02c5aaa99a302afe97a3f5649be543666",
   "seed_status": "unsupported",
-  "status": "LIVE_ATTEMPT_RECORDED",
+  "semantic_runs": 20,
+  "status": "LIVE_BASELINE_SUCCESS",
   "temperature": "provider_default",
-  "workflow_error": {
-    "category": "internal",
-    "cause_code": "UNCLASSIFIED_FAILURE",
-    "cause_summary": "DEEPSEEK_MODEL is required",
-    "cause_type": "EvaluationConfigurationError",
-    "code": "UNCLASSIFIED_FAILURE",
-    "finish_reason": null,
-    "input_tokens": 0,
-    "max_tokens": null,
-    "message": "live semantic evaluation failed",
-    "model": null,
-    "output_tokens": 0,
-    "retryable": false,
-    "stage": "live_runner",
-    "trace_id": "live:unknown"
-  }
+  "view_fixture_fingerprint": "610e7603d7b0cf8a41a5fc92f54f3e9a75972545cedf0c8c492fecfcc20507a4"
 }
