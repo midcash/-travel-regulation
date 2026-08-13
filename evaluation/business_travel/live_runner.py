@@ -119,7 +119,33 @@ def _safe_cause_summary(cause: BaseException | None) -> str | None:
         return "LLM request timed out"
     if isinstance(cause, ConfigurationError):
         return str(cause)[:256]
+    if isinstance(cause, ConnectionError | OSError) or type(cause).__module__.startswith(
+        "openai"
+    ):
+        return _safe_connection_summary(cause)
     return type(cause).__name__
+
+
+def _safe_connection_summary(cause: BaseException) -> str:
+    """保留连接失败的有限异常链，同时过滤凭证和完整供应商载荷。"""
+    parts = [_bounded_exception_text(cause)]
+    chained = cause.__cause__ or cause.__context__
+    if chained is not None and chained is not cause:
+        parts.append(f"cause={_bounded_exception_text(chained)}")
+    return "; ".join(parts)[:512]
+
+
+def _bounded_exception_text(exc: BaseException) -> str:
+    """Return a short exception summary without URLs, prompts, or credentials."""
+    detail = str(exc).strip()
+    if not detail:
+        return type(exc).__name__
+    lowered = detail.casefold()
+    for marker in ("api_key", "apikey", "authorization", "bearer", "token"):
+        if marker in lowered:
+            detail = detail[: detail.casefold().find(marker)].rstrip(" :;,")
+            break
+    return f"{type(exc).__name__}: {detail[:240]}"
 
 
 def _semantic_summary(result: SemanticEvaluationResult) -> dict[str, object]:

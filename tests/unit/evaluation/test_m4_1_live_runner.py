@@ -76,6 +76,27 @@ def test_live_runner_does_not_invent_success_when_gateway_fails(tmp_path: Path) 
     assert payload["workflow_error"]["cause_summary"] == "LLM request timed out"
 
 
+def test_live_runner_preserves_safe_provider_connection_chain(tmp_path: Path) -> None:
+    try:
+        raise OSError("TLS handshake failed")
+    except OSError as cause:
+        failure = ConnectionError("provider connection closed")
+        failure.__cause__ = cause
+
+    result = run_live_semantic(
+        settings=Settings(deepseek_api_key="key", deepseek_model="deepseek-v4-flash"),
+        output_dir=tmp_path,
+        gateway_factory=lambda _: (_ for _ in ()).throw(failure),
+    )
+
+    assert result.status == "LIVE_ATTEMPT_RECORDED"
+    payload = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    assert payload["workflow_error"]["cause_summary"] == (
+        "ConnectionError: provider connection closed; "
+        "cause=OSError: TLS handshake failed"
+    )
+
+
 def test_live_runner_records_workflow_error_root_cause(tmp_path: Path) -> None:
     failure = LLMResponseError(
         "LLM output was truncated",
