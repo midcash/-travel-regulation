@@ -21,7 +21,7 @@ from src.obs.metric import record_interpreter_failure
 from src.obs.trace import trace_agent
 from src.ports.llm_gateway import LLMGateway, LLMOutputMode, LLMResponseError
 
-REQUEST_INTERPRETER_PROMPT_VERSION: Final[str] = "m2-request-interpreter-v2"
+REQUEST_INTERPRETER_PROMPT_VERSION: Final[str] = "m2-request-interpreter-v3"
 INTERPRETATION_SCHEMA_VERSION: Final[str] = "1.0"
 _MAX_CONVERSATION_SUMMARY_LENGTH: Final[int] = 4096
 
@@ -270,15 +270,20 @@ one of: {json.dumps(allowed_values, ensure_ascii=False)}.
 
 Interpretation rules:
 - Use canonical categories whenever applicable: origin, destination, date_range,
-  travelers, budget, accommodation, activity, avoid_activity.
+  travelers, budget, budget_max, budget_min, budget_target, budget_semantics,
+  policy, accommodation, activity, avoid_activity.
 - Represent date/date_range as a canonical ISO date or date range string, such as
   "2026-08-01" or "2026-08-01/2026-08-03". Resolve relative expressions such
   as "下周一", "明天" and "本周末" against REFERENCE_DATE_DATA before returning
   them. For a one-day relative expression, return the resolved ISO date. Never
   Never append weekday names, explanations, parentheses, or other text to a date
   value.
-  Represent travelers as an integer; represent budget as a scalar string such
-  as "5000 CNY" or as a number.
+  Represent travelers as an integer; represent a numeric budget as a scalar
+  string such as "5000 CNY" or as a number. Use budget/budget_max/budget_min/
+  budget_target only when the user states an explicit numeric amount. For a
+  company policy, policy ceiling, or policy-bounded request without an amount,
+  use category policy with a short semantic value such as "policy_bounded";
+  never use budget for a policy reference and never invent an amount.
 - Every constraint value must be a JSON string, integer, number, boolean, or an
   array of strings. Never return an object as a constraint value.
 - Create at most one candidate for each canonical field. Do not duplicate a

@@ -79,6 +79,22 @@ def test_interpret_prompt_provides_reference_date_for_relative_dates() -> None:
     assert "Never append weekday names" in prompt
 
 
+def test_interpret_prompt_separates_policy_budget_semantics_from_numeric_budget() -> None:
+    interpreter, gateway = _interpreter(_payload())
+
+    interpreter.interpret(
+        "请按公司的通用差旅政策，不超过政策上限",
+        context=_context(),
+        trace_id="trace:interpret-policy-budget",
+        reference_date=date(2026, 8, 12),
+    )
+
+    prompt = gateway.calls[0][0]
+    assert "budget_semantics" in prompt
+    assert "policy_bounded" in prompt
+    assert "never use budget for a policy reference" in prompt
+
+
 
 def test_interpret_delimits_user_data_and_current_context_in_prompt() -> None:
     interpreter, gateway = _interpreter(_payload(mode="compare"))
