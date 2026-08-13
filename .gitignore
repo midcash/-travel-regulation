@@ -21,6 +21,7 @@ venv/
 .superpowers
 .pytest-tmp*/
 evaluation/reports/M4.1/runs/_tmp/
+evaluation/reports/M4.1/runs/live-attempt/
 data
 docs
 

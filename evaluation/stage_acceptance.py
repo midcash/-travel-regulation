@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,20 @@ class StageAcceptanceResult:
     exit_code: int
     checks: dict[str, str]
     live_status: str | None
+
+
+def _load_dotenv_into_process(root: Path) -> Path | None:
+    """在开发期验收入口将 `.env` 白名单配置注入当前进程。"""
+    dotenv_path = root / ".env"
+    if not dotenv_path.is_file():
+        return None
+    from evaluation.run_m4_1_acceptance import ACCEPTANCE_ENV_NAMES, parse_dotenv
+
+    values = parse_dotenv(dotenv_path)
+    for name, value in values.items():
+        if name in ACCEPTANCE_ENV_NAMES and value.strip():
+            os.environ[name] = value
+    return dotenv_path
 
 
 def _validate_assets(root: Path) -> None:
@@ -207,7 +222,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stage", default="M4.1")
     parser.add_argument("--mode", default="all", choices=("offline", "all"))
     args = parser.parse_args(argv)
-    result = run_stage_acceptance(stage=args.stage, mode=args.mode, root=Path.cwd())
+    root = Path.cwd()
+    dotenv_path = _load_dotenv_into_process(root)
+    if dotenv_path is not None:
+        sys.stdout.write(f"Loaded local acceptance configuration from {dotenv_path}\n")
+        sys.stdout.write("Secret values are not printed; configuration is scoped to this process.\n")
+    result = run_stage_acceptance(stage=args.stage, mode=args.mode, root=root)
     sys.stdout.write(
         json.dumps({"checks": result.checks, "live_status": result.live_status}, indent=2) + "\n"
     )

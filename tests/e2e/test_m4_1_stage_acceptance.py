@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from evaluation.stage_acceptance import main, run_stage_acceptance
@@ -51,3 +52,36 @@ def test_stage_acceptance_defaults_to_m41_all(monkeypatch, capsys) -> None:
         "root": Path.cwd(),
     }
     assert "LIVE_BASELINE_SUCCESS" in capsys.readouterr().out
+
+
+def test_stage_acceptance_loads_dotenv_for_default_live_run(
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
+    monkeypatch.delenv("STRICT_MODE", raising=False)
+
+    def fake_load_dotenv(root: Path) -> Path:
+        assert root == Path.cwd()
+        os.environ.update(
+            {
+                "DEEPSEEK_API_KEY": "dotenv-key",
+                "DEEPSEEK_MODEL": "deepseek-v4-flash",
+                "STRICT_MODE": "true",
+            }
+        )
+        return root / ".env"
+
+    monkeypatch.setattr("evaluation.stage_acceptance._load_dotenv_into_process", fake_load_dotenv)
+
+    def fake_run_stage_acceptance(*, stage: str, mode: str, root: Path):
+        assert os.environ["DEEPSEEK_API_KEY"] == "dotenv-key"
+        assert os.environ["DEEPSEEK_MODEL"] == "deepseek-v4-flash"
+        assert os.environ["STRICT_MODE"] == "true"
+        return type("Result", (), {"checks": {}, "live_status": "LIVE_BASELINE_SUCCESS", "exit_code": 0})()
+
+    monkeypatch.setattr("evaluation.stage_acceptance.run_stage_acceptance", fake_run_stage_acceptance)
+
+    assert main([]) == 0
+    assert ".env" in capsys.readouterr().out
