@@ -12,7 +12,7 @@ from src.domain.errors import WorkflowError
 from src.domain.models.enums import ConstraintHardness, InteractionMode
 from src.domain.models.interpretation import SafetyFlag
 from src.guard.g0 import G0SecurityContext, G0Validator
-from src.ports.llm_gateway import LLMOutputMode
+from src.ports.llm_gateway import LLMOutputMode, LLMResponseError
 from tests.support.llm_fakes import FakeLLMGateway, FakeNotConfiguredError
 
 
@@ -101,7 +101,7 @@ def test_interpret_delimits_user_data_and_current_context_in_prompt() -> None:
     "response",
     ["", "not json", '{"mode_hint": "plan"}'],
 )
-def test_interpret_rejects_empty_invalid_and_incomplete_llm_responses(response: str) -> None:
+def test_interpret_classifies_empty_parse_and_schema_failures(response: str) -> None:
     interpreter, _ = _interpreter(response)
 
     with pytest.raises(WorkflowError) as raised:
@@ -113,6 +113,38 @@ def test_interpret_rejects_empty_invalid_and_incomplete_llm_responses(response: 
 
     assert raised.value.payload.code == "INTERPRETATION_INVALID"
     assert raised.value.retryable is False
+    expected_cause_code = {
+        "": "LLM_EMPTY_RESPONSE",
+        "not json": "LLM_JSON_PARSE_FAILED",
+        '{"mode_hint": "plan"}': "LLM_SCHEMA_VALIDATION_FAILED",
+    }[response]
+    assert raised.value.payload.cause_code == expected_cause_code
+
+
+def test_interpret_preserves_structured_llm_response_failure() -> None:
+    interpreter, _ = _interpreter(
+        LLMResponseError(
+            "LLM output was truncated",
+            cause_code="LLM_OUTPUT_TRUNCATED",
+            finish_reason="length",
+            model="deepseek-v4-flash",
+            max_tokens=4096,
+            input_tokens=1200,
+            output_tokens=4096,
+        )
+    )
+
+    with pytest.raises(WorkflowError) as raised:
+        interpreter.interpret(
+            "瑙勫垝鏉窞鏃呰",
+            context=_context(),
+            trace_id="trace:interpret-truncated",
+        )
+
+    assert raised.value.payload.category.value == "llm"
+    assert raised.value.payload.code == "INTERPRETATION_INVALID"
+    assert raised.value.payload.cause_code == "LLM_OUTPUT_TRUNCATED"
+    assert isinstance(raised.value.cause, LLMResponseError)
 
 
 def test_interpret_rejects_unknown_fields_and_disallowed_modes() -> None:

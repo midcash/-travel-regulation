@@ -87,5 +87,6 @@ def test_workflow_error_exposes_safe_payload_without_cause() -> None:
         "safe_message": "工具查询超时",
         "upstream_refs": ["candidate-1"],
         "retryable": True,
+        "cause_code": None,
     }
     assert "secret upstream response" not in repr(error.public_payload())

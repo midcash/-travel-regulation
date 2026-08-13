@@ -25,9 +25,10 @@ from evaluation.business_travel.semantic_use_case import (
     SemanticEvaluationUseCase,
 )
 from src.config import ConfigurationError, Settings, load_settings
+from src.domain.errors import WorkflowError
 from src.domain.models.trip_request import TravelerProfile, TripRequest
 from src.domain.models.value_objects import DateRange
-from src.ports.llm_gateway import LLMGateway
+from src.ports.llm_gateway import LLMGateway, LLMResponseError
 
 
 class EvaluationConfigurationError(ConfigurationError):
@@ -65,6 +66,60 @@ class LiveRunResult:
     error_type: str | None = None
     semantic_runs: int = 0
     downstream_calls: int = 0
+
+
+def _workflow_error_summary(exc: BaseException, *, case_id: str | None = None) -> dict[str, object]:
+    """Build a safe, structured failure summary without raw prompts or responses."""
+    if isinstance(exc, WorkflowError):
+        payload = exc.public_payload()
+        cause = exc.cause
+        summary: dict[str, object] = {
+            "trace_id": str(payload.trace_id),
+            "stage": payload.stage,
+            "category": payload.category.value,
+            "code": payload.code,
+            "cause_code": payload.cause_code,
+            "message": payload.safe_message,
+            "retryable": payload.retryable,
+            "cause_type": type(cause).__name__ if cause is not None else None,
+            "cause_summary": _safe_cause_summary(cause),
+            "finish_reason": getattr(cause, "finish_reason", None),
+            "model": getattr(cause, "model", None),
+            "max_tokens": getattr(cause, "max_tokens", None),
+            "input_tokens": getattr(cause, "input_tokens", 0),
+            "output_tokens": getattr(cause, "output_tokens", 0),
+        }
+    else:
+        summary = {
+            "trace_id": f"live:{case_id}" if case_id else "live:unknown",
+            "stage": "live_runner",
+            "category": "internal",
+            "code": "UNCLASSIFIED_FAILURE",
+            "cause_code": "UNCLASSIFIED_FAILURE",
+            "message": "live semantic evaluation failed",
+            "retryable": False,
+            "cause_type": type(exc).__name__,
+            "cause_summary": _safe_cause_summary(exc),
+            "finish_reason": None,
+            "model": None,
+            "max_tokens": None,
+            "input_tokens": 0,
+            "output_tokens": 0,
+        }
+    return summary
+
+
+def _safe_cause_summary(cause: BaseException | None) -> str | None:
+    """Return a bounded summary without copying arbitrary provider payloads."""
+    if cause is None:
+        return None
+    if isinstance(cause, LLMResponseError):
+        return str(cause)[:256]
+    if isinstance(cause, TimeoutError):
+        return "LLM request timed out"
+    if isinstance(cause, ConfigurationError):
+        return str(cause)[:256]
+    return type(cause).__name__
 
 
 def _semantic_summary(result: SemanticEvaluationResult) -> dict[str, object]:
@@ -170,7 +225,9 @@ def run_live_semantic(
         identity = _live_identity(settings)
         semantic_runs = 0
         case_results: list[dict[str, object]] = []
+        current_case_id: str | None = None
         for case in live_cases:
+            current_case_id = case.case_id
             request = TripRequest(
                 request_id=f"live-{case.case_id}",
                 trip_id=f"live-{case.case_id}",
@@ -241,7 +298,17 @@ def run_live_semantic(
             "LIVE_BASELINE_SUCCESS", "COMPLETED", 0, output_dir, semantic_runs=semantic_runs
         )
     except Exception as exc:
-        base_payload.update({"error_type": type(exc).__name__})
+        base_payload.update(
+            {
+                "error_type": type(exc).__name__,
+                "workflow_error": _workflow_error_summary(
+                    exc,
+                    case_id=locals().get("current_case_id"),
+                ),
+                "case_id": locals().get("current_case_id"),
+                "semantic_runs": locals().get("semantic_runs", 0),
+            }
+        )
         _write_attempt(output_dir, base_payload)
         return LiveRunResult(
             "LIVE_ATTEMPT_RECORDED",
@@ -271,6 +338,7 @@ def run_live_semantic_from_environment() -> LiveRunResult:
                 "temperature": "provider_default",
                 "seed_status": "unsupported",
                 "error_type": type(exc).__name__,
+                "workflow_error": _workflow_error_summary(exc),
             },
         )
         return LiveRunResult(

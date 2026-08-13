@@ -136,3 +136,41 @@ def test_ask_llm_propagates_sdk_timeout_without_retry(
     monkeypatch.setattr(deepseek, 'OpenAI', fake_openai)
     with pytest.raises(TimeoutError):
         deepseek.ask_llm('prompt', Settings(deepseek_api_key='secret'))
+
+
+def test_ask_llm_rejects_truncated_output_with_structured_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content='{"partial": true'),
+                finish_reason='length',
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=17, completion_tokens=128),
+    )
+    _patch_client(monkeypatch, response)
+    records = []
+
+    with pytest.raises(deepseek.LLMResponseError) as raised:
+        deepseek.ask_llm(
+            'prompt',
+            Settings(deepseek_api_key='secret', deepseek_max_tokens=128),
+            observer=records.append,
+        )
+
+    error = raised.value
+    assert error.cause_code == 'LLM_OUTPUT_TRUNCATED'
+    assert error.finish_reason == 'length'
+    assert error.model == 'deepseek-chat'
+    assert error.max_tokens == 128
+    assert error.input_tokens == 17
+    assert error.output_tokens == 128
+    assert len(records) == 1
+    assert records[0].status == 'failure'
+    assert records[0].cause_code == 'LLM_OUTPUT_TRUNCATED'
+    assert records[0].finish_reason == 'length'
+    assert records[0].max_tokens == 128
+    assert records[0].input_tokens == 17
+    assert records[0].output_tokens == 128

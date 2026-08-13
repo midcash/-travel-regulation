@@ -19,7 +19,7 @@ from src.gateway.json_utils import JsonResponseError, parse_json_object
 from src.guard.g0 import G0SecurityContext, G0ValidationResult, G0Validator
 from src.obs.metric import record_interpreter_failure
 from src.obs.trace import trace_agent
-from src.ports.llm_gateway import LLMGateway, LLMOutputMode
+from src.ports.llm_gateway import LLMGateway, LLMOutputMode, LLMResponseError
 
 REQUEST_INTERPRETER_PROMPT_VERSION: Final[str] = "m2-request-interpreter-v2"
 INTERPRETATION_SCHEMA_VERSION: Final[str] = "1.0"
@@ -115,6 +115,7 @@ class RequestInterpreter:
                 trace_id,
                 ErrorCategory.CONFIGURATION,
                 "LLM configuration is invalid",
+                cause_code="LLM_CONFIGURATION_ERROR",
                 cause=exc,
             )
         except TimeoutError as exc:
@@ -122,6 +123,15 @@ class RequestInterpreter:
                 trace_id,
                 ErrorCategory.TIMEOUT,
                 "request interpretation timed out",
+                cause_code="LLM_TIMEOUT",
+                cause=exc,
+            )
+        except LLMResponseError as exc:
+            self._raise_workflow_error(
+                trace_id,
+                ErrorCategory.LLM,
+                "request interpretation failed",
+                cause_code=exc.cause_code,
                 cause=exc,
             )
         except Exception as exc:
@@ -129,12 +139,17 @@ class RequestInterpreter:
                 trace_id,
                 ErrorCategory.LLM,
                 "request interpretation failed",
+                cause_code="LLM_PROVIDER_ERROR",
                 cause=exc,
             )
 
         if type(raw_response) is not str:
             record_interpreter_failure("schema")
-            self._raise_invalid(trace_id, "LLM response must be text")
+            self._raise_invalid(
+                trace_id,
+                "LLM response must be text",
+                cause_code="LLM_RESPONSE_NOT_TEXT",
+            )
 
         try:
             payload = parse_json_object(raw_response)
@@ -144,6 +159,11 @@ class RequestInterpreter:
             self._raise_invalid(
                 trace_id,
                 "LLM response does not match InterpretationResult",
+                cause_code=(
+                    "LLM_EMPTY_RESPONSE"
+                    if not raw_response.strip()
+                    else "LLM_JSON_PARSE_FAILED"
+                ),
                 cause=exc,
             )
         except (ValidationError, TypeError, ValueError) as exc:
@@ -151,6 +171,7 @@ class RequestInterpreter:
             self._raise_invalid(
                 trace_id,
                 "LLM response does not match InterpretationResult",
+                cause_code="LLM_SCHEMA_VALIDATION_FAILED",
                 cause=exc,
             )
 
@@ -326,12 +347,14 @@ JSON Schema:
         trace_id: TraceId,
         message: str,
         *,
+        cause_code: str | None = None,
         cause: BaseException | None = None,
     ) -> NoReturn:
         RequestInterpreter._raise_workflow_error(
             trace_id,
             ErrorCategory.VALIDATION,
             message,
+            cause_code=cause_code,
             cause=cause,
         )
 
@@ -342,6 +365,7 @@ JSON Schema:
         message: str,
         *,
         code: str = "INTERPRETATION_INVALID",
+        cause_code: str | None = None,
         cause: BaseException | None = None,
     ) -> NoReturn:
         raise WorkflowError(
@@ -351,6 +375,7 @@ JSON Schema:
             code=code,
             safe_message=message,
             retryable=False,
+            cause_code=cause_code,
             cause=cause,
         )
 

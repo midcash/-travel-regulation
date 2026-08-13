@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from evaluation.business_travel.live_runner import (
     run_live_semantic_from_environment,
 )
 from src.config import Settings
+from src.ports.llm_gateway import LLMResponseError
 from tests.support.llm_fakes import FakeLLMGateway
 
 
@@ -67,6 +69,53 @@ def test_live_runner_does_not_invent_success_when_gateway_fails(tmp_path: Path) 
     assert result.status == "LIVE_ATTEMPT_RECORDED"
     assert result.exit_code != 0
     assert result.run_status == "EXTERNAL_FAILURE"
+    payload = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    assert payload["workflow_error"]["code"] == "UNCLASSIFIED_FAILURE"
+    assert payload["workflow_error"]["stage"] == "live_runner"
+    assert payload["workflow_error"]["cause_type"] == "TimeoutError"
+    assert payload["workflow_error"]["cause_summary"] == "LLM request timed out"
+
+
+def test_live_runner_records_workflow_error_root_cause(tmp_path: Path) -> None:
+    failure = LLMResponseError(
+        "LLM output was truncated",
+        cause_code="LLM_OUTPUT_TRUNCATED",
+        finish_reason="length",
+        model="deepseek-v4-flash",
+        max_tokens=4096,
+        input_tokens=800,
+        output_tokens=4096,
+    )
+    result = run_live_semantic(
+        settings=Settings(deepseek_api_key="key", deepseek_model="deepseek-v4-flash"),
+        output_dir=tmp_path,
+        gateway_factory=lambda _: FakeLLMGateway([failure]),
+    )
+
+    assert result.status == "LIVE_ATTEMPT_RECORDED"
+    assert result.exit_code != 0
+    payload = json.loads((tmp_path / "run.json").read_text(encoding="utf-8"))
+    assert payload["case_id"] == "BT-M41-001"
+    assert payload["semantic_runs"] == 0
+    assert payload["workflow_error"] == {
+        "category": "llm",
+        "cause_code": "LLM_OUTPUT_TRUNCATED",
+        "cause_summary": "LLM output was truncated",
+        "cause_type": "LLMResponseError",
+        "code": "INTERPRETATION_INVALID",
+        "finish_reason": "length",
+        "input_tokens": 800,
+        "max_tokens": 4096,
+        "message": "request interpretation failed",
+        "model": "deepseek-v4-flash",
+        "output_tokens": 4096,
+        "retryable": False,
+        "stage": "request_interpreter",
+        "trace_id": "semantic:live-BT-M41-001:live-BT-M41-001",
+    }
+    encoded = json.dumps(payload, ensure_ascii=False).casefold()
+    assert "prompt" not in encoded
+    assert "api_key" not in encoded
 
 
 def test_live_runner_executes_only_read_only_semantic_chain(tmp_path: Path) -> None:

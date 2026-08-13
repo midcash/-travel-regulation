@@ -22,6 +22,7 @@ class WorkflowErrorPayload(BaseModel):
     safe_message: str = Field(min_length=1, max_length=512)
     upstream_refs: tuple[StableId, ...] = ()
     retryable: bool = False
+    cause_code: str | None = Field(default=None, max_length=64)
 
 
 class WorkflowError(RuntimeError):
@@ -37,6 +38,7 @@ class WorkflowError(RuntimeError):
         *,
         upstream_refs: Sequence[StableId] = (),
         retryable: bool = False,
+        cause_code: str | None = None,
         cause: BaseException | None = None,
     ) -> None:
         self.payload = WorkflowErrorPayload(
@@ -47,6 +49,7 @@ class WorkflowError(RuntimeError):
             safe_message=safe_message,
             upstream_refs=tuple(upstream_refs),
             retryable=retryable,
+            cause_code=cause_code,
         )
         self.cause = cause
         super().__init__(self.payload.safe_message)
@@ -70,6 +73,11 @@ class WorkflowError(RuntimeError):
     def retryable(self) -> bool:
         """返回是否允许由上层重试。"""
         return self.payload.retryable
+
+    @property
+    def cause_code(self) -> str | None:
+        """返回上游失败的细分原因码。"""
+        return self.payload.cause_code
 
     def public_payload(self) -> WorkflowErrorPayload:
         """返回不包含内部 cause 的不可变错误载荷。"""

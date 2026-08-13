@@ -133,6 +133,18 @@ class WorkflowErrorSummary(_FrozenModel):
     error_type: str = Field(min_length=1)
     stage: str = Field(min_length=1)
     message: str = Field(min_length=1)
+    trace_id: str = Field(min_length=1)
+    category: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    cause_code: str | None = None
+    retryable: bool = False
+    cause_type: str | None = None
+    cause_summary: str | None = None
+    finish_reason: str | None = None
+    model: str | None = None
+    max_tokens: int | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class TokenUsage(_FrozenModel):
