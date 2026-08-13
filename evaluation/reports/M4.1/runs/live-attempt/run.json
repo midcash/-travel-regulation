@@ -1,0 +1,27 @@
+{
+  "error_type": "EvaluationConfigurationError",
+  "max_tokens": 4096,
+  "model": "<unset>",
+  "provider": "deepseek",
+  "retry_count": 0,
+  "run_status": "EXTERNAL_FAILURE",
+  "seed_status": "unsupported",
+  "status": "LIVE_ATTEMPT_RECORDED",
+  "temperature": "provider_default",
+  "workflow_error": {
+    "category": "internal",
+    "cause_code": "UNCLASSIFIED_FAILURE",
+    "cause_summary": "DEEPSEEK_MODEL is required",
+    "cause_type": "EvaluationConfigurationError",
+    "code": "UNCLASSIFIED_FAILURE",
+    "finish_reason": null,
+    "input_tokens": 0,
+    "max_tokens": null,
+    "message": "live semantic evaluation failed",
+    "model": null,
+    "output_tokens": 0,
+    "retryable": false,
+    "stage": "live_runner",
+    "trace_id": "live:unknown"
+  }
+}
