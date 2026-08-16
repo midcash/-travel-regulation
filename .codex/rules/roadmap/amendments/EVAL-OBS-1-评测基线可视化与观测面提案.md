@@ -1,24 +1,25 @@
-# M4.1：评测可观测性补充规格
+# EVAL-OBS-1：评测基线可视化与观测面提案
 
-> 文档类型：阶段补充 Spec  
-> 适用阶段：M4.1 商务差旅评测基线  
-> 目标：把“只有日志和最终 pass”的评测基线改造成可回放、可解释、可插拔的评测观测面。  
-> 关系：本文件补充 `.codex/rules/roadmap/M4.1-商务差旅评测基线.md`，不修改其 Oracle、评分公式和阶段验收语义。
-> 使用方式：本文件是 AI 和开发者共同遵循的观测契约；它描述必须可被实现和验收的行为，不宣称对应 Dashboard、API 或存储适配器已经完成。
+> 文档类型：阶段完成后的独立增量提案  
+> 依赖基线：M4.1 商务差旅评测基线已完成验收  
+> 状态：提案，尚未进入当前核心阶段的实施范围，也不属于 M4.1 完成条件  
+> 目标：把已验收评测基线的运行过程改造成可回放、可解释、可插拔的评测观测面。  
+> 关系：本提案只消费 M4.1 已交付的评测产物，不修改 M4.1 的 Oracle、评分公式、验收结论或 M4.2 前置条件。
+> 使用方式：本文件描述未来增量的机器可验证合同，不宣称对应 Dashboard、API、事件存储或适配器已经完成。是否进入路线图，必须由独立 Plan 和验收门决定。
 
 ## 1. 问题定义与设计原则
 
-M4.1 当前能够证明评测命令是否完成，却不能充分证明数据集如何进入各路线、每个阶段输出了什么、失败首先发生在哪里以及最终指标如何由样本推导。因而本增量建设一个只读的 Evaluation Observatory：运行入口负责创建受控评测任务，Runner 负责真实执行，事件层负责结构化记录，Dashboard 负责回放与解释；Dashboard 不得成为第二个 Scorer，也不得改变验收结果。
+已验收的 M4.1 评测基线能够证明评测命令是否完成，但仍可进一步解释数据集如何进入各路线、每个阶段输出了什么、失败首先发生在哪里以及最终指标如何由样本推导。因而本提案规划一个只读的 Evaluation Observatory：运行入口负责创建受控评测任务，Runner 负责真实执行，事件层负责结构化记录，Dashboard 负责回放与解释；Dashboard 不得成为第二个 Scorer，也不得改变验收结果。
 
-本 Spec 遵循五项原则：确定性验收仍由现有 Runner、Scorer 和 `stage_acceptance.py` 负责；事件先持久化后推送；未产生事件不等于成功；失败优先于空结果；数据最小化优先于调试便利。所有事件都必须能追溯到 `run_id`、路线、案例、节点、版本和 Artifact，不允许以日志文本作为唯一事实来源。
+本提案遵循五项原则：确定性验收仍由现有 Runner、Scorer 和 `stage_acceptance.py` 负责；事件先持久化后推送；未产生事件不等于成功；失败优先于空结果；数据最小化优先于调试便利。所有事件都必须能追溯到 `run_id`、路线、案例、节点、版本和 Artifact，不允许以日志文本作为唯一事实来源。
 
-实现时应先满足本文件的机器可验证合同，再选择 JSONL、SQLite、SSE、WebSocket、FastAPI 或其他具体技术。任何未在本文件中定义、但会改变 Oracle、评分、失败归因、隐私边界或最终验收状态的扩展，都必须回到 M4.1 Spec 进行版本化变更，不能通过 Dashboard 逻辑隐式引入。
+未来实施时应先满足本提案的机器可验证合同，再使用第 10 节已选定的适配器。事件源、传输、任务运行器、读模型、节点发现和诊断序列化都必须通过稳定接口隔离；替代技术只能以新适配器或新版本接入，不得改写 M4.1 的 Oracle、评分、失败归因、隐私边界或验收状态。任何改变这些语义的扩展，都必须回到对应阶段 Spec 进行版本化变更，不能通过 Dashboard 逻辑隐式引入。
 
 ## 2. 范围与非目标
 
 ### 2.1 本次范围
 
-本补充覆盖 M4.1 的全部评测链路：
+本提案覆盖未来观测面需要解释的 M4.1 评测链路：
 
 ```text
 RunSpec 冻结
@@ -37,7 +38,7 @@ RunSpec 冻结
 
 ### 2.2 非目标
 
-本补充不实现通用日志平台、Token 级流式输出、在线改写 Oracle、自动修复业务失败、缓存回退、备用供应商接管、部分成功伪装、M4-before 覆盖、真实预订/付款动作，以及把 Dashboard 作为 M4.1 业务验收的权威来源。FastAPI、SSE、WebSocket 和持久化数据库可以作为后续适配器；首版必须先拥有与传输协议无关的事件合同和可回放存储。
+本补充不实现通用日志平台、Token 级流式输出、在线改写 Oracle、自动修复业务失败、缓存回退、备用供应商接管、部分成功伪装、M4-before 覆盖、真实预订/付款动作，以及把 Dashboard 作为 M4.1 业务验收的权威来源。本版选定 SSE 作为观测传输适配器、JSONL 作为规范事件源；派生 Read Model 可以使用数据库，但不得升级为事实源。替代传输、事件源和读模型实现只能通过后续可替换适配器接入。首版必须先拥有与传输协议无关的事件合同和可回放规范事件源。
 
 ## 3. 评测输入合同
 
@@ -156,9 +157,9 @@ run_finished         运行结束，可成功或失败
 
 ### 5.3 M4.1 节点注册
 
-首批节点注册表至少包含：`run_spec`、`dataset_contract`、`case_registry`、`component_offline`、`stage_integration`、`scorer`、`offline_determinism`、`fingerprint`、`m4_before`、`self_diff`、`live_blocking`、`live_observation`、`artifact_manifest`、`stage_acceptance`。每个节点登记 `node_id`、`node_version`、输入/输出 Schema、拥有指标、允许失败类别、上游/下游、`principle_refs` 和可用路线。
+首批节点清单至少包含：`run_spec`、`dataset_contract`、`case_registry`、`component_offline`、`stage_integration`、`scorer`、`offline_determinism`、`fingerprint`、`m4_before`、`self_diff`、`live_blocking`、`live_observation`、`artifact_manifest`、`stage_acceptance`。每个节点的版本化 Manifest 登记 `node_id`、`node_version`、输入/输出 Schema、拥有指标、允许失败类别、上游/下游、`principle_refs` 和可用路线。
 
-注册表是 Dashboard 的元数据来源。页面不得用节点名称写死流程判断；新增节点只需实现统一 Node Adapter、注册元数据并产出事件，即可被路线图、节点详情和指标页识别。未注册的事件必须使运行进入 `EVALUATOR_ERROR`，不能静默展示。
+版本化 Node Manifest 是 Runner 与 Dashboard 的共同元数据来源，Manifest Loader 负责 Schema、版本和引用完整性校验。页面不得用节点名称写死流程判断；新增节点只需实现统一 Node Adapter、提交兼容的 Manifest 并产出事件，即可被路线图、节点详情和指标页识别。未注册的事件、Manifest 版本不兼容或声明与实际事件不一致，必须使运行进入 `EVALUATOR_ERROR`，不能静默展示。代码内注册表可以作为 Loader 的内部索引，但不是跨模块元数据的规范来源。
 
 ### 5.4 阶段输出最小内容
 
@@ -195,13 +196,13 @@ artifact_refs          报告、事件或证据引用
 
 首个失败阶段由最早违反合同或 Oracle 的节点确定，不得把后续连锁失败覆盖首因。数据集、Policy、Fixture、Schema 或 Scorer 不可用归为 `EVALUATOR_ERROR` 或 `CONFIGURATION_ERROR`；外部 API/LLM 网络、超时、限流归为 `EXTERNAL_DEPENDENCY_FAILURE`；案例期望与实际不符归为 `BUSINESS_FAILURE`。只有拥有充分上下文的节点才能标记失败；否则使用 `EVALUATOR_ERROR` 并说明缺失字段。
 
-Failure Packet 不得把异常堆栈、完整 Prompt 或供应商原始响应直接作为摘要。若需要调试，原始材料只能存放在受控本地隔离 Artifact，并由引用和哈希关联，不能通过 Dashboard 默认接口返回。
+Failure Packet 不得把异常堆栈、完整 Prompt 或供应商原始响应直接作为摘要。选择 10.6=A 后，观测层也不得复制原始材料到生成的 Artifact；如需人工复核，只能引用已有的、独立受权限保护的输入源或外部审计系统，Failure Packet 仅保存引用、哈希和安全摘要，不能通过 Dashboard 默认接口返回原始内容。
 
 ## 7. 脱敏边界与数据治理
 
-### 7.1 永不写入事件、报告和推送
+### 7.1 永不写入观测产物
 
-以下内容禁止进入普通事件、JSONL、Dashboard API、报告和指标标签：API Key、Token、Password、Authorization、Cookie、完整 Prompt、系统指令、完整用户原文、姓名/手机号/邮箱/证件号、完整行程、支付信息、供应商完整原始响应以及 URL 查询参数中的密钥。发现敏感键或敏感值时必须替换为 `[REDACTED]`，不能仅依赖前端隐藏。
+以下内容禁止进入任何生成的观测事件、JSONL、派生 Artifact、Dashboard API、报告和指标标签：API Key、Token、Password、Authorization、Cookie、完整 Prompt、系统指令、完整用户原文、姓名/手机号/邮箱/证件号、完整行程、支付信息、供应商完整原始响应以及 URL 查询参数中的密钥。发现敏感键或敏感值时必须替换为 `[REDACTED]`，不能仅依赖前端隐藏。原始数据集、外部供应商响应或系统错误日志如因其他系统需要保留，不属于本观测层生成物，且不得被观测层复制或拼接进引用对象。
 
 ### 7.2 允许写入的最小信息
 
@@ -213,17 +214,17 @@ Failure Packet 不得把异常堆栈、完整 Prompt 或供应商原始响应直
 
 ## 8. 运行、实时推送与回放
 
-按钮行为等价于创建受控 Job：后端生成 `run_id`，冻结 `RunSpec`，启动允许的 Runner，并返回 `run_id` 与观测地址。Runner 与前端解耦：事件必须先追加到 JSONL/SQLite 等事件存储，再通过 SSE、WebSocket 或轮询发送；推送失败不得中断评测。客户端按 `run_id + after_sequence` 请求增量，断线重连后可以从最后序号继续回放。
+按钮行为等价于创建受控 Job：后端生成 `run_id`，冻结 `RunSpec`，启动允许的独立子进程 Runner，并返回 `run_id` 与观测地址。本版以 JSONL 作为规范事件源，以 SSE 作为传输适配器；事件必须先追加并校验，再向客户端发送，推送失败不得中断评测。客户端按 `run_id + after_sequence` 请求或恢复增量，断线重连后可以从最后序号继续回放。Dashboard 读模型由 JSONL 事件投影生成并可删除重建；轮询、WebSocket 或 SQLite 规范事件源只能作为实验适配器，不能在默认路径静默接管。
 
 节点级事件是默认粒度，不推送 LLM Token。实时指标标记为 `in_progress` 或 `partial_observation`，只有 `metric_computed`、`route_finished` 和 `acceptance_finished` 产生的结果才可用于最终展示。未完成运行不得显示最终 PASS；运行中的上游失败必须实时将相关下游置为 `BLOCKED_BY_UPSTREAM`。
 
 ## 9. 一致性、幂等与 Artifact 约束
 
-同一 `run_id` 只允许一个执行实例；运行中的同一路线不得重复启动。事件存储追加式写入，禁止覆盖已有事件或复用序号。每次运行使用独立目录，正式 `M4-before.json` 保持不可变，按钮不得更新它。事件、scorecard、report 和 manifest 的哈希必须可相互校验；事件汇总的路线计数必须与 `CaseResult`、`StageScorecard` 和最终报告一致，否则运行标记为 `EVALUATOR_ERROR`。
+同一 `run_id` 只允许一个执行实例；运行中的同一路线不得重复启动。JSONL 规范事件源采用追加式写入，禁止覆盖已有事件或复用序号；读模型属于可重建投影，不得反向修改事件源。每次运行使用独立目录，正式 `M4-before.json` 保持不可变，按钮不得更新它。事件、scorecard、report 和 manifest 的哈希必须可相互校验；事件汇总的路线计数必须与 `CaseResult`、`StageScorecard` 和最终报告一致，否则运行标记为 `EVALUATOR_ERROR`。
 
-## 10. 待决策的技术选型与实现方案
+## 10. 已决策的技术选型与可替换实现方案
 
-本节专门列出当前存在多个合理方案、但尚未由项目维护者最终选择的事项。下列选项不会改变 M4.1 的 Golden Dataset、Oracle、评分公式、Failure Packet 语义或四类最终状态；它们只决定事件如何保存、运行如何调度、Dashboard 如何读取以及开发诊断如何开放。除非明确写入选择结果，否则实现者必须采用“推荐方案”作为临时默认，并在代码、测试和报告中保留可替换边界。
+本节记录项目维护者已经选择的方案及其替换边界。下列选项不会改变 M4.1 的 Golden Dataset、Oracle、评分公式、Failure Packet 语义或四类最终状态；它们只决定事件如何保存、运行如何调度、Dashboard 如何读取以及开发诊断如何开放。每个选择都必须通过接口、版本字段、配置指纹和独立验收保持可替换；实验结果不足以证明替代方案更好时，默认路径不得被实验代码污染。
 
 选择记录格式如下：
 
@@ -243,7 +244,7 @@ decided_at: <日期>
 
 **C. 双写模式**：JSONL 保存不可变原始事件，SQLite 保存查询读模型；可同时满足审计回放和 Dashboard 查询，但存在双写一致性、恢复顺序和存储成本问题。
 
-待选择：`D-OBS-01`。未选择时默认 A；无论选择哪一项，`events` 必须保持追加、可按 `sequence` 回放且不可被 Dashboard 覆盖。
+已选择：`D-OBS-01 = A`。理由：M4.1 以单机、可归档、易 diff 和可回放为首要目标，JSONL 能以最低实现成本提供不可变事件源。替换边界为 `EventStore` 接口；SQLite 或双写实验只能生成独立 `run_id`，并必须证明回放结果与 JSONL 规范源一致。无论选择哪一项，`events` 必须保持追加、可按 `sequence` 回放且不可被 Dashboard 覆盖。
 
 ### 10.2 实时事件传输方案
 
@@ -253,7 +254,7 @@ decided_at: <日期>
 
 **C. WebSocket**：支持双向控制、暂停、取消和交互式操作；代价是协议复杂度、权限边界和状态同步成本更高，M4.1 当前不需要双向通信。
 
-待选择：`D-OBS-02`。未选择时默认 A；无论选择哪一项，事件必须先持久化，再向客户端发送，推送失败不得中断 Runner。
+已选择：`D-OBS-02 = B`。理由：评测链路是服务端单向事件流，SSE 能在保持协议简单的同时提供近实时更新和断线重连语义。替换边界为 `EventTransport` 接口；轮询可作为兼容或实验实现，但不是运行时故障回退。无论选择哪一项，事件必须先持久化，再向客户端发送，推送失败不得中断 Runner。
 
 ### 10.3 评测任务运行隔离方案
 
@@ -263,7 +264,7 @@ decided_at: <日期>
 
 **C. 独立 Job Worker/任务队列**：由队列和 Worker 执行评测，适合多人、多运行和长期任务；需要额外部署、队列可靠性和任务状态治理，不宜作为 M4.1 首个实现前置条件。
 
-待选择：`D-OBS-03`。未选择时默认 B；任何方案都不得允许前端提交任意命令、Python 代码或未注册 Runner。
+已选择：`D-OBS-03 = B`。理由：独立子进程能隔离 Live 调用、Runner 崩溃和资源泄漏，且仍适合当前单机阶段。替换边界为 `EvaluationExecutor` 接口；未来可实验 Job Worker，但不能让前端提交任意命令、Python 代码或未注册 Runner。任何方案都不得允许这些行为。
 
 ### 10.4 Dashboard 读模型方案
 
@@ -273,7 +274,7 @@ decided_at: <日期>
 
 **C. 仅保存最终快照**：查询简单，但无法可靠回放中间过程，也无法证明最终指标如何由阶段事件推导，不满足本 Spec 的完整观测目标。
 
-待选择：`D-OBS-04`。未选择时默认 B；Dashboard 不得将自身聚合结果反写为评测事实。
+已选择：`D-OBS-04 = B`。理由：事件是审计事实，路线、案例、指标和失败摘要由可重建投影生成，既支持断线恢复，也允许读模型独立演进。替换边界为 `ReadModelProjector` 接口；读模型可以使用 SQLite，但只能是派生存储，损坏后必须能从 JSONL 重建。Dashboard 不得将自身聚合结果反写为评测事实。
 
 ### 10.5 事件观测粒度方案
 
@@ -283,7 +284,7 @@ decided_at: <日期>
 
 **C. Token 级 LLM 流式事件**：能够展示模型生成过程，但不能替代结构化评测事件，会增加隐私、成本、噪声和重放复杂度；不建议用于 M4.1。
 
-待选择：`D-OBS-05`。未选择时默认 A；无论选择哪一项，Token 流不能成为评分、失败归因或验收状态的依据。
+已选择：`D-OBS-05 = A`。理由：节点、案例和指标级事件已经能够解释链路与验收，能够控制事件量、隐私风险和回放成本。替换边界为 `EventDetailPolicy`；字段级或 Token 级实验不得改变标准事件、评分和验收，且不得默认进入公共观测面。无论选择哪一项，Token 流不能成为评分、失败归因或验收状态的依据。
 
 ### 10.6 开发诊断信息开放方案
 
@@ -293,7 +294,7 @@ decided_at: <日期>
 
 **C. 开发阶段完全不脱敏**：调试信息最完整，但会使本地日志、截图、CI 转储、共享目录和错误上报成为敏感数据泄漏点，不建议采用。
 
-无论选择哪一项，API Key、Token、Password、Authorization、Cookie 和密钥类 URL 参数均不得明文写入任何事件或 Artifact。待选择：`D-OBS-06`。未选择时默认 B，并继续遵守第 7 节脱敏边界。
+无论选择哪一项，API Key、Token、Password、Authorization、Cookie 和密钥类 URL 参数均不得明文写入任何事件或 Artifact。已选择：`D-OBS-06 = A`。理由：企业项目和共享开发环境中，事件、报告、Dashboard、CI 与截图具有不可控扩散路径，统一安全摘要能提供最稳定的边界。根因不得因此被压缩成无意义的“失败”：`error_code`、首因阶段、结构化 `expected_ref/actual_ref`、受影响指标、上游引用和有限长度 `safe_summary` 必须足以解释可验证根因。若实验表明仍不足，必须提出新的版本化诊断方案并重新验收，不能直接关闭脱敏或写入原始 Prompt、堆栈和供应商响应。
 
 ### 10.7 节点注册机制
 
@@ -303,7 +304,7 @@ decided_at: <日期>
 
 **C. Python Package Entry Point 插件**：模块可独立安装和发现，扩展性最好；部署、加载失败、安全审查和版本冲突处理复杂，不宜在 M4.1 首版引入。
 
-待选择：`D-OBS-07`。未选择时默认 A；节点未注册、版本不匹配或 Schema 不可解析时必须进入 `EVALUATOR_ERROR`，不得静默忽略。
+已选择：`D-OBS-07 = B`。理由：版本化 Manifest 将节点元数据从 Dashboard 和 Runner 代码中解耦，便于未来模块跨项目接入和实验比较。替换边界为 `NodeManifestLoader` 接口；Entry Point 等插件机制只能作为后续实验。节点未注册、版本不匹配或 Schema 不可解析时必须进入 `EVALUATOR_ERROR`，不得静默忽略。
 
 ### 10.8 Live 评测启动策略
 
@@ -313,11 +314,29 @@ decided_at: <日期>
 
 **C. 每次按钮都运行完整 `all`**：观测链路最完整，但会产生不可预期的模型费用、网络依赖和等待时间，不建议作为默认行为。
 
-待选择：`D-OBS-08`。未选择时默认 B；Live 缺少模型或凭证时必须显式失败，不得回退 Fake、默认模型或离线结果。
+已选择：`D-OBS-08 = A`。理由：真实模型调用具有成本、延迟和凭证风险，`all` 必须在展示模型、调用上限、预计成本和凭证状态后由用户明确确认；`offline` 可直接运行，不产生 Live 副作用。替换边界为 `LiveGateAuthorizer` 接口；Live 缺少模型或凭证时必须显式失败，不得回退 Fake、默认模型或离线结果。
 
 ### 10.9 选型的固定约束
 
-无论维护者选择何种组合，以下约束不得被选型覆盖：事件 Schema 与 Failure Packet 必须保持版本化；`run_id` 必须幂等；M4-before 必须不可覆盖；事件汇总必须与 Scorer、Scorecard 和最终报告一致；Dashboard 不得修改评测结果；敏感凭证不得明文落盘；所有新增方案都必须通过第 11 节验收并记录迁移代价。
+无论维护者选择何种组合，以下约束不得被选型覆盖：事件 Schema 与 Failure Packet 必须保持版本化；`run_id` 必须幂等；M4-before 必须不可覆盖；事件汇总必须与 Scorer、Scorecard 和最终报告一致；Dashboard 不得修改评测结果；敏感凭证不得明文落盘；所有新增方案都必须通过第 11 节验收并记录迁移代价。替代实现不得以运行时隐式 fallback 接入；必须显式声明 `implementation_id`、`implementation_version`、配置指纹和兼容的合同版本。
+
+### 10.10 可插拔与实验协议
+
+为支持“先实验、后决定”的技术演进，本阶段把可替换性定义为合同要求，而不是未来重构目标。至少保留以下边界：
+
+```text
+EventStore             JSONL 规范事件源；未来可替换 SQLite 或其他实现
+EventTransport         SSE；未来可替换轮询或 WebSocket
+EvaluationExecutor     独立子进程；未来可替换 Job Worker
+ReadModelProjector     从事件生成可重建读模型
+NodeManifestLoader     加载、校验和版本协商 Node Manifest
+DiagnosticSerializer   生成结构化安全摘要和 Failure Packet
+LiveGateAuthorizer     执行 Live 启动前的确认、预算和权限检查
+```
+
+每个实现必须以 Adapter 形式接入，不能让业务节点依赖具体 JSONL、SSE、SQLite、进程或 Manifest 文件读取细节。每次实验都必须使用相同版本的 Dataset、Oracle、Policy、Fixture、评分器和 `RunSpec` 约束，单独生成 `run_id` 与 `experiment_id`，并记录实现身份、版本、配置指纹、耗时、资源成本、失败分布和回放一致性。实验比较至少回答：是否改变了事件语义、是否改变了最终指标、是否改变了失败归因、是否改善了延迟/可靠性/维护成本，以及迁移是否可逆。
+
+替代实现进入默认路径前，必须先通过合同测试、故障注入、断线/重启恢复、事件重放一致性、脱敏验收和可插拔验收；若实验失败，系统必须显式失败并保留失败包，不得自动切回另一实现伪造成功。节点扩展只需提供 Adapter、版本化 Manifest、输入/输出 Schema、指标与原理引用以及事件生产能力；Dashboard 不得为单个新节点增加专用判断分支。
 
 ## 11. 验收方式
 
@@ -330,6 +349,8 @@ decided_at: <日期>
 5. **安全验收**：凭证、Token、Prompt、PII、完整行程和供应商原始响应在 JSONL、Artifact、报告和 API 输出中均不可见；路径和引用不泄露工作区之外的秘密文件。
 6. **幂等与回放验收**：同一运行不能重复启动；事件写入不可覆盖；断线后可按序号恢复；重复消费不会重复计数；正式 M4-before 仍保持原哈希。
 7. **可插拔验收**：注册一个测试节点，不改 Dashboard 聚合代码即可出现在路线、节点、失败和原理视图；注销或版本不匹配时必须显式失败。
+8. **选型实现验收**：确认 JSONL 是唯一规范事件源、SSE 只负责传输、读模型可从事件重建、Runner 在独立子进程中失败可回收、Node Manifest 可版本校验、公共诊断不泄露原始敏感材料，以及 `all` 未经确认不会启动。
+9. **替换实验验收**：以测试替代 Adapter 替换任一已选实现，不修改 Runner、Scorer、Dashboard 业务判断即可运行；实验结果必须能与基线按 `run_id`、`experiment_id` 和实现指纹对比，并在失败时保留 Failure Packet。
 
 验收命令至少包括：
 
@@ -343,9 +364,9 @@ Live 只在显式配置模型、密钥和预算后执行，不作为普通测试
 
 ## 12. 交付顺序与当前实现限制
 
-实施顺序固定为：先交付事件/失败包/脱敏/追加存储合同与测试，再接入现有 Offline Runner，随后接入 Live Runner，最后提供运行按钮、事件读取 API 与 Dashboard 读模型。任何 UI 先于事件合同都属于不可验收的展示层。
+实施顺序固定为：先交付事件/失败包/脱敏/JSONL EventStore 合同与测试，再接入独立子进程 Offline Runner，随后接入 SSE、可重建 Read Model 和版本化 Node Manifest，最后接入 Live 确认与运行按钮。任何 UI 先于事件合同都属于不可验收的展示层。
 
-本补充首版不宣称 Dashboard、SSE、FastAPI 或 SQLite 已存在；它们只有在对应 Implementation Plan 任务完成并通过测试后才可称为已实现。当前 M4.1 原有日志和最终报告继续有效，新增观测层必须作为兼容适配器接入，不能修改既有业务结果来制造可观测性。
+本补充首版不宣称 Dashboard、SSE、FastAPI、独立子进程 Runner、Read Model 或 Node Manifest Loader 已存在；它们只有在对应 Implementation Plan 任务完成并通过测试后才可称为已实现。当前 M4.1 原有日志和最终报告继续有效，新增观测层必须作为兼容适配器接入，不能修改既有业务结果来制造可观测性。已选方案是默认实现方向，不等于禁止实验；实验必须通过第 10.10 节的替换协议进行。
 
 ## 13. 版本记录
 
@@ -353,3 +374,4 @@ Live 只在显式配置模型、密钥和预算后执行，不作为普通测试
 |---|---|---|
 | v1.0 | 2026-08-14 | 建立 M4.1 评测可观测性补充合同、脱敏边界、Failure Packet 和验收方式 |
 | v1.1 | 2026-08-14 | 增加待决策技术选型、方案取舍、推荐默认与选择记录格式 |
+| v1.2 | 2026-08-15 | 固化 10.1—10.8 选型为 A、B、B、B、A、A、B、A；增加适配器边界、实验协议和替换验收 |
