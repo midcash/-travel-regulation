@@ -1,13 +1,13 @@
 # ACC-INFRA-1：阶段人工验收接口
 
 > 文档类型：横切开发规格（Cross-cutting Development Specification）  
-> 文档状态：Draft v0.5，待维护者批准后编写 Implementation Plan  
+> 文档状态：Draft v0.6，待维护者批准后编写 Implementation Plan
 > 首批适用范围：M0、M1、M2、M2.1、M3、M4、M4.1 既有阶段的人工收口；M4.2 及后续阶段必须复用本合同  
 > 阶段关系：不占用 M 系列编号，不改变 M4.2/M4.3 的路线位置
 
 本规格只建立阶段人工验收入口，不修复商务差旅业务语义，不修改历史阶段报告，不修改 M4.1 Golden Dataset、Oracle、评分公式或正式验收结论。
 
-本规格是总 Spec“阶段人工收口”架构原则的首个适配器。总 Spec 规定长期治理要求，本规格规定通用命令、Artifact、人工记录和复核合同；每个后续阶段必须在自身阶段 Spec 中声明适配器、案例和阶段特有输出，不得重新设计平行验收入口。
+本说明是项目“阶段人工收口”架构原则的首个适配器。架构说明记录长期治理要求，本文记录通用命令、Artifact、人工记录和复核约定；后续阶段如果继续使用该适配器，应在自己的阶段说明中声明案例和阶段特有输出，不必重新设计平行验收入口。
 
 ## 1. 问题定义
 
@@ -20,7 +20,7 @@
 - M4 Live 测试直接调用内部 Use Case 并构造 `RouteDecision`，不能证明完整的 M2→M4 公开交互路径；
 - M4.1 正式评测可以同时出现 `evaluation_status=PASS` 与 `business_assertion=FAIL`，两者不能合并成一个“通过”。
 
-本问题定义以当前 `main.py`、`tests/e2e/test_m21_observability_acceptance.py`、`tests/e2e/test_m4_live_vertical_slice.py`、`evaluation/reports/M4.1/M4.1-completion.md` 和 `.codex/rules/roadmap/M4.2-差旅语义与能力路由.md` 为代码与规格依据；这些文件的当前限制不能由本规格假设性地视为已经修复。
+本问题定义以当前 `main.py`、`tests/e2e/test_m21_observability_acceptance.py`、`tests/e2e/test_m4_live_vertical_slice.py`、`evaluation/reports/M4.1/M4.1-completion.md` 和 `docs/roadmap/M4.2-差旅语义与能力路由.md` 为代码与阶段背景依据；这些文件的当前限制不能由本文档假设性地视为已经修复。
 
 因此，本规格将以下三个状态严格分开：
 
@@ -304,7 +304,7 @@ ACCEPTED ──实现、案例、配置或期望断言变化后新建 run_id─�
 3. `OBSERVATION_READY → HUMAN_REVIEW_PENDING`：必须能分别查看 `EXPECTED` 与 `ACTUAL`，并启动独立复核。
 4. `HUMAN_REVIEW_PENDING → ACCEPTED`：必须同时满足 `machine_assertion=PASS`、人工断言完成、`mutation_result=PASS`、`independent_review_result=PASS`，以及 `business_transition_baseline` 为 `CAPTURED_PASS`、`BASELINE_FAIL` 或预先声明的 `NOT_APPLICABLE`。
 5. `HUMAN_REVIEW_PENDING → REJECTED`：任一关键语义断言不成立、变异检查无效或独立复核否定时转为 `REJECTED`。
-6. 运行缺少凭证、配置、案例、真实边界输出、Artifact、公开入口或安全条件时，转为 `BLOCKED`；外部调用、评测器或配置异常必须保留对应 `runner_status`，并同时使 `stage_gate_state=BLOCKED`。
+6. 运行缺少凭证、配置、案例、真实边界输出、Artifact、公开入口或安全条件时，转为 `BLOCKED`；外部调用、评测器或配置异常必须保留对应 `runner_status`，并同时使 `stage_gate_state=BLOCKED`。源码工作树状态只作为运行元数据记录，不因固定报告、日志或其他生成物变化单独阻塞固定案例验收。
 7. `BLOCKED` 和 `REJECTED` 都是当前 `run_id` 的终态，不能直接转为 `ACCEPTED`。阻塞解除后必须生成新的 `run_id`，从 `NOT_STARTED` 重新运行；旧 Artifact 的状态不可覆盖。
 8. `ACCEPTED` 是当前 `run_id` 的终态。任何实现、案例、配置或期望断言变化都必须创建新的 `run_id`，不能修改旧记录。
 
@@ -322,12 +322,13 @@ human_decision = ACCEPTED
 mutation_result = PASS
 independent_review_result = PASS
 没有 BLOCKED、REJECTED、RUNTIME_FAILURE、EVALUATOR_ERROR 或 NON_ACCEPTANCE_RUN
+runtime.json 已记录 git_commit 和 source_tree_status；source_tree_status 仅用于说明运行时源码状态，不作为单独放行条件
 所有适用的固定案例都有 ACTUAL Artifact 和人工复核记录
 ```
 
 `stage_gate_state` 和实施 Gate 都是由上述字段确定性派生的只读结果，不得由命令参数、人工编辑或报告文本直接写入 `OPEN`。任何一个前置阶段不满足上述条件，`M4.2_IMPLEMENTATION_GATE=CLOSED`。`BASELINE_FAIL` 仅能作为已记录的转型前事实，不能表示业务语义已经通过；`NOT_APPLICABLE` 只能来自运行前冻结的阶段适用性声明，不能用来替代失败运行或缺失接口。
 
-`NOT_APPLICABLE` 只适用于阶段 Spec 和运行前冻结的适用性清单已经明确声明“不处理该业务义务”的阶段或案例；被阶段 Gate 标记为 `mandatory` 的阶段或案例不得使用该值。适用性清单必须由维护者在运行前确认，不能由 Runner、人工复核或失败处理逻辑在运行后生成。
+`NOT_APPLICABLE` 只适用于阶段说明和运行前确认的适用性清单已经明确声明“不处理该业务义务”的阶段或案例；被阶段 Gate 标记为 `mandatory` 的阶段或案例不得使用该值。适用性清单必须由维护者在运行前确认，不能由 Runner、人工复核或失败处理逻辑在运行后生成。
 
 `M4.3_IMPLEMENTATION_GATE=OPEN` 还必须额外满足 M4.2 的 `stage_gate_state=ACCEPTED`。任何 `BLOCKED`、`REJECTED` 或未完成的人工复核都会使 Gate 保持 `CLOSED`。
 
@@ -536,7 +537,7 @@ API Key、Token、Password、Authorization、Cookie
 - 上游失败被包装成部分成功；
 - 变异后输出不变或仍自动通过；
 - Artifact 缺少代码版本、运行模式或案例身份；
-- 工作树状态不满足正式验收要求；
+- Artifact 缺少源码提交号或 source_tree_status 等源码身份记录；
 - 人工记录缺少明确的 `ACCEPTED`、`REJECTED` 或 `BLOCKED`。
 
 ## 12. M4.2 前置门
@@ -558,11 +559,11 @@ M4.1 historical_contract_acceptance = ACCEPTED
 
 上述 M0～M4.1 阶段集合统一引用 §7.3 的 Gate 计算规则；本节不重复定义状态域、字段取值或例外路径。
 
-`BASELINE_FAIL` 仅能作为当前商务转型基线记录，不代表业务成功，也不能替代 `ACCEPTED`。`NOT_APPLICABLE` 必须在运行前由阶段 Spec 和冻结适用性清单确定；mandatory 阶段或案例不得使用该值，且不能在运行失败后补写或掩盖缺少实际输出。任何 `BLOCKED` 都会使 M4.2 前置门保持 `CLOSED`。
+`BASELINE_FAIL` 仅能作为当前商务转型基线记录，不代表业务成功，也不能替代 `ACCEPTED`。`NOT_APPLICABLE` 必须在运行前由阶段说明和适用性清单确定；mandatory 阶段或案例不得使用该值，且不能在运行失败后补写或掩盖缺少实际输出。任何 `BLOCKED` 都会使 M4.2 前置门保持 `CLOSED`。
 
 ## 12.1 未来阶段复用规则
 
-M4.2、M4.3、M5 以及之后的每个阶段 Spec 都必须显式引用总 Spec 的“阶段人工收口”原则和本规格，并至少声明：
+M4.2、M4.3、M5 以及之后的阶段如果采用本接口，应在各自阶段说明中显式记录“阶段人工收口”原则、本说明、案例和阶段特有输出，至少声明：
 
 - `evaluation.manual_acceptance` 的阶段标识和只读适配器；
 - 本阶段必须展示的真实边界输出；
@@ -600,3 +601,4 @@ ACC-INFRA-1 完成必须满足：
 | v0.3 | 2026-08-16 | 固化阶段状态机、Gate 计算和 `BLOCKED`/`NOT_APPLICABLE` 的不可绕过规则。 |
 | v0.4 | 2026-08-16 | 将运行状态、机器检查、变异检查和独立复核纳入 Gate 派生条件，并清除 M4.2/M4.3 的 `BLOCKED` 放行表述。 |
 | v0.5 | 2026-08-17 | 统一 `business_transition_baseline` 的取值域，移除与 §7.1 冲突的 `BLOCKED` 值。 |
+| v0.6 | 2026-08-17 | 取消全工作树 `CLEAN` 作为固定案例人工验收的硬门槛；保留源码提交号与工作树状态记录，并继续阻断真实运行失败、机器检查失败、人工复核未完成和其他明确失败状态。 |

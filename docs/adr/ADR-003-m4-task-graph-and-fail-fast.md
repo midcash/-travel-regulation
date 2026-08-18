@@ -29,4 +29,4 @@ M4 must connect the M2 route and frozen constraint snapshot to the M3 provider/e
 - `evaluation/reports/M4-acceptance-record.md`
 - `evaluation/reports/M4-coverage.md`
 - `evaluation/reports/M4-live-vertical-slice.json`
-- `.codex/rules/roadmap/M4-任务图研究Agent与混合规划.md`
+- `docs/roadmap/M4-任务图研究Agent与混合规划.md`
