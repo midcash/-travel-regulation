@@ -8,6 +8,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from src.domain.models.business_trip import BusinessTripScope, CapabilityReason
 from src.domain.models.interpretation import SafetyFlag
 from src.domain.models.value_objects import IssueId, StableId
 
@@ -28,6 +29,8 @@ class RouteReasonCode(str, Enum):
     COMPARE_REQUEST = "COMPARE_REQUEST"
     PLAN_REQUEST = "PLAN_REQUEST"
     UNSUPPORTED_REQUEST = "UNSUPPORTED_REQUEST"
+    MULTI_TRAVELER_UNSUPPORTED = "MULTI_TRAVELER_UNSUPPORTED"
+    TOURISM_UNSUPPORTED = "TOURISM_UNSUPPORTED"
     ROUTE_UNCERTAIN = "ROUTE_UNCERTAIN"
 
 
@@ -43,6 +46,10 @@ class RouteDecision(BaseModel):
     missing_blockers: tuple[IssueId, ...] = ()
     risk_flags: tuple[SafetyFlag, ...] = ()
     current_plan_ref: StableId | None = None
+    business_scope: BusinessTripScope | None = None
+    scope_version: str | None = None
+    capability_reasons: tuple[CapabilityReason, ...] = ()
+    continue_to_planner: bool = True
 
     @field_validator("mode")
     @classmethod
@@ -71,9 +78,26 @@ class RouteDecision(BaseModel):
             raise ValueError("required capabilities must not contain empty values")
         return values
 
+    @field_validator("capability_reasons")
+    @classmethod
+    def validate_unique_capability_reasons(
+        cls,
+        values: tuple[CapabilityReason, ...],
+    ) -> tuple[CapabilityReason, ...]:
+        """拒绝同一能力重复出现多个理由。"""
+        capabilities = tuple(item.capability for item in values)
+        if len(capabilities) != len(set(capabilities)):
+            raise ValueError("capability reasons must be unique")
+        return values
+
     @model_validator(mode="after")
     def validate_current_plan_reference(self) -> RouteDecision:
         """要求局部修改和重规划必须携带当前计划引用。"""
         if self.mode in {"refine", "replan"} and self.current_plan_ref is None:
             raise ValueError("refine and replan routes require current_plan_ref")
+        if self.business_scope is not None:
+            if self.scope_version != self.business_scope.scope_version:
+                raise ValueError("route scope_version must match business_scope")
+            if self.capability_reasons != self.business_scope.capability_reasons:
+                raise ValueError("route capability_reasons must match business_scope")
         return self

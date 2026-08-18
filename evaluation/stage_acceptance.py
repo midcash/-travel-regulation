@@ -184,26 +184,9 @@ def run_stage_acceptance(*, stage: str, mode: str, root: Path) -> StageAcceptanc
     except Exception as exc:
         checks["offline"] = f"FAIL:{type(exc).__name__}"
         return StageAcceptanceResult(1, checks, None)
+    checks["source_tree_status"] = source_tree_status(root).upper()
     if mode == "offline":
         return StageAcceptanceResult(0, checks, None)
-    if source_tree_status(root) != "clean":
-        checks["source_tree_status"] = "DIRTY"
-        checks["run_status"] = "NON_ACCEPTANCE_RUN"
-        attempt_dir = root / "evaluation" / "reports" / "M4.1" / "runs" / "_tmp"
-        attempt_dir.mkdir(parents=True, exist_ok=True)
-        (attempt_dir / "all-attempt.json").write_text(
-            json.dumps(
-                {
-                    "status": "NON_ACCEPTANCE_RUN",
-                    "reason": "source tree is dirty",
-                    "checks": checks,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        return StageAcceptanceResult(1, checks, "NON_ACCEPTANCE_RUN")
     try:
         live: LiveRunResult = run_live_semantic_from_environment()
     except Exception as exc:

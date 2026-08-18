@@ -1,0 +1,25 @@
+{
+  "case_id": "M4-ACC-001",
+  "stage": "M4",
+  "input": "A fixed offline planning request entering M4 through the public interaction route.",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Expose the M2 route, Task Graph, Task Results, Evidence, Candidates and plan boundary.",
+  "expected_key_fields": {
+    "public_route": true,
+    "task_graph": true,
+    "task_results": true,
+    "evidence_and_candidates": true,
+    "plan_boundary": true
+  },
+  "expected_failure_or_success_semantics": "A plan is only reported as a plan when the public route and downstream chain actually run; current semantic gaps remain visible.",
+  "human_assertions": [
+    "The output contains the M2 route decision used by M4.",
+    "The Task Graph and Task Results are tied to the same snapshot and trace.",
+    "A route bypass or missing task is observable as a failure."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "BASELINE_FAIL",
+  "required_outputs": ["route_decision", "task_graph", "task_results", "plan_result"],
+  "mutation_target": "Bypass the public Router or remove a required task in an isolated variant.",
+  "independent_review_prompt": "Review the public route and downstream graph without accepting a summary-only result."
+}

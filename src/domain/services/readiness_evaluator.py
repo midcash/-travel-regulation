@@ -11,7 +11,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
-from src.domain.models.constraint import Constraint, ConstraintSnapshot
+from src.domain.models.constraint import Constraint, ConstraintSnapshot, ConstraintSource
 from src.domain.models.enums import ConstraintHardness, InteractionMode
 from src.domain.models.interpretation import InterpretationResult
 from src.domain.models.readiness import (
@@ -39,6 +39,41 @@ _DESTINATION_CATEGORIES: Final[frozenset[str]] = frozenset(
 _TRAVELER_CATEGORIES: Final[frozenset[str]] = frozenset(
     {"traveler", "travelers", "people", "person_count", "traveler_count"}
 )
+_MEETING_CATEGORIES: Final[frozenset[str]] = frozenset(
+    {
+        "meeting_city",
+        "meeting_location",
+        "meeting_starts_at",
+        "meeting_timezone",
+        "planning_horizon",
+    }
+)
+_MEETING_REQUIRED_FIELDS: Final[tuple[tuple[str, ReadinessBlockerCode, str, str], ...]] = (
+    (
+        "meeting_city",
+        ReadinessBlockerCode.MISSING_MEETING_CITY,
+        "meeting city cannot be determined from the current constraints",
+        "会议城市",
+    ),
+    (
+        "meeting_location",
+        ReadinessBlockerCode.MISSING_MEETING_LOCATION,
+        "meeting location cannot be determined from the current constraints",
+        "会议地点",
+    ),
+    (
+        "meeting_starts_at",
+        ReadinessBlockerCode.MISSING_MEETING_START,
+        "meeting start time cannot be determined from the current constraints",
+        "会议开始时间",
+    ),
+    (
+        "meeting_timezone",
+        ReadinessBlockerCode.MISSING_MEETING_TIMEZONE,
+        "meeting timezone must be explicit or derived from a uniquely resolved meeting city",
+        "会议时区",
+    ),
+)
 _SPECIAL_POPULATION_CATEGORIES: Final[frozenset[str]] = frozenset(
     {
         "child",
@@ -59,6 +94,9 @@ _BUDGET_CATEGORIES: Final[frozenset[str]] = frozenset(
 )
 _PLANNING_MODES: Final[frozenset[InteractionMode]] = frozenset(
     {InteractionMode.PLAN, InteractionMode.COMPARE}
+)
+_ASSUMPTION_ELIGIBLE_CATEGORIES: Final[frozenset[str]] = frozenset(
+    {"travelers", "meeting_timezone"}
 )
 _UNKNOWN_TEXT: Final[frozenset[str]] = frozenset(
     {
@@ -213,7 +251,7 @@ def _required_trip_fields(
         )
 
     travelers = _items_for(grouped, _TRAVELER_CATEGORIES)
-    if not _has_known_traveler_count(travelers):
+    if not _has_known_traveler_count(travelers, allow_controlled_assumption=True):
         blockers.append(
             _blocker(
                 ReadinessBlockerCode.TRAVELER_COUNT_UNDETERMINED,
@@ -235,6 +273,25 @@ def _required_trip_fields(
                     priority=24,
                 )
             )
+    if set(grouped).intersection(_MEETING_CATEGORIES):
+        for category, code, message, field in _MEETING_REQUIRED_FIELDS:
+            items = grouped.get(category, ())
+            if not _has_resolved_value(
+                grouped,
+                {category},
+                allow_controlled_assumption=category in _ASSUMPTION_ELIGIBLE_CATEGORIES,
+            ):
+                blockers.append(
+                    _blocker(
+                        code,
+                        field=category,
+                        message=message,
+                        constraint_refs=_refs(items),
+                        priority=25 + _MEETING_REQUIRED_FIELDS.index(
+                            (category, code, message, field)
+                        ),
+                    )
+                )
     return blockers
 
 
@@ -424,10 +481,32 @@ def _assumptions(
         | _DURATION_CATEGORIES
         | _TRAVELER_CATEGORIES
         | _SPECIAL_POPULATION_CATEGORIES
+        | _MEETING_CATEGORIES
     )
     for item in constraints:
         category = _canonical_category(item.category)
         if item.hardness is ConstraintHardness.ASSUMPTION:
+            category = _canonical_category(item.category)
+            if category == "meeting_timezone" and item.source is ConstraintSource.ASSUMPTION:
+                assumptions.append(
+                    ReadinessAssumption(
+                        code=ReadinessAssumptionCode.MEETING_TIMEZONE_DERIVED_FROM_CITY,
+                        field=category,
+                        message="会议时区根据可识别的会议城市推导，并等待用户确认",
+                        constraint_refs=(item.id,),
+                    )
+                )
+                continue
+            if category == "travelers" and item.source is ConstraintSource.ASSUMPTION:
+                assumptions.append(
+                    ReadinessAssumption(
+                        code=ReadinessAssumptionCode.TRAVELER_COUNT_DEFAULTED_TO_ONE,
+                        field=category,
+                        message="未明确出行人数，当前按 1 人规划，并等待用户确认",
+                        constraint_refs=(item.id,),
+                    )
+                )
+                continue
             assumptions.append(
                 ReadinessAssumption(
                     code=ReadinessAssumptionCode.EXPLICIT_ASSUMPTION,
@@ -473,9 +552,17 @@ def _items_for(
 def _has_resolved_value(
     grouped: dict[str, tuple[Constraint, ...]],
     categories: Iterable[str],
+    *,
+    allow_controlled_assumption: bool = False,
 ) -> bool:
     items = _items_for(grouped, categories)
-    return bool(items) and any(not _is_undetermined(item) for item in items)
+    return bool(items) and any(
+        not _is_undetermined(
+            item,
+            allow_controlled_assumption=allow_controlled_assumption,
+        )
+        for item in items
+    )
 
 
 def _has_known_date(items: tuple[Constraint, ...]) -> bool:
@@ -494,16 +581,33 @@ def _has_known_duration(items: tuple[Constraint, ...]) -> bool:
     )
 
 
-def _has_known_traveler_count(items: tuple[Constraint, ...]) -> bool:
+def _has_known_traveler_count(
+    items: tuple[Constraint, ...],
+    *,
+    allow_controlled_assumption: bool = False,
+) -> bool:
     return any(
         type(item.normalized_value) is int and item.normalized_value > 0
         for item in items
-        if not _is_undetermined(item)
+        if not _is_undetermined(
+            item,
+            allow_controlled_assumption=allow_controlled_assumption,
+        )
     )
 
 
-def _is_undetermined(item: Constraint) -> bool:
-    if item.hardness in {ConstraintHardness.UNKNOWN, ConstraintHardness.ASSUMPTION}:
+def _is_undetermined(
+    item: Constraint,
+    *,
+    allow_controlled_assumption: bool = False,
+) -> bool:
+    if item.hardness is ConstraintHardness.UNKNOWN:
+        return True
+    if item.hardness is ConstraintHardness.ASSUMPTION and not (
+        allow_controlled_assumption
+        and item.source is ConstraintSource.ASSUMPTION
+        and _canonical_category(item.category) in _ASSUMPTION_ELIGIBLE_CATEGORIES
+    ):
         return True
     value = item.normalized_value
     if isinstance(value, str):

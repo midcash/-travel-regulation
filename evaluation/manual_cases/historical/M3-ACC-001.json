@@ -1,0 +1,24 @@
+{
+  "case_id": "M3-ACC-001",
+  "stage": "M3",
+  "input": "A fixed offline provider contract projection for transport and stay candidates.",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Expose ProviderResult, Evidence and Candidate contracts with source, observed time and TTL.",
+  "expected_key_fields": {
+    "provider_results": true,
+    "evidence_items": true,
+    "candidate_pool": true,
+    "source_and_ttl": true
+  },
+  "expected_failure_or_success_semantics": "Empty provider results and provider failures remain explicit and are not converted to success.",
+  "human_assertions": [
+    "Every accepted candidate references an Evidence item.",
+    "Evidence exposes source, observed_at and validity information.",
+    "Failure and empty-result paths remain distinguishable."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "BASELINE_FAIL",
+  "required_outputs": ["provider_results", "evidence_snapshot", "candidate_pool"],
+  "mutation_target": "Remove an Evidence reference or convert an empty result into a candidate in an isolated variant.",
+  "independent_review_prompt": "Review candidate-to-evidence references and failure semantics independently."
+}

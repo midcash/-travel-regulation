@@ -95,6 +95,37 @@ def test_interpret_prompt_separates_policy_budget_semantics_from_numeric_budget(
     assert "never use budget for a policy reference" in prompt
 
 
+def test_business_meeting_prompt_requires_generic_trip_fields_with_meeting_fields() -> None:
+    interpreter, gateway = _interpreter(_payload())
+
+    interpreter.interpret(
+        "我一个人从杭州到上海参加会议，请规划会前到达。",
+        context=_context(),
+        trace_id="trace:interpret-business-completeness",
+        reference_date=date(2026, 8, 16),
+    )
+
+    prompt = " ".join(gateway.calls[0][0].split())
+    assert "meeting fields supplement the generic trip fields" in prompt
+    assert "must output both the generic trip field and the meeting field" in prompt
+    assert "meeting fields must not replace origin, destination, date_range, or travelers" in prompt
+    assert "If the fact is not explicit, leave the field missing" in prompt
+
+
+def test_interpret_prompt_requires_string_entity_values() -> None:
+    interpreter, gateway = _interpreter(_payload())
+
+    interpreter.interpret(
+        "我一个人从杭州到上海参加会议，请规划会前到达。",
+        context=_context(),
+        trace_id="trace:interpret-entity-value-type",
+    )
+
+    prompt = " ".join(gateway.calls[0][0].split())
+    assert "Every extracted_entities value and normalized_value must be a JSON string" in prompt
+    assert "never an object, number, or array" in prompt
+
+
 
 def test_interpret_delimits_user_data_and_current_context_in_prompt() -> None:
     interpreter, gateway = _interpreter(_payload(mode="compare"))

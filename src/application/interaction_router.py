@@ -5,6 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Final
 
+from src.domain.models.business_trip import BusinessTripBoundaryCode, BusinessTripScope
 from src.domain.models.enums import InteractionMode
 from src.domain.models.interpretation import InterpretationResult, SafetyFlag
 from src.domain.models.readiness import ReadinessResult
@@ -59,6 +60,8 @@ class InteractionRouter:
         *,
         g0_result: G0ValidationResult,
         current_plan_ref: StableId | None = None,
+        business_scope: BusinessTripScope | None = None,
+        business_boundary: BusinessTripBoundaryCode | None = None,
     ) -> RouteDecision:
         """根据固定优先级生成下一步路由决策。
 
@@ -67,6 +70,7 @@ class InteractionRouter:
             readiness: ReadinessEvaluator 生成的 G1 就绪结果。
             g0_result: 同一请求的 G0 安全与输入预检结果。
             current_plan_ref: 当前计划引用，仅供 REFINE/REPLAN 使用。
+            business_boundary: 当前商务产品边界判断；存在时阻止进入规划。
 
         Returns:
             RouteDecision: 可供状态机或后续任务图读取的类型化路由。
@@ -75,6 +79,13 @@ class InteractionRouter:
             TypeError: 任一上游结果不是声明的领域契约。
         """
         _validate_inputs(interpretation, readiness, g0_result)
+        if business_scope is not None and not isinstance(business_scope, BusinessTripScope):
+            raise TypeError("business_scope must be a BusinessTripScope")
+        if business_boundary is not None and not isinstance(
+            business_boundary,
+            BusinessTripBoundaryCode,
+        ):
+            raise TypeError("business_boundary must be a BusinessTripBoundaryCode")
         risk_flags = _unique_flags((*g0_result.safety_flags, *interpretation.safety_flags))
         if not g0_result.passed or _contains_blocking_safety(risk_flags):
             return _decision(
@@ -85,8 +96,27 @@ class InteractionRouter:
             )
 
         mode = interpretation.mode_hint
-        blockers = _blocker_refs(readiness)
         confidence = min(interpretation.overall_confidence, readiness.confidence)
+        if business_boundary is not None and mode in {
+            InteractionMode.PLAN,
+            InteractionMode.COMPARE,
+        }:
+            reason_code = {
+                BusinessTripBoundaryCode.MULTI_TRAVELER_UNSUPPORTED: (
+                    RouteReasonCode.MULTI_TRAVELER_UNSUPPORTED
+                ),
+                BusinessTripBoundaryCode.TOURISM_UNSUPPORTED: (
+                    RouteReasonCode.TOURISM_UNSUPPORTED
+                ),
+            }[business_boundary]
+            return _decision(
+                mode=InteractionMode.UNSUPPORTED,
+                confidence=confidence,
+                reason_codes=(reason_code,),
+                risk_flags=risk_flags,
+                continue_to_planner=False,
+            )
+        blockers = _blocker_refs(readiness)
 
         if mode is InteractionMode.ACTION:
             if blockers:
@@ -184,7 +214,9 @@ class InteractionRouter:
             confidence=confidence,
             reason_codes=(reason_code,),
             risk_flags=risk_flags,
-            required_capabilities=_required_capabilities(mode, interpretation),
+            required_capabilities=_required_capabilities(mode, interpretation, business_scope),
+            business_scope=business_scope,
+            continue_to_planner=business_scope is None,
         )
 
 
@@ -243,6 +275,8 @@ def _decision(
     missing_blockers: tuple[str, ...] = (),
     risk_flags: tuple[SafetyFlag, ...] = (),
     current_plan_ref: StableId | None = None,
+    business_scope: BusinessTripScope | None = None,
+    continue_to_planner: bool = True,
 ) -> RouteDecision:
     """集中创建 RouteDecision，确保所有分支经过同一 Schema。"""
     return RouteDecision(
@@ -253,12 +287,19 @@ def _decision(
         missing_blockers=missing_blockers,
         risk_flags=risk_flags,
         current_plan_ref=current_plan_ref,
+        business_scope=business_scope,
+        scope_version=business_scope.scope_version if business_scope is not None else None,
+        capability_reasons=(
+            business_scope.capability_reasons if business_scope is not None else ()
+        ),
+        continue_to_planner=continue_to_planner,
     )
 
 
 def _required_capabilities(
     mode: InteractionMode,
     interpretation: InterpretationResult,
+    business_scope: BusinessTripScope | None = None,
 ) -> tuple[str, ...]:
     """把路由模式映射为有限能力名，不在本步骤创建任务或调用工具。"""
     categories = {
@@ -275,6 +316,8 @@ def _required_capabilities(
             capabilities.append("context")
         return tuple(capabilities)
     if mode is InteractionMode.PLAN:
+        if business_scope is not None:
+            return business_scope.initial_required_capabilities
         capabilities = ["geo", "transport"]
         if categories.intersection(_STAY_CATEGORIES):
             capabilities.append("stay")

@@ -1,0 +1,39 @@
+{
+  "case_id": "BT-ACC-003",
+  "stage": "M2",
+  "input": "我和两位同事从杭州出发，下周六早上8点在上海东方明珠塔有会议，请规划差旅。",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Identify three travelers, reject the unsupported multi-traveler business scope, and do not start external research.",
+  "expected_key_fields": {
+    "origin": "杭州",
+    "meeting_city": "上海",
+    "meeting_location": "上海东方明珠塔",
+    "meeting_starts_at": "2026-08-22T08:00:00+08:00",
+    "traveler_count": 3,
+    "meeting_timezone": "Asia/Shanghai",
+    "mode": "UNSUPPORTED",
+    "unsupported_reason": "MULTI_TRAVELER_UNSUPPORTED",
+    "assumptions": [
+      "meeting_timezone"
+    ],
+    "external_research_calls": 0
+  },
+  "expected_failure_or_success_semantics": "The system recognizes three travelers, exposes the meeting-city timezone assumption, and rejects the current single-traveler product boundary without routing.",
+  "human_assertions": [
+    "The system recognizes the explicit group language as three travelers.",
+    "The system explains that the current product only supports single-traveler business trips.",
+    "The system may show Asia/Shanghai as a meeting-city-derived assumption, but it does not turn that assumption into a user fact.",
+    "The system does not start Planner or external research for the unsupported multi-traveler request."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "BASELINE_FAIL",
+  "required_outputs": [
+    "interpretation",
+    "constraint_snapshot",
+    "readiness",
+    "route_decision",
+    "final_state"
+  ],
+  "mutation_target": "Change the traveler count from three to one in an isolated variant; the unsupported boundary and route must change.",
+  "independent_review_prompt": "Review only expected.json, actual.json and observation.md as an independent verifier."
+}

@@ -18,6 +18,7 @@ from src.application.trip_state_integration import TripStateIntegration
 from src.application.use_cases.plan_trip import PlanTripResult
 from src.config import Settings
 from src.domain.errors import WorkflowError
+from src.domain.models.business_trip import BusinessTripScope
 from src.domain.models.clarification import ClarificationRequest
 from src.domain.models.constraint import ConstraintSnapshot
 from src.domain.models.enums import ErrorCategory, InteractionMode, WorkflowStatus
@@ -30,6 +31,13 @@ from src.domain.models.routing import RouteDecision
 from src.domain.models.state import TripState
 from src.domain.models.trip_request import TripRequest
 from src.domain.models.value_objects import StableId, TraceId
+from src.domain.services.business_trip_assumption_resolver import (
+    BusinessTripAssumptionResolver,
+)
+from src.domain.services.business_trip_boundary_resolver import (
+    BusinessTripBoundaryResolver,
+)
+from src.domain.services.business_trip_scope_resolver import BusinessTripScopeResolver
 from src.domain.services.clarification_builder import ClarificationBuilder
 from src.domain.services.constraint_service import ConstraintService
 from src.domain.services.readiness_evaluator import ReadinessEvaluationContext, ReadinessEvaluator
@@ -91,6 +99,7 @@ class TripInteractionResult(BaseModel):
     state: TripState
     constraint_snapshot: ConstraintSnapshot
     readiness: ReadinessResult
+    business_scope: BusinessTripScope | None = None
     clarification: ClarificationRequest | None = None
     plan_result: PlanResult | None = None
 
@@ -130,6 +139,9 @@ class TripInteractionFacade:
         self._m4_input_resolver = M4InputResolver()
         self._state_integration = state_integration or TripStateIntegration()
         self._clarification_builder = clarification_builder or ClarificationBuilder()
+        self._business_assumption_resolver = BusinessTripAssumptionResolver()
+        self._business_boundary_resolver = BusinessTripBoundaryResolver()
+        self._business_scope_resolver = BusinessTripScopeResolver()
         self._clock = clock or SystemClock()
 
     def execute(
@@ -238,22 +250,46 @@ class TripInteractionFacade:
                         confidence=float(interpretation.overall_confidence),
                     )
                 with observe_stage("constraint_service") as stage:
+                    business_boundary = self._business_boundary_resolver.resolve(
+                        interpretation,
+                        raw_input,
+                    )
+                    assumption_observations = self._business_assumption_resolver.resolve(
+                        interpretation,
+                        raw_input,
+                    )
                     snapshot = self._constraint_service.build_snapshot(
                         interpretation,
                         request_id=request.request_id,
                         trace_id=trace_id,
                         created_at=created_at,
                         previous_snapshot=state.constraint_snapshot,
+                        context_observations=assumption_observations,
                         negation_text=raw_input,
                         reference_date=effective_reference_date,
                     )
                     stage.add_summary(
                         schema_version="m2.constraint_snapshot.v1",
-                        input_count=len(interpretation.constraint_candidates),
+                        input_count=(
+                            len(interpretation.constraint_candidates)
+                            + len(assumption_observations)
+                        ),
                         output_count=len(snapshot.constraints),
                         snapshot_version=snapshot.version,
                         constraint_count=len(snapshot.constraints),
                         categories=tuple(sorted({item.category for item in snapshot.constraints})),
+                        assumption_categories=tuple(
+                            sorted(
+                                {
+                                    item.candidate.category
+                                    for item in assumption_observations
+                                    if item.source.value == "assumption"
+                                }
+                            )
+                        ),
+                        business_boundary=(
+                            business_boundary.value if business_boundary is not None else None
+                        ),
                         conflict_group_count=len(
                             {
                                 item.conflict_group
@@ -291,11 +327,18 @@ class TripInteractionFacade:
                         confidence=float(readiness.confidence),
                     )
                 with observe_stage("router") as stage:
+                    business_scope = (
+                        self._business_scope_resolver.resolve(snapshot)
+                        if readiness.ready
+                        else None
+                    )
                     decision = self._router.route(
                         interpretation,
                         readiness,
                         g0_result=g0_result,
                         current_plan_ref=current_plan_ref,
+                        business_scope=business_scope,
+                        business_boundary=business_boundary,
                     )
                     record_route_mode(decision.mode)
                     if decision.mode == InteractionMode.CLARIFY.value:
@@ -315,7 +358,10 @@ class TripInteractionFacade:
                         ),
                     )
                 planning_request = request
-                if decision.mode == InteractionMode.PLAN.value:
+                if (
+                    decision.mode == InteractionMode.PLAN.value
+                    and decision.continue_to_planner
+                ):
                     planning_request = self._m4_input_resolver.resolve(
                         request,
                         snapshot,
@@ -345,7 +391,10 @@ class TripInteractionFacade:
                     else None
                 )
                 plan_result = None
-                if decision.mode == InteractionMode.PLAN.value:
+                if (
+                    decision.mode == InteractionMode.PLAN.value
+                    and decision.continue_to_planner
+                ):
                     plan_result = _execute_plan(
                         self._planner,
                         planning_request,
@@ -370,6 +419,7 @@ class TripInteractionFacade:
                     state=active_state,
                     constraint_snapshot=snapshot,
                     readiness=readiness,
+                    business_scope=business_scope,
                     clarification=clarification,
                     plan_result=plan_result,
                 )

@@ -1,0 +1,30 @@
+{
+  "case_id": "BT-ACC-004",
+  "stage": "M2",
+  "input": "我下周去上海旅游，想安排景点和活动。",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Reject explicit tourism because the current product only supports business travel; do not start external research.",
+  "expected_key_fields": {
+    "mode": "UNSUPPORTED",
+    "unsupported_reason": "TOURISM_UNSUPPORTED",
+    "assumptions": [],
+    "external_research_calls": 0
+  },
+  "expected_failure_or_success_semantics": "The system clearly states that tourism planning is outside the current business-travel product boundary and does not generate a tourism itinerary.",
+  "human_assertions": [
+    "The system identifies the request as ordinary tourism rather than business travel.",
+    "The system returns TOURISM_UNSUPPORTED and does not ask for business-trip fields.",
+    "The system does not start Planner or external research."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "BASELINE_FAIL",
+  "required_outputs": [
+    "interpretation",
+    "constraint_snapshot",
+    "readiness",
+    "route_decision",
+    "final_state"
+  ],
+  "mutation_target": "Remove the tourism markers in an isolated variant; the tourism boundary result must change.",
+  "independent_review_prompt": "Review only expected.json, actual.json and observation.md as an independent verifier."
+}

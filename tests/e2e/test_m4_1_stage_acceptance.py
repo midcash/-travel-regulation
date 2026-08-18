@@ -25,7 +25,7 @@ def test_invalid_stage_and_mode_return_nonzero() -> None:
 
 
 def test_live_failure_cannot_be_masked_by_old_success_artifact(monkeypatch) -> None:
-    monkeypatch.setattr("evaluation.stage_acceptance.source_tree_status", lambda _: "clean")
+    monkeypatch.setattr("evaluation.stage_acceptance.source_tree_status", lambda _: "dirty")
     monkeypatch.setattr(
         "evaluation.stage_acceptance.run_live_semantic_from_environment",
         lambda: type("Live", (), {"status": "LIVE_ATTEMPT_RECORDED", "exit_code": 1})(),
@@ -34,6 +34,20 @@ def test_live_failure_cannot_be_masked_by_old_success_artifact(monkeypatch) -> N
 
     assert result.exit_code != 0
     assert result.live_status == "LIVE_ATTEMPT_RECORDED"
+
+
+def test_live_acceptance_does_not_block_on_dirty_source_tree(monkeypatch) -> None:
+    monkeypatch.setattr("evaluation.stage_acceptance.source_tree_status", lambda _: "dirty")
+    monkeypatch.setattr(
+        "evaluation.stage_acceptance.run_live_semantic_from_environment",
+        lambda: type("Live", (), {"status": "LIVE_BASELINE_SUCCESS", "exit_code": 0})(),
+    )
+
+    result = run_stage_acceptance(stage="M4.1", mode="all", root=Path("."))
+
+    assert result.exit_code == 0
+    assert result.live_status == "LIVE_BASELINE_SUCCESS"
+    assert result.checks["source_tree_status"] == "DIRTY"
 
 
 def test_stage_acceptance_defaults_to_m41_all(monkeypatch, capsys) -> None:

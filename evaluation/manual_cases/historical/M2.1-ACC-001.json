@@ -1,0 +1,22 @@
+{
+  "case_id": "M2.1-ACC-001",
+  "stage": "M2.1",
+  "input": "A fixed offline interaction request that reaches the Router.",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Expose the workflow and stage event chain with the same trace identifier.",
+  "expected_key_fields": {
+    "events": ["workflow_started", "G0", "Interpreter", "Constraint", "Readiness", "Router", "workflow_completed"],
+    "planner_calls_on_clarify": 0
+  },
+  "expected_failure_or_success_semantics": "Events are human-viewable and do not expose raw prompts or secrets.",
+  "human_assertions": [
+    "The event chain is present in ACTUAL rather than only in a test capture.",
+    "Events share one business trace identifier.",
+    "A clarification path does not start Planner or external research."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "BASELINE_FAIL",
+  "required_outputs": ["events", "trace_id", "final_state"],
+  "mutation_target": "Delete the Router stage event in an isolated variant and confirm verification rejects the observation.",
+  "independent_review_prompt": "Review the event sequence and trace linkage as an observability reviewer."
+}

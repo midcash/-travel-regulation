@@ -1,0 +1,24 @@
+{
+  "case_id": "M4.1-ACC-001",
+  "stage": "M4.1",
+  "input": "Run the existing immutable M4.1 offline evaluation baseline.",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Expose evaluator status separately from business assertion and failure attribution.",
+  "expected_key_fields": {
+    "evaluation_status": true,
+    "business_assertion": true,
+    "run_status": true,
+    "live_status": true
+  },
+  "expected_failure_or_success_semantics": "Evaluator success does not turn a business semantic failure into business success.",
+  "human_assertions": [
+    "The formal M4.1 dataset and Oracle remain unchanged.",
+    "Evaluator errors are distinct from business assertion failures.",
+    "A completed evaluator run with business failures remains visible as such."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "BASELINE_FAIL",
+  "required_outputs": ["offline_component", "offline_integration", "status_distinction"],
+  "mutation_target": "Change first_failed_stage or business assertion in an isolated result variant.",
+  "independent_review_prompt": "Review the status distinction and failure attribution against the existing M4.1 contract."
+}

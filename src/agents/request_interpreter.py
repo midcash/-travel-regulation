@@ -21,7 +21,7 @@ from src.obs.metric import record_interpreter_failure
 from src.obs.trace import trace_agent
 from src.ports.llm_gateway import LLMGateway, LLMOutputMode, LLMResponseError
 
-REQUEST_INTERPRETER_PROMPT_VERSION: Final[str] = "m2-request-interpreter-v3"
+REQUEST_INTERPRETER_PROMPT_VERSION: Final[str] = "m2-request-interpreter-v4"
 INTERPRETATION_SCHEMA_VERSION: Final[str] = "1.0"
 _MAX_CONVERSATION_SUMMARY_LENGTH: Final[int] = 4096
 
@@ -271,7 +271,9 @@ one of: {json.dumps(allowed_values, ensure_ascii=False)}.
 Interpretation rules:
 - Use canonical categories whenever applicable: origin, destination, date_range,
   travelers, budget, budget_max, budget_min, budget_target, budget_semantics,
-  policy, accommodation, activity, avoid_activity.
+  policy, accommodation, activity, avoid_activity. For a business meeting,
+  also use meeting_city, meeting_location, meeting_starts_at,
+  meeting_timezone, and planning_horizon.
 - Represent date/date_range as a canonical ISO date or date range string, such as
   "2026-08-01" or "2026-08-01/2026-08-03". Resolve relative expressions such
   as "下周一", "明天" and "本周末" against REFERENCE_DATE_DATA before returning
@@ -286,6 +288,9 @@ Interpretation rules:
   never use budget for a policy reference and never invent an amount.
 - Every constraint value must be a JSON string, integer, number, boolean, or an
   array of strings. Never return an object as a constraint value.
+- Every extracted_entities value and normalized_value must be a JSON string,
+  never an object, number, or array. If an entity cannot be represented as a
+  string, omit that entity rather than changing the schema.
 - Create at most one candidate for each canonical field. Do not duplicate a
   field under aliases. Do not use date/date_range for vague references such
   as "保留原来的日期"; put those references in references_to_current_plan.
@@ -296,6 +301,21 @@ Interpretation rules:
   convert "不是不想去博物馆" into avoid_activity, while "不想爬山" is one.
 - Extract every field that is present, ask only for explicitly missing blockers,
   and never invent a missing value.
+- For business meetings, keep meeting_starts_at as an ISO datetime. A missing
+  meeting timezone must remain missing: never infer Asia/Shanghai from the
+  location, language, or request-level timezone. Use
+  planning_horizon=meeting_arrival_ready only when the user asks to arrive for
+  the first meeting. Extract travelers=1 when the user explicitly says they
+  are traveling alone.
+- For business meetings, meeting fields supplement the generic trip fields.
+  When a fact is explicit, you must output both the generic trip field and the
+  meeting field when both apply. meeting fields must not replace origin,
+  destination, date_range, or travelers. When the user asks for a trip to a
+  meeting city, output both destination and meeting_city with the stated city;
+  when the meeting date is explicit, output both date_range and
+  meeting_starts_at; when the user explicitly says they are alone, output
+  travelers=1. If the fact is not explicit, leave the field missing rather
+  than deriving, defaulting, or guessing it.
 - Use refine only for a local change to the current plan, and replan only when
   an event requires rescheduling. Put current-plan references in
   references_to_current_plan.

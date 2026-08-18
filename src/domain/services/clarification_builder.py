@@ -26,6 +26,10 @@ _QUESTION_TEXT: Final[dict[ReadinessBlockerCode, str]] = {
     ReadinessBlockerCode.ACTION_AUTHORIZATION_REQUIRED: "请完成身份认证并确认当前操作已获授权。",
     ReadinessBlockerCode.ACTION_IDENTITY_REQUIRED: "请提供已验证的操作主体身份。",
     ReadinessBlockerCode.CURRENT_PLAN_REQUIRED: "请提供可引用的当前计划。",
+    ReadinessBlockerCode.MISSING_MEETING_CITY: "请补充会议城市。",
+    ReadinessBlockerCode.MISSING_MEETING_LOCATION: "请补充会议地点。",
+    ReadinessBlockerCode.MISSING_MEETING_START: "请补充会议开始日期和时间。",
+    ReadinessBlockerCode.MISSING_MEETING_TIMEZONE: "请明确会议时区，系统不会自行推断。",
 }
 
 

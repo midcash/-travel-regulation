@@ -1,0 +1,44 @@
+{
+  "case_id": "BT-ACC-001",
+  "stage": "M2",
+  "input": "我当前在杭州，下周六早上8点我在上海东方明珠塔有一场会议，请规划我的差旅方案。",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Use controlled assumptions for a uniquely resolved Shanghai meeting and expose the meeting-arrival scope without starting external research.",
+  "expected_key_fields": {
+    "origin": "杭州",
+    "meeting_city": "上海",
+    "meeting_location": "上海东方明珠塔",
+    "meeting_starts_at": "2026-08-22T08:00:00+08:00",
+    "traveler_count": 1,
+    "meeting_timezone": "Asia/Shanghai",
+    "mode": "PLAN",
+    "assumptions": [
+      "meeting_timezone",
+      "travelers"
+    ],
+    "initial_required_capabilities": [
+      "geo",
+      "policy",
+      "intercity_transport"
+    ],
+    "external_research_calls": 0
+  },
+  "expected_failure_or_success_semantics": "The system may proceed with a transparent timezone and traveler assumption for this domestic single-user request; it must not claim a completed itinerary or call Planner.",
+  "human_assertions": [
+    "The system exposes what it understood as origin, meeting city, location and start time.",
+    "The system labels Asia/Shanghai as a meeting-city-derived assumption rather than a user fact.",
+    "The system labels the default traveler count of one as an unconfirmed assumption.",
+    "The system does not start Planner or external research in this M4.2 route-only slice."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "BASELINE_FAIL",
+  "required_outputs": [
+    "interpretation",
+    "constraint_snapshot",
+    "readiness",
+    "route_decision",
+    "final_state"
+  ],
+  "mutation_target": "Change the route expectation or remove the meeting-timezone blocker in an isolated variant; ACTUAL and the review outcome must change.",
+  "independent_review_prompt": "Review only expected.json, actual.json and observation.md as an independent verifier."
+}

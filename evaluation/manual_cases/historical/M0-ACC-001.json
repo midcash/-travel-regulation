@@ -1,0 +1,23 @@
+{
+  "case_id": "M0-ACC-001",
+  "stage": "M0",
+  "input": "Run the frozen baseline-v1 offline dataset.",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Run the existing M0 offline baseline with no network calls and expose explicit case statuses.",
+  "expected_key_fields": {
+    "dataset_version": "baseline-v1",
+    "offline": true,
+    "network_calls": 0
+  },
+  "expected_failure_or_success_semantics": "M0 does not interpret business-travel natural language.",
+  "human_assertions": [
+    "The frozen dataset and fixture are used without rewriting them.",
+    "Offline execution reports zero network calls.",
+    "Unsupported and failed cases remain explicit."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "NOT_APPLICABLE",
+  "required_outputs": ["dataset_report", "execution", "failures"],
+  "mutation_target": "Remove the offline network guard or change a failure status in an isolated variant.",
+  "independent_review_prompt": "Review the M0 report and confirm it describes actual runner output."
+}

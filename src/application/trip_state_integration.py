@@ -41,6 +41,8 @@ class TripStateIntegration:
             raise TypeError("state must be a TripState")
         if not isinstance(decision, RouteDecision):
             raise TypeError("decision must be a RouteDecision")
+        if not decision.continue_to_planner:
+            return state
 
         mode = InteractionMode(decision.mode)
         target = _ROUTE_TARGET_STATUS.get(mode)

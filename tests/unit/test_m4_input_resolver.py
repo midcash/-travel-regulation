@@ -34,6 +34,7 @@ def _constraint(
     value: object,
     *,
     hardness: ConstraintHardness = ConstraintHardness.HARD,
+    source: ConstraintSource = ConstraintSource.USER,
 ) -> Constraint:
     return Constraint(
         id=f"constraint:{category}",
@@ -42,7 +43,7 @@ def _constraint(
         hardness=hardness,
         priority=10,
         scope="trip",
-        source=ConstraintSource.USER,
+        source=source,
         confidence=Decimal("1"),
         user_confirmed=True,
     )
@@ -101,6 +102,36 @@ def test_m4_input_resolver_rejects_ambiguous_snapshot_values() -> None:
 
     assert caught.value.payload.code == "M4_INPUT_AMBIGUOUS"
     assert caught.value.payload.category is ErrorCategory.VALIDATION
+
+
+def test_m4_input_resolver_carries_controlled_traveler_assumption() -> None:
+    snapshot = _snapshot(
+        _constraint(
+            "travelers",
+            1,
+            hardness=ConstraintHardness.ASSUMPTION,
+            source=ConstraintSource.ASSUMPTION,
+        )
+    )
+
+    resolved = M4InputResolver().resolve(_request(), snapshot, trace_id=_TRACE_ID)
+
+    assert resolved.travelers == TravelerProfile(adults=1)
+
+
+def test_m4_input_resolver_ignores_uncontrolled_traveler_assumption() -> None:
+    snapshot = _snapshot(
+        _constraint(
+            "travelers",
+            3,
+            hardness=ConstraintHardness.ASSUMPTION,
+            source=ConstraintSource.USER,
+        )
+    )
+
+    resolved = M4InputResolver().resolve(_request(), snapshot, trace_id=_TRACE_ID)
+
+    assert resolved.travelers == TravelerProfile(adults=1)
 
 
 def test_m4_input_resolver_rejects_request_snapshot_mismatch() -> None:

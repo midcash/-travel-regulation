@@ -1,0 +1,23 @@
+{
+  "case_id": "M1-ACC-001",
+  "stage": "M1",
+  "input": "Typed request with Shanghai origin, Hangzhou destination and one adult traveler.",
+  "reference_now": "2026-08-16T12:00:00+08:00",
+  "expected_stage_behavior": "Validate a typed TripRequest and expose the invalid-schema projection as a separate result.",
+  "expected_key_fields": {
+    "valid_request": true,
+    "invalid_request": "validation_error",
+    "workflow_error": "not_applicable"
+  },
+  "expected_failure_or_success_semantics": "M1 validates typed input and does not claim natural-language understanding.",
+  "human_assertions": [
+    "The valid request is a Pydantic-validated TripRequest.",
+    "The invalid request exposes a Schema validation error rather than being accepted.",
+    "The two outcomes are displayed separately."
+  ],
+  "historical_contract_acceptance": "ACCEPTED",
+  "business_transition_baseline": "NOT_APPLICABLE",
+  "required_outputs": ["valid_request", "invalid_request"],
+  "mutation_target": "Remove one required typed field in an isolated variant and confirm validation fails.",
+  "independent_review_prompt": "Review the typed request and validation error without relying on test names."
+}

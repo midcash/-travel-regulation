@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 
 from src.application.interaction_router import InteractionRouter
+from src.domain.models.business_trip import BusinessTripBoundaryCode
 from src.domain.models.enums import ConstraintHardness, InteractionMode
 from src.domain.models.interpretation import (
     ConstraintCandidate,
@@ -102,6 +103,38 @@ def test_interaction_router_routes_ready_plan_and_selects_research_capabilities(
     assert decision.reason_codes == (RouteReasonCode.PLAN_REQUEST,)
     assert decision.required_capabilities == ("geo", "transport", "stay")
     assert decision.missing_blockers == ()
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        BusinessTripBoundaryCode.MULTI_TRAVELER_UNSUPPORTED,
+        BusinessTripBoundaryCode.TOURISM_UNSUPPORTED,
+    ],
+)
+def test_interaction_router_rejects_business_product_boundaries_without_planner(
+    boundary: BusinessTripBoundaryCode,
+) -> None:
+    decision = InteractionRouter().route(
+        _interpretation(InteractionMode.PLAN),
+        _readiness(InteractionMode.PLAN),
+        g0_result=_g0(),
+        business_boundary=boundary,
+    )
+
+    expected_reason = {
+        BusinessTripBoundaryCode.MULTI_TRAVELER_UNSUPPORTED: (
+            RouteReasonCode.MULTI_TRAVELER_UNSUPPORTED
+        ),
+        BusinessTripBoundaryCode.TOURISM_UNSUPPORTED: (
+            RouteReasonCode.TOURISM_UNSUPPORTED
+        ),
+    }[boundary]
+    assert decision.mode == InteractionMode.UNSUPPORTED.value
+    assert decision.reason_codes == (expected_reason,)
+    assert decision.required_capabilities == ()
+    assert decision.missing_blockers == ()
+    assert decision.continue_to_planner is False
 
 
 @pytest.mark.parametrize(

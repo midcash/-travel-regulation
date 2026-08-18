@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from src.domain.errors import WorkflowError
-from src.domain.models.constraint import ConstraintSnapshot
+from src.domain.models.constraint import ConstraintSnapshot, ConstraintSource
 from src.domain.models.enums import ConstraintHardness, ErrorCategory
 from src.domain.models.trip_request import BudgetSemantics, BudgetSpec, TravelerProfile, TripRequest
 from src.domain.models.value_objects import DateRange, Money, TraceId
@@ -79,7 +79,13 @@ class M4InputResolver:
             updates["date_range"] = date_range
             updates["duration_days"] = date_range.days
 
-        traveler_value = self._single_value(snapshot, _TRAVELER_CATEGORIES, "travelers", trace_id)
+        traveler_value = self._single_value(
+            snapshot,
+            _TRAVELER_CATEGORIES,
+            "travelers",
+            trace_id,
+            allow_assumptions=True,
+        )
         if traveler_value is not None:
             if type(traveler_value) is not int or traveler_value <= 0:
                 self._invalid(trace_id, "traveler constraint has an invalid value")
@@ -117,17 +123,20 @@ class M4InputResolver:
         categories: frozenset[str],
         field: str,
         trace_id: TraceId,
+        *,
+        allow_assumptions: bool = False,
     ) -> object | None:
+        excluded_hardness = {ConstraintHardness.UNKNOWN}
+        if not allow_assumptions:
+            excluded_hardness.add(ConstraintHardness.ASSUMPTION)
         values = tuple(
             constraint.normalized_value
             for constraint in snapshot.constraints
-            if (
-                constraint.category in categories
-                and constraint.hardness
-                not in {
-                    ConstraintHardness.UNKNOWN,
-                    ConstraintHardness.ASSUMPTION,
-                }
+            if constraint.category in categories
+            and constraint.hardness not in excluded_hardness
+            and (
+                constraint.hardness is not ConstraintHardness.ASSUMPTION
+                or constraint.source is ConstraintSource.ASSUMPTION
             )
         )
         unique = tuple(dict.fromkeys(values))
@@ -143,11 +152,11 @@ class M4InputResolver:
                     for constraint in snapshot.constraints
                     if (
                         constraint.category in categories
-                        and constraint.hardness
-                        not in {
-                            ConstraintHardness.UNKNOWN,
-                            ConstraintHardness.ASSUMPTION,
-                        }
+                        and constraint.hardness not in excluded_hardness
+                        and (
+                            constraint.hardness is not ConstraintHardness.ASSUMPTION
+                            or constraint.source is ConstraintSource.ASSUMPTION
+                        )
                     )
                 ),
             )

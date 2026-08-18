@@ -69,3 +69,30 @@ def test_semantic_use_case_stops_after_router_for_plan() -> None:
         "router",
     )
     assert forbidden_downstream.calls == 0
+
+
+def test_semantic_use_case_rejects_tourism_boundary_before_planning() -> None:
+    interpretation = (
+        '{"mode_hint":"plan","extracted_entities":[],"constraint_candidates":['
+        '{"category":"destination","value":"上海","hardness":"hard","scope":"trip",'
+        '"confidence":0.95},{"category":"place","value":"景点",'
+        '"hardness":"soft","scope":"trip","confidence":0.95},'
+        '{"category":"activity","value":"游玩","hardness":"soft","scope":"trip",'
+        '"confidence":0.95}],"explicit_questions":[],'
+        '"references_to_current_plan":[],"field_confidence":{},'
+        '"overall_confidence":0.95,"safety_flags":[]}'
+    )
+    use_case = SemanticEvaluationUseCase(
+        Settings(deepseek_api_key="offline-eval"),
+        gateway=FakeLLMGateway([interpretation]),
+    )
+
+    result = use_case.execute(
+        _request(),
+        "我下周去上海旅游，想安排景点和活动。",
+        reference_date=date(2026, 8, 12),
+    )
+
+    assert result.route_decision.mode == "unsupported"
+    assert result.route_decision.reason_codes == ("TOURISM_UNSUPPORTED",)
+    assert result.route_decision.continue_to_planner is False
